@@ -14,10 +14,34 @@
  * limitations under the License.
  */
 
-package cn.edu.tsinghua.iginx.parquet.util.exception;
+package cn.edu.tsinghua.iginx.parquet.util.record;
 
-public class UnsupportedTypeException extends StorageException {
-  public UnsupportedTypeException(String format, Object type) {
-    super("Unsupported " + format + " type: " + type);
+import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
+import cn.edu.tsinghua.iginx.thrift.DataType;
+
+import java.util.Optional;
+
+public interface RecordIterator extends AutoCloseable {
+
+  Header getHeader() throws StorageException;
+
+  Optional<Record> next() throws StorageException;
+
+  @Override
+  void close() throws StorageException;
+
+  interface Header {
+    int size();
+
+    String getName(int i);
+
+    DataType getType(int i);
+  }
+
+  interface Record extends Iterable<IntObjPair> {
+
+    long getKey();
+
+    Object getValue(int i);
   }
 }

@@ -20,15 +20,10 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.format.parquet.ParquetReadOptions;
 import cn.edu.tsinghua.iginx.format.parquet.ParquetRecordReader;
 import cn.edu.tsinghua.iginx.parquet.util.Constants;
-import cn.edu.tsinghua.iginx.parquet.util.exception.UnsupportedTypeException;
+import cn.edu.tsinghua.iginx.parquet.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import cn.edu.tsinghua.iginx.utils.Pair;
 import com.google.common.collect.Range;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.Objects;
-import java.util.Set;
-import javax.annotation.Nonnull;
 import org.apache.parquet.column.statistics.LongStatistics;
 import org.apache.parquet.filter2.compat.FilterCompat;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
@@ -45,6 +40,12 @@ import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Objects;
+import java.util.Set;
 
 public class IParquetReader implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(IParquetReader.class);
@@ -66,6 +67,10 @@ public class IParquetReader implements AutoCloseable {
     return new Builder(new LocalInputFile(path));
   }
 
+  public boolean isIginxData() {
+    return Constants.PARQUET_OBJECT_MODEL_NAME_VALUE.equals(metadata.getFileMetaData().getKeyValueMetaData().get(Constants.PARQUET_OBJECT_MODEL_NAME_PROP));
+  }
+
   public MessageType getSchema() {
     return schema;
   }
@@ -82,11 +87,15 @@ public class IParquetReader implements AutoCloseable {
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() throws IOException {
     if (internalReader != null) {
       internalReader.close();
     }
     LOGGER.debug("read {} records", count);
+  }
+
+  public long getCurrentRowIndex() {
+    return internalReader.getCurrentRowIndex();
   }
 
   public long getRowCount() {
@@ -95,7 +104,7 @@ public class IParquetReader implements AutoCloseable {
 
   public Range<Long> getRange() {
     MessageType schema = metadata.getFileMetaData().getSchema();
-    if (schema.containsPath(new String[] {Constants.KEY_FIELD_NAME})) {
+    if (schema.containsPath(new String[]{Constants.KEY_FIELD_NAME})) {
       Type type = schema.getType(Constants.KEY_FIELD_NAME);
       if (type.isPrimitive()) {
         PrimitiveType primitiveType = type.asPrimitiveType();
@@ -204,28 +213,25 @@ public class IParquetReader implements AutoCloseable {
     }
   }
 
-  public static DataType toIginxType(Type type) {
-    if (type.isPrimitive()) {
-      PrimitiveType primitiveType = type.asPrimitiveType();
-      if (!primitiveType.getRepetition().equals(PrimitiveType.Repetition.REPEATED)) {
-        switch (primitiveType.getPrimitiveTypeName()) {
-          case BOOLEAN:
-            return DataType.BOOLEAN;
-          case INT32:
-            return DataType.INTEGER;
-          case INT64:
-            return DataType.LONG;
-          case FLOAT:
-            return DataType.FLOAT;
-          case DOUBLE:
-            return DataType.DOUBLE;
-          case BINARY:
-            return DataType.BINARY;
-          default:
-            throw new UnsupportedTypeException(primitiveType.getPrimitiveTypeName().toString());
-        }
+  public static DataType toIginxType(PrimitiveType type) {
+
+    PrimitiveType primitiveType = type.asPrimitiveType();
+    if (!primitiveType.getRepetition().equals(PrimitiveType.Repetition.REPEATED)) {
+      switch (primitiveType.getPrimitiveTypeName()) {
+        case BOOLEAN:
+          return DataType.BOOLEAN;
+        case INT32:
+          return DataType.INTEGER;
+        case INT64:
+          return DataType.LONG;
+        case FLOAT:
+          return DataType.FLOAT;
+        case DOUBLE:
+          return DataType.DOUBLE;
+        case BINARY:
+          return DataType.BINARY;
       }
     }
-    throw new UnsupportedTypeException(type.toString());
+    throw new StorageRuntimeException("unsupported parquet type: " + type);
   }
 }

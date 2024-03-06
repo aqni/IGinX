@@ -38,9 +38,9 @@ public final class Constants {
 
   public static final long SIZE_INSERT_BATCH = 4096;
 
-  public static final String KEY_FIELD_NAME = "__iginx_key__";
+  public static final String KEY_FIELD_NAME = "_key*";
 
-  public static final String RECORD_FIELD_NAME = "iginx";
+  public static final String RECORD_FIELD_NAME = "";
   public static final String DIR_DB_LSM = "lsm";
   public static final String TOMBSTONE_NAME = "iginx.tombstone";
   public static final String KEY_RANGE_NAME = "iginx.key.range";
@@ -51,4 +51,6 @@ public final class Constants {
   public static final String DIR_NAME_TOMBSTONE = "tombstones";
   public static final String DIR_NAME_TABLE = "tables";
   public static final String LOCK_FILE_NAME = "LOCK";
+  public static final String PARQUET_OBJECT_MODEL_NAME_PROP = "writer.model.name";
+  public static final String PARQUET_OBJECT_MODEL_NAME_VALUE = "iginx";
 }

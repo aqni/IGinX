@@ -21,8 +21,7 @@ import cn.edu.tsinghua.iginx.format.parquet.ParquetWriteOptions;
 import cn.edu.tsinghua.iginx.parquet.util.Constants;
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.parquet.util.iterator.Scanner;
-import java.io.IOException;
-import java.nio.file.Path;
+import cn.edu.tsinghua.iginx.thrift.DataType;
 import org.apache.parquet.compression.CompressionCodecFactory;
 import org.apache.parquet.hadoop.CodecFactory;
 import org.apache.parquet.hadoop.ParquetFileWriter;
@@ -31,7 +30,12 @@ import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.io.LocalOutputFile;
 import org.apache.parquet.io.OutputFile;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.PrimitiveType;
+import org.apache.parquet.schema.Type;
 import org.apache.parquet.schema.TypeUtil;
+
+import java.io.IOException;
+import java.nio.file.Path;
 
 public class IParquetWriter implements AutoCloseable {
 
@@ -48,12 +52,28 @@ public class IParquetWriter implements AutoCloseable {
     return new Builder(new LocalOutputFile(path), schema);
   }
 
-  public void write(IRecord record) throws IOException {
-    internalWriter.write(record);
+  public static PrimitiveType getParquetType(
+      String name, DataType type, Type.Repetition repetition) {
+    switch (type) {
+      case BOOLEAN:
+        return new PrimitiveType(repetition, PrimitiveType.PrimitiveTypeName.BOOLEAN, name);
+      case INTEGER:
+        return new PrimitiveType(repetition, PrimitiveType.PrimitiveTypeName.INT32, name);
+      case LONG:
+        return new PrimitiveType(repetition, PrimitiveType.PrimitiveTypeName.INT64, name);
+      case FLOAT:
+        return new PrimitiveType(repetition, PrimitiveType.PrimitiveTypeName.FLOAT, name);
+      case DOUBLE:
+        return new PrimitiveType(repetition, PrimitiveType.PrimitiveTypeName.DOUBLE, name);
+      case BINARY:
+        return new PrimitiveType(repetition, PrimitiveType.PrimitiveTypeName.BINARY, name);
+      default:
+        throw new RuntimeException("Unsupported data type: " + type);
+    }
   }
 
-  public void setExtraMetaData(String key, String value) {
-    internalWriter.setExtraMetaData(key, value);
+  public void write(IRecord record) throws IOException {
+    internalWriter.write(record);
   }
 
   @Override
@@ -85,6 +105,7 @@ public class IParquetWriter implements AutoCloseable {
       ParquetFileWriter fileWriter = new ParquetFileWriter(outputFile, options);
       ParquetRecordWriter<IRecord> recordWriter =
           new ParquetRecordWriter<>(fileWriter, new IRecordDematerializer(schema), options);
+      recordWriter.setExtraMetaData(Constants.PARQUET_OBJECT_MODEL_NAME_PROP, Constants.PARQUET_OBJECT_MODEL_NAME_VALUE);
       return new IParquetWriter(recordWriter, fileWriter);
     }
 

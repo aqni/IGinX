@@ -9,7 +9,6 @@ import cn.edu.tsinghua.iginx.parquet.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.parquet.io.parquet.IParquetReader;
 import cn.edu.tsinghua.iginx.parquet.io.parquet.IParquetWriter;
 import cn.edu.tsinghua.iginx.parquet.io.parquet.IRecord;
-import cn.edu.tsinghua.iginx.parquet.manager.dummy.Storer;
 import cn.edu.tsinghua.iginx.parquet.manager.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.parquet.util.CachePool;
 import cn.edu.tsinghua.iginx.parquet.util.Constants;
@@ -22,16 +21,17 @@ import cn.edu.tsinghua.iginx.parquet.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
-import java.io.IOException;
-import java.nio.file.*;
-import java.util.*;
-import javax.annotation.Nonnull;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
 import org.ehcache.sizeof.SizeOf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
+import java.io.IOException;
+import java.nio.file.*;
+import java.util.*;
 
 public class ParquetReadWriter implements ReadWriter<Long, String, DataType, Object> {
 
@@ -52,7 +52,7 @@ public class ParquetReadWriter implements ReadWriter<Long, String, DataType, Obj
 
   private void cleanTempFiles() {
     try (DirectoryStream<Path> stream =
-        Files.newDirectoryStream(dir, path -> path.endsWith(Constants.SUFFIX_FILE_TEMP))) {
+             Files.newDirectoryStream(dir, path -> path.endsWith(Constants.SUFFIX_FILE_TEMP))) {
       for (Path path : stream) {
         LOGGER.info("remove temp file {}", path);
         Files.deleteIfExists(path);
@@ -109,14 +109,13 @@ public class ParquetReadWriter implements ReadWriter<Long, String, DataType, Obj
   private static MessageType getMessageType(Map<String, DataType> schema) {
     List<Type> fields = new ArrayList<>();
     fields.add(
-        Storer.getParquetType(Constants.KEY_FIELD_NAME, DataType.LONG, Type.Repetition.REQUIRED));
+        IParquetWriter.getParquetType(Constants.KEY_FIELD_NAME, DataType.LONG, Type.Repetition.REQUIRED));
     for (Map.Entry<String, DataType> entry : schema.entrySet()) {
       String name = entry.getKey();
       DataType type = entry.getValue();
-      fields.add(Storer.getParquetType(name, type, Type.Repetition.OPTIONAL));
+      fields.add(IParquetWriter.getParquetType(name, type, Type.Repetition.OPTIONAL));
     }
-    MessageType parquetSchema = new MessageType(Constants.RECORD_FIELD_NAME, fields);
-    return parquetSchema;
+    return new MessageType(Constants.RECORD_FIELD_NAME, fields);
   }
 
   @Override
@@ -226,7 +225,7 @@ public class ParquetReadWriter implements ReadWriter<Long, String, DataType, Obj
   public Iterable<String> tableNames() throws IOException {
     List<String> names = new ArrayList<>();
     try (DirectoryStream<Path> stream =
-        Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
+             Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
       for (Path path : stream) {
         String fileName = path.getFileName().toString();
         String tableName = getTableName(fileName);
@@ -252,7 +251,7 @@ public class ParquetReadWriter implements ReadWriter<Long, String, DataType, Obj
     LOGGER.info("clearing data of {}", dir);
     try {
       try (DirectoryStream<Path> stream =
-          Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
+               Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
         for (Path path : stream) {
           Files.deleteIfExists(path);
           String fileName = path.toString();
