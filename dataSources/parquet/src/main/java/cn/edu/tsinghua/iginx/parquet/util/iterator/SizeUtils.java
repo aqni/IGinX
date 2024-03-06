@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cn.edu.tsinghua.iginx.parquet.db.util.iterator;
+package cn.edu.tsinghua.iginx.parquet.util.iterator;
 
 import java.util.HashMap;
 import java.util.Map;

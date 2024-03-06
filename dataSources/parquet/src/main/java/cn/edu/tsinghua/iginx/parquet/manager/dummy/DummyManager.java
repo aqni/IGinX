@@ -19,6 +19,7 @@ package cn.edu.tsinghua.iginx.parquet.manager.dummy;
 import static cn.edu.tsinghua.iginx.parquet.util.Constants.SUFFIX_FILE_PARQUET;
 
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
+import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalRuntimeException;
 import cn.edu.tsinghua.iginx.engine.physical.storage.domain.Column;
 import cn.edu.tsinghua.iginx.engine.shared.KeyRange;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
@@ -26,8 +27,11 @@ import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.metadata.entity.KeyInterval;
+import cn.edu.tsinghua.iginx.parquet.io.parquet.IParquetReader;
 import cn.edu.tsinghua.iginx.parquet.manager.Manager;
-import cn.edu.tsinghua.iginx.parquet.manager.utils.RangeUtils;
+import cn.edu.tsinghua.iginx.parquet.manager.util.RangeUtils;
+import cn.edu.tsinghua.iginx.parquet.util.exception.StorageRuntimeException;
+import cn.edu.tsinghua.iginx.thrift.DataType;
 import cn.edu.tsinghua.iginx.utils.Pair;
 import cn.edu.tsinghua.iginx.utils.StringUtils;
 import cn.edu.tsinghua.iginx.utils.TagKVUtils;
@@ -41,6 +45,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.validation.constraints.NotNull;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +67,7 @@ public class DummyManager implements Manager {
   public RowStream project(List<String> paths, TagFilter tagFilter, Filter filter)
       throws PhysicalException {
     LOGGER.debug("project paths: {}", paths);
-    Table table = new Table();
+
     Set<String> projectedPath = new HashSet<>();
     for (Path path : getFilePaths()) {
       Set<String> pathsInFile;
@@ -128,29 +134,28 @@ public class DummyManager implements Manager {
 
   @Override
   public void insert(DataView dataView) throws PhysicalException {
-    throw new PhysicalException("DummyManager does not support insert");
+    throw new StorageRuntimeException("DummyManager does not support insert");
   }
 
   @Override
   public void delete(List<String> paths, List<KeyRange> keyRanges, TagFilter tagFilter)
       throws PhysicalException {
-    throw new PhysicalException("DummyManager does not support delete");
+    throw new StorageRuntimeException("DummyManager does not support delete");
   }
 
   @Override
   public List<Column> getColumns() throws PhysicalException {
     List<Column> columns = new ArrayList<>();
-    for (Path path : getFilePaths()) {
-      try {
-        List<Field> fields = new Loader(path).getHeader();
-        for (Field field : fields) {
-          Pair<String, Map<String, String>> pair = TagKVUtils.fromFullName(field.getName());
-          Column column = new Column(prefix + "." + pair.k, field.getType(), pair.v, true);
-          columns.add(column);
-        }
-      } catch (IOException e) {
-        throw new PhysicalException("failed to load schema from " + path, e);
-      }
+    List<Path> filePaths = getFilePaths();
+    filePaths.sort(Comparator.naturalOrder());
+    Map<String, DataType> allSchema = new HashMap<>();
+    for (Path path : filePaths) {
+      Map<String, DataType> schema = getSchema(path);
+      allSchema.putAll(schema);
+    }
+    for (Map.Entry<String, DataType> entry : allSchema.entrySet()) {
+      String withPrefix = getColumnName(entry.getKey());
+      columns.add(new Column(withPrefix, entry.getValue(), null, true));
     }
     return columns;
   }
@@ -185,7 +190,31 @@ public class DummyManager implements Manager {
     return "DummyManager{" + "dummyDir=" + dir + '}';
   }
 
-  private Iterable<Path> getFilePaths() throws PhysicalException {
+  private String getColumnName(String name) {
+    return prefix + "." + name;
+  }
+
+  private static Map<String, DataType> getSchema(Path path) {
+    IParquetReader.Builder builder = IParquetReader.builder(path);
+    try (IParquetReader reader = builder.build()) {
+      return getSchema(reader.getSchema());
+    } catch (Exception e) {
+      throw new PhysicalRuntimeException("failed to load schema from " + path, e);
+    }
+  }
+
+  private static Map<String, DataType> getSchema(MessageType schema) {
+    Map<String, DataType> ret = new HashMap<>();
+    for (int i = 0; i < schema.getFieldCount(); i++) {
+      String name = schema.getFieldName(i);
+      Type type = schema.getType(i);
+      DataType dataType = IParquetReader.toIginxType(type);
+      ret.put(name, dataType);
+    }
+    return ret;
+  }
+
+  private List<Path> getFilePaths() throws PhysicalException {
     try (Stream<Path> pathStream = Files.list(dir)) {
       return pathStream
           .filter(path -> path.toString().endsWith(SUFFIX_FILE_PARQUET))

@@ -17,10 +17,10 @@
 package cn.edu.tsinghua.iginx.parquet.db.lsm.buffer;
 
 import cn.edu.tsinghua.iginx.parquet.db.util.AreaSet;
-import cn.edu.tsinghua.iginx.parquet.db.util.iterator.ColumnUnionRowScanner;
-import cn.edu.tsinghua.iginx.parquet.db.util.iterator.IteratorScanner;
-import cn.edu.tsinghua.iginx.parquet.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
+import cn.edu.tsinghua.iginx.parquet.util.iterator.ColumnUnionRowScanner;
+import cn.edu.tsinghua.iginx.parquet.util.iterator.IteratorScanner;
+import cn.edu.tsinghua.iginx.parquet.util.iterator.Scanner;
 import com.google.common.collect.BoundType;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;

@@ -20,6 +20,7 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.format.parquet.ParquetReadOptions;
 import cn.edu.tsinghua.iginx.format.parquet.ParquetRecordReader;
 import cn.edu.tsinghua.iginx.parquet.util.Constants;
+import cn.edu.tsinghua.iginx.parquet.util.exception.UnsupportedTypeException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import cn.edu.tsinghua.iginx.utils.Pair;
 import com.google.common.collect.Range;
@@ -203,26 +204,28 @@ public class IParquetReader implements AutoCloseable {
     }
   }
 
-  public static DataType toIginxType(PrimitiveType primitiveType) {
-    if (primitiveType.getRepetition().equals(PrimitiveType.Repetition.REPEATED)) {
-      return DataType.BINARY;
+  public static DataType toIginxType(Type type) {
+    if (type.isPrimitive()) {
+      PrimitiveType primitiveType = type.asPrimitiveType();
+      if (!primitiveType.getRepetition().equals(PrimitiveType.Repetition.REPEATED)) {
+        switch (primitiveType.getPrimitiveTypeName()) {
+          case BOOLEAN:
+            return DataType.BOOLEAN;
+          case INT32:
+            return DataType.INTEGER;
+          case INT64:
+            return DataType.LONG;
+          case FLOAT:
+            return DataType.FLOAT;
+          case DOUBLE:
+            return DataType.DOUBLE;
+          case BINARY:
+            return DataType.BINARY;
+          default:
+            throw new UnsupportedTypeException(primitiveType.getPrimitiveTypeName().toString());
+        }
+      }
     }
-    switch (primitiveType.getPrimitiveTypeName()) {
-      case BOOLEAN:
-        return DataType.BOOLEAN;
-      case INT32:
-        return DataType.INTEGER;
-      case INT64:
-        return DataType.LONG;
-      case FLOAT:
-        return DataType.FLOAT;
-      case DOUBLE:
-        return DataType.DOUBLE;
-      case BINARY:
-        return DataType.BINARY;
-      default:
-        throw new RuntimeException(
-            "Unsupported data type: " + primitiveType.getPrimitiveTypeName());
-    }
+    throw new UnsupportedTypeException(type.toString());
   }
 }

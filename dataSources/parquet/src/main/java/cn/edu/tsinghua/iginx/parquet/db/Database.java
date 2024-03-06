@@ -17,8 +17,8 @@
 package cn.edu.tsinghua.iginx.parquet.db;
 
 import cn.edu.tsinghua.iginx.parquet.db.util.AreaSet;
-import cn.edu.tsinghua.iginx.parquet.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
+import cn.edu.tsinghua.iginx.parquet.util.iterator.Scanner;
 import java.util.Map;
 
 public interface Database<K extends Comparable<K>, F, T, V> extends ImmutableDatabase<K, F, T, V> {

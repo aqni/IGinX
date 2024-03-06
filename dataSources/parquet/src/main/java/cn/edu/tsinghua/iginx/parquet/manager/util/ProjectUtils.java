@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cn.edu.tsinghua.iginx.parquet.manager.data;
+package cn.edu.tsinghua.iginx.parquet.manager.util;
 
 import cn.edu.tsinghua.iginx.engine.physical.storage.utils.TagKVUtils;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.*;
@@ -26,19 +26,19 @@ import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class ProjectUtils {
+public class ProjectUtils {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ProjectUtils.class);
 
-  public static Map<String, DataType> project(Map<String, DataType> schema, TagFilter tagFilter) {
-    if (tagFilter == null) {
-      return schema;
-    }
+  public interface TagKVParser {
+    Map.Entry<String, Map<String, String>> parse(String fieldWithTagKV);
+  }
 
+  public static Map<String, DataType> projectWithTag(
+      Map<String, DataType> schema, TagFilter tagFilter, TagKVParser parser) {
     Map<String, DataType> result = new HashMap<>();
     for (Map.Entry<String, DataType> entry : schema.entrySet()) {
-      Map.Entry<String, Map<String, String>> pathWithTags =
-          DataViewWrapper.parseFieldName(entry.getKey());
+      Map.Entry<String, Map<String, String>> pathWithTags = parser.parse(entry.getKey());
       if (TagKVUtils.match(pathWithTags.getValue(), tagFilter)) {
         result.put(entry.getKey(), entry.getValue());
       }
@@ -46,11 +46,11 @@ class ProjectUtils {
     return result;
   }
 
-  public static Map<String, DataType> project(Map<String, DataType> schema, List<String> paths) {
+  public static Map<String, DataType> projectWithTag(
+      Map<String, DataType> schema, List<String> paths, TagKVParser parser) {
     Map<String, DataType> result = new HashMap<>();
     for (Map.Entry<String, DataType> entry : schema.entrySet()) {
-      Map.Entry<String, Map<String, String>> pathWithTags =
-          DataViewWrapper.parseFieldName(entry.getKey());
+      Map.Entry<String, Map<String, String>> pathWithTags = parser.parse(entry.getKey());
       for (String path : paths) {
         if (StringUtils.match(pathWithTags.getKey(), path)) {
           result.put(entry.getKey(), entry.getValue());
@@ -61,15 +61,16 @@ class ProjectUtils {
     return result;
   }
 
-  public static Filter project(Filter filter, Map<String, DataType> schema) {
+  public static Filter project(Filter filter, Map<String, DataType> schema, TagKVParser parser) {
     try {
-      return project(filter, schema, false);
+      return project(filter, schema, parser, false);
     } catch (UnsupportedFilterException e) {
       return new BoolFilter(true);
     }
   }
 
-  private static Filter project(Filter filter, Map<String, DataType> schema, boolean notInParent)
+  private static Filter project(
+      Filter filter, Map<String, DataType> schema, TagKVParser parser, boolean notInParent)
       throws UnsupportedFilterException {
     try {
       switch (filter.getType()) {
@@ -77,15 +78,15 @@ class ProjectUtils {
         case Bool:
           return filter;
         case And:
-          return project((AndFilter) filter, schema, notInParent);
+          return project((AndFilter) filter, schema, parser, notInParent);
         case Or:
-          return project((OrFilter) filter, schema, notInParent);
+          return project((OrFilter) filter, schema, parser, notInParent);
         case Not:
-          return project((NotFilter) filter, schema, notInParent);
+          return project((NotFilter) filter, schema, parser, notInParent);
         case Value:
-          return project((ValueFilter) filter, schema);
+          return project((ValueFilter) filter, schema, parser);
         case Path:
-          return project((PathFilter) filter, schema);
+          return project((PathFilter) filter, schema, parser);
         default:
           throw new UnsupportedFilterException(filter);
       }
@@ -99,33 +100,37 @@ class ProjectUtils {
     }
   }
 
-  private static Filter project(AndFilter filter, Map<String, DataType> schema, boolean notInParent)
+  private static Filter project(
+      AndFilter filter, Map<String, DataType> schema, TagKVParser parser, boolean notInParent)
       throws UnsupportedFilterException {
     List<Filter> filters = new ArrayList<>();
     for (Filter subfilter : filter.getChildren()) {
-      filters.add(project(subfilter, schema, notInParent));
+      filters.add(project(subfilter, schema, parser, notInParent));
     }
     return new AndFilter(filters);
   }
 
-  private static Filter project(OrFilter filter, Map<String, DataType> schema, boolean notInParent)
+  private static Filter project(
+      OrFilter filter, Map<String, DataType> schema, TagKVParser parser, boolean notInParent)
       throws UnsupportedFilterException {
     List<Filter> filters = new ArrayList<>();
     for (Filter subfilter : filter.getChildren()) {
-      filters.add(project(subfilter, schema, notInParent));
+      filters.add(project(subfilter, schema, parser, notInParent));
     }
     return new OrFilter(filters);
   }
 
-  private static Filter project(NotFilter filter, Map<String, DataType> schema, boolean notInParent)
+  private static Filter project(
+      NotFilter filter, Map<String, DataType> schema, TagKVParser parser, boolean notInParent)
       throws UnsupportedFilterException {
-    return new NotFilter(project(filter.getChild(), schema, true));
+    return new NotFilter(project(filter.getChild(), schema, parser, true));
   }
 
-  private static Filter project(ValueFilter filter, Map<String, DataType> schema)
+  private static Filter project(
+      ValueFilter filter, Map<String, DataType> schema, TagKVParser parser)
       throws UnsupportedFilterException {
     Map<String, DataType> projectedSchema =
-        project(schema, Collections.singletonList(filter.getPath()));
+        projectWithTag(schema, Collections.singletonList(filter.getPath()), parser);
 
     List<Filter> filters = new ArrayList<>();
     for (String projectedField : projectedSchema.keySet()) {
@@ -139,12 +144,12 @@ class ProjectUtils {
     }
   }
 
-  private static Filter project(PathFilter filter, Map<String, DataType> schema)
+  private static Filter project(PathFilter filter, Map<String, DataType> schema, TagKVParser parser)
       throws UnsupportedFilterException {
     Map<String, DataType> projectedSchemaA =
-        project(schema, Collections.singletonList(filter.getPathA()));
+        projectWithTag(schema, Collections.singletonList(filter.getPathA()), parser);
     Map<String, DataType> projectedSchemaB =
-        project(schema, Collections.singletonList(filter.getPathB()));
+        projectWithTag(schema, Collections.singletonList(filter.getPathB()), parser);
 
     List<Filter> filters = new ArrayList<>();
 

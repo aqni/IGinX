@@ -14,20 +14,10 @@
  * limitations under the License.
  */
 
-package cn.edu.tsinghua.iginx.parquet.db.util.iterator;
+package cn.edu.tsinghua.iginx.parquet.util.exception;
 
-import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
-import javax.annotation.Nonnull;
-
-public interface Scanner<K, V> extends AutoCloseable {
-  @Nonnull
-  K key();
-
-  @Nonnull
-  V value();
-
-  boolean iterate() throws StorageException;
-
-  @Override
-  void close() throws StorageException;
+public class UnsupportedTypeException extends StorageRuntimeException {
+  public UnsupportedTypeException(String type) {
+    super("Unsupported type: " + type);
+  }
 }

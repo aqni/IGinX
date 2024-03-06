@@ -28,13 +28,15 @@ import cn.edu.tsinghua.iginx.parquet.db.Database;
 import cn.edu.tsinghua.iginx.parquet.db.lsm.OneTierDB;
 import cn.edu.tsinghua.iginx.parquet.db.lsm.api.ReadWriter;
 import cn.edu.tsinghua.iginx.parquet.db.util.AreaSet;
-import cn.edu.tsinghua.iginx.parquet.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.parquet.manager.Manager;
-import cn.edu.tsinghua.iginx.parquet.manager.utils.RangeUtils;
+import cn.edu.tsinghua.iginx.parquet.manager.util.FilterRangeUtils;
+import cn.edu.tsinghua.iginx.parquet.manager.util.ProjectUtils;
+import cn.edu.tsinghua.iginx.parquet.manager.util.RangeUtils;
 import cn.edu.tsinghua.iginx.parquet.util.Constants;
 import cn.edu.tsinghua.iginx.parquet.util.Shared;
 import cn.edu.tsinghua.iginx.parquet.util.exception.InvalidFieldNameException;
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
+import cn.edu.tsinghua.iginx.parquet.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import cn.edu.tsinghua.iginx.utils.StringUtils;
 import com.google.common.collect.Range;
@@ -62,10 +64,16 @@ public class DataManager implements Manager {
   @Override
   public RowStream project(List<String> paths, TagFilter tagFilter, Filter filter)
       throws PhysicalException {
-    Map<String, DataType> schemaMatchTags = ProjectUtils.project(db.schema(), tagFilter);
+    Map<String, DataType> schemaMatchTags = db.schema();
+    if (tagFilter != null) {
+      schemaMatchTags =
+          ProjectUtils.projectWithTag(schemaMatchTags, tagFilter, DataViewWrapper::parseFieldName);
+    }
 
-    Map<String, DataType> projectedSchema = ProjectUtils.project(schemaMatchTags, paths);
-    Filter projectedFilter = ProjectUtils.project(filter, schemaMatchTags);
+    Map<String, DataType> projectedSchema =
+        ProjectUtils.projectWithTag(schemaMatchTags, paths, DataViewWrapper::parseFieldName);
+    Filter projectedFilter =
+        ProjectUtils.project(filter, schemaMatchTags, DataViewWrapper::parseFieldName);
     RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(projectedFilter);
 
     Scanner<Long, Scanner<String, Object>> scanner =
@@ -118,8 +126,15 @@ public class DataManager implements Manager {
         areas.add(rangeSet);
       }
     } else {
-      Map<String, DataType> schemaMatchedTags = ProjectUtils.project(db.schema(), tagFilter);
-      Set<String> fields = ProjectUtils.project(schemaMatchedTags, paths).keySet();
+      Map<String, DataType> schemaMatchedTags = db.schema();
+      if (tagFilter != null) {
+        schemaMatchedTags =
+            ProjectUtils.projectWithTag(
+                schemaMatchedTags, tagFilter, DataViewWrapper::parseFieldName);
+      }
+      Set<String> fields =
+          ProjectUtils.projectWithTag(schemaMatchedTags, paths, DataViewWrapper::parseFieldName)
+              .keySet();
       if (rangeSet.isEmpty()) {
         areas.add(fields);
       } else {
