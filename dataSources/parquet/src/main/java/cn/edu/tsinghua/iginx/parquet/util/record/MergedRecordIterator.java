@@ -29,6 +29,12 @@ public class MergedRecordIterator implements RecordIterator {
   private final PriorityQueue<Entry> queue;
 
   public MergedRecordIterator(Iterable<ParquetRecordIterator> iterators) {
+    try{
+
+    }catch (Exception e) {
+
+      throw e;
+    }
 
   }
 
