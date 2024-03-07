@@ -40,6 +40,10 @@ import cn.edu.tsinghua.iginx.parquet.util.exception.IsClosedException;
 import cn.edu.tsinghua.iginx.utils.Pair;
 import cn.edu.tsinghua.iginx.utils.StringUtils;
 import com.google.common.collect.Iterables;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -52,9 +56,6 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 
 public class LocalExecutor implements Executor {
 
@@ -245,6 +246,7 @@ public class LocalExecutor implements Executor {
       Filter filter,
       String storageUnit,
       boolean isDummyStorageUnit) {
+    LOGGER.debug("project {} in {} filter {} with {}, dummy:{}", paths, storageUnit, filter, tagFilter, isDummyStorageUnit);
     try {
       Manager manager;
       if (isDummyStorageUnit) {

@@ -38,14 +38,18 @@ import org.apache.parquet.io.SeekableInputStream;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
+import org.apache.parquet.schema.Types;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 public class IParquetReader implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(IParquetReader.class);
@@ -104,7 +108,7 @@ public class IParquetReader implements AutoCloseable {
 
   public Range<Long> getRange() {
     MessageType schema = metadata.getFileMetaData().getSchema();
-    if (schema.containsPath(new String[]{Constants.KEY_FIELD_NAME})) {
+    if (isIginxData()) {
       Type type = schema.getType(Constants.KEY_FIELD_NAME);
       if (type.isPrimitive()) {
         PrimitiveType primitiveType = type.asPrimitiveType();
@@ -147,6 +151,7 @@ public class IParquetReader implements AutoCloseable {
     private final InputFile localInputfile;
     private boolean skip = false;
     private Set<String> fields;
+    private BiFunction<MessageType, Map<String, String>, MessageType> schemaConverter;
 
     public Builder(LocalInputFile localInputFile) {
       this.localInputfile = localInputFile;
@@ -178,6 +183,10 @@ public class IParquetReader implements AutoCloseable {
         LOGGER.debug("project schema with {} as {}", fields, requestedSchema);
       }
 
+      if (schemaConverter != null) {
+        requestedSchema = schemaConverter.apply(requestedSchema, footer.getFileMetaData().getKeyValueMetaData());
+      }
+
       if (skip) {
         return new IParquetReader(null, requestedSchema, footer);
       }
@@ -191,6 +200,11 @@ public class IParquetReader implements AutoCloseable {
 
     public Builder project(Set<String> fields) {
       this.fields = Objects.requireNonNull(fields);
+      return this;
+    }
+
+    public Builder withSchemaConverter(BiFunction<MessageType, Map<String, String>, MessageType> schemaConverter) {
+      this.schemaConverter = schemaConverter;
       return this;
     }
 
@@ -209,6 +223,11 @@ public class IParquetReader implements AutoCloseable {
       optionsBuilder.withCodecFactory(
           new CodecFactory(
               lz4BufferSize, CodecFactory.DEFAULT_ZSTD_LEVEL, CodecFactory.DEFAULT_ZSTD_WORKERS));
+      return this;
+    }
+
+    public Builder range(long begin, long end) {
+      optionsBuilder.withRange(begin, end);
       return this;
     }
   }
@@ -233,5 +252,23 @@ public class IParquetReader implements AutoCloseable {
       }
     }
     throw new StorageRuntimeException("unsupported parquet type: " + type);
+  }
+
+  public static MessageType project(MessageType schema, Set<String> fields) {
+    Set<String> schemaFields = new HashSet<>(Objects.requireNonNull(fields));
+    schemaFields.add(Constants.KEY_FIELD_NAME);
+
+    Types.MessageTypeBuilder builder = Types.buildMessage();
+    for (String field : schemaFields) {
+      if (schema.containsField(field)) {
+        Type type = schema.getType(field);
+        if (!type.isPrimitive()) {
+          throw new IllegalArgumentException("not primitive type is not supported: " + field);
+        }
+        builder.addField(schema.getType(field));
+      }
+    }
+
+    return builder.named(schema.getName());
   }
 }

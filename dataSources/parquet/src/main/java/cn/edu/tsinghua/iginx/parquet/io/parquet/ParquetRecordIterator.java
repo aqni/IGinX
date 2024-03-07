@@ -16,81 +16,61 @@
 
 package cn.edu.tsinghua.iginx.parquet.io.parquet;
 
-import cn.edu.tsinghua.iginx.parquet.util.Constants;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.parquet.util.exception.UnsupportedTypeException;
-import cn.edu.tsinghua.iginx.parquet.util.record.ArrayHeader;
-import cn.edu.tsinghua.iginx.parquet.util.record.ArrayRecord;
+import cn.edu.tsinghua.iginx.parquet.util.record.Record;
 import cn.edu.tsinghua.iginx.parquet.util.record.RecordIterator;
-import cn.edu.tsinghua.iginx.thrift.DataType;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.Type;
+import com.google.common.collect.Range;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 public class ParquetRecordIterator implements RecordIterator {
 
   private final IParquetReader reader;
+  private final ParquetSchema schema;
 
-  public ParquetRecordIterator(IParquetReader reader) {
+  public ParquetRecordIterator(IParquetReader reader, List<String> prefix) throws UnsupportedTypeException {
     this.reader = reader;
-  }
-
-  private Header header;
-  private Integer keyIndex;
-
-  @Override
-  public Header getHeader() throws UnsupportedTypeException {
-    if (header == null) {
-      MessageType schema = reader.getSchema();
-      String prefix = schema.getName();
-      List<Map.Entry<String, DataType>> fields = new ArrayList<>();
-      for (Type type : schema.getFields()) {
-        if (!type.isPrimitive()) {
-          throw new UnsupportedTypeException("Parquet", type);
-        }
-        String name = type.getName();
-        if (reader.isIginxData() && name.equals(Constants.KEY_FIELD_NAME)) {
-          keyIndex = fields.size();
-          continue;
-        }
-        DataType iType = IParquetReader.toIginxType(type.asPrimitiveType());
-        String fullName = prefix.isEmpty() ? name : prefix + "." + name;
-        fields.add(new AbstractMap.SimpleImmutableEntry<>(fullName, iType));
-      }
-      header = new ArrayHeader(fields);
-    }
-    return header;
+    this.schema = new ParquetSchema(reader.getSchema(), reader.getMeta().getFileMetaData().getKeyValueMetaData(), prefix);
   }
 
   @Override
-  public Optional<Record> next() throws StorageException {
+  public List<Field> header() throws UnsupportedTypeException {
+    return schema.getHeader();
+  }
+
+  @Override
+  public Record next() throws StorageException {
     try {
       IRecord record = this.reader.read();
       if (record == null) {
-        return Optional.empty();
+        return null;
       }
 
       Long key = null;
-
-      Object[] values = new Object[getHeader().size()];
+      int valueIndexOffset = 0;
+      List<Object> values = new ArrayList<>(header().size());
       for (Map.Entry<Integer, Object> indexedValue : record) {
-        int index = indexedValue.getKey();
+        Integer index = indexedValue.getKey();
         Object value = indexedValue.getValue();
-        if (index == keyIndex) {
+        if (index.equals(schema.getKeyIndex())) {
           key = (Long) value;
+          valueIndexOffset = -1;
           continue;
         }
-        values[index] = value;
+        values.set(index + valueIndexOffset, value);
       }
 
       if (key == null) {
         key = reader.getCurrentRowIndex();
       }
 
-      return Optional.of(new ArrayRecord(key, values));
+      return new Record(key, values);
     } catch (IOException e) {
       throw new StorageRuntimeException(e);
     }
@@ -103,5 +83,9 @@ public class ParquetRecordIterator implements RecordIterator {
     } catch (IOException e) {
       throw new StorageRuntimeException(e);
     }
+  }
+
+  public Range<Long> range() {
+    return reader.getRange();
   }
 }

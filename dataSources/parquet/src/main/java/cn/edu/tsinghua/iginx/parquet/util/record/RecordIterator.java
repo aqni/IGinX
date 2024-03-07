@@ -16,32 +16,17 @@
 
 package cn.edu.tsinghua.iginx.parquet.util.record;
 
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
-import cn.edu.tsinghua.iginx.thrift.DataType;
 
-import java.util.Optional;
+import java.util.List;
 
 public interface RecordIterator extends AutoCloseable {
 
-  Header getHeader() throws StorageException;
+  List<Field> header() throws StorageException;
 
-  Optional<Record> next() throws StorageException;
+  Record next() throws StorageException;
 
   @Override
   void close() throws StorageException;
-
-  interface Header {
-    int size();
-
-    String getName(int i);
-
-    DataType getType(int i);
-  }
-
-  interface Record extends Iterable<IntObjPair> {
-
-    long getKey();
-
-    Object getValue(int i);
-  }
 }

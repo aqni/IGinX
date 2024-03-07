@@ -16,44 +16,45 @@
 
 package cn.edu.tsinghua.iginx.parquet.util.record;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.StringJoiner;
 
-public class IntObjPair {
-  private final int key;
-  private final Object value;
+public class Record {
+  private final long key;
+  private final List<Object> valueList;
 
-  public IntObjPair(int key, Object value) {
+  public Record(long key, List<Object> valueList) {
     this.key = key;
-    this.value = value;
+    this.valueList = valueList;
   }
 
-  public int getKey() {
+  public long getKey() {
     return key;
   }
 
-  public Object getValue() {
-    return value;
+  public List<Object> getValueList() {
+    return valueList;
   }
 
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    IntObjPair intObjPair = (IntObjPair) o;
-    return key == intObjPair.key && Objects.equals(value, intObjPair.value);
+    Record that = (Record) o;
+    return key == that.key && Objects.equals(valueList, that.valueList);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(key, value);
+    return Objects.hash(key, valueList);
   }
 
   @Override
   public String toString() {
-    return new StringJoiner(", ", IntObjPair.class.getSimpleName() + "[", "]")
+    return new StringJoiner(", ", Record.class.getSimpleName() + "[", "]")
         .add("key=" + key)
-        .add("value=" + value)
+        .add("value=" + valueList)
         .toString();
   }
 }
