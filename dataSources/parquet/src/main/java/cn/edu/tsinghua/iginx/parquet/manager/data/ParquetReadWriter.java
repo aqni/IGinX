@@ -86,8 +86,7 @@ public class ParquetReadWriter implements ReadWriter<Long, String, DataType, Obj
         IRecord record = IParquetWriter.getRecord(parquetSchema, scanner.key(), scanner.value());
         writer.write(record);
       }
-    } catch (Exception e) {
-      throw new IOException("failed to write " + path, e);
+      closedWriter = writer;
     }
 
     ParquetMetadata parquetMeta = closedWriter.getFooter();
@@ -339,7 +338,7 @@ public class ParquetReadWriter implements ReadWriter<Long, String, DataType, Obj
       this.meta = meta;
       int schemaWeight = schemaDst.toString().length();
       int rangeWeight = rangeMap.toString().length();
-      int metaWeight = (int) SizeOf.newInstance().deepSizeOf(meta);
+      int metaWeight = Math.toIntExact(SizeOf.newInstance().deepSizeOf(meta));
       this.weight = schemaWeight + rangeWeight + metaWeight;
     }
 
