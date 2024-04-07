@@ -59,7 +59,7 @@ public class OneTierDB<K extends Comparable<K>, F, T, V> implements Database<K, 
   private String previousTableName = null;
   private final AtomicLong bufferDirtiedTime = new AtomicLong(Long.MAX_VALUE);
   private final LongAdder bufferInsertedSize = new LongAdder();
-  private final Lock checkLock = new ReentrantLock(false);
+  private final Lock checkLock = new ReentrantLock(true);
   private final ReadWriteLock deleteLock = new ReentrantReadWriteLock(true);
   private final ReadWriteLock commitLock = new ReentrantReadWriteLock(true);
   private final ReadWriteLock storageLock = new ReentrantReadWriteLock(true);
@@ -239,7 +239,8 @@ public class OneTierDB<K extends Comparable<K>, F, T, V> implements Database<K, 
     if (bufferInsertedSize.sum() < shared.getStorageProperties().getWriteBufferSize()) {
       return;
     }
-    synchronized (checkLock) {
+    checkLock.lock();
+    try {
       if (bufferInsertedSize.sum() < shared.getStorageProperties().getWriteBufferSize()) {
         return;
       }
@@ -250,12 +251,15 @@ public class OneTierDB<K extends Comparable<K>, F, T, V> implements Database<K, 
             shared.getStorageProperties().getWriteBufferSize());
       }
       commitMemoryTable(false, new CountDownLatch(1));
+    } finally {
+      checkLock.unlock();
     }
   }
 
   private void checkBufferTimeout() {
     CountDownLatch latch = new CountDownLatch(1);
-    synchronized (checkLock) {
+    checkLock.lock();
+    try {
       long interval = System.currentTimeMillis() - bufferDirtiedTime.get();
       if (interval < timeout) {
         return;
@@ -267,6 +271,8 @@ public class OneTierDB<K extends Comparable<K>, F, T, V> implements Database<K, 
           timeout);
 
       commitMemoryTable(true, latch);
+    } finally {
+      checkLock.unlock();
     }
     LOGGER.debug("waiting for flushing table");
     try {
