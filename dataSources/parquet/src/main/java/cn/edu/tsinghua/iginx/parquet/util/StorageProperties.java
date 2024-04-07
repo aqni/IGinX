@@ -21,9 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.StringJoiner;
 
-/**
- * The properties of storage engine
- */
+/** The properties of storage engine */
 public class StorageProperties {
   private final long writeBufferSize;
   private final Duration writeBufferTimeout;
@@ -46,14 +44,14 @@ public class StorageProperties {
   /**
    * Construct a StorageProperties
    *
-   * @param writeBufferSize            the size of write buffer, bytes
-   * @param writeBatchSize             the size of write batch, bytes
-   * @param compactPermits             the number of flusher permits
-   * @param cacheCapacity              the capacity of cache, bytes
-   * @param cacheTimeout               the expiry timeout of cache
-   * @param cacheSoftValues            whether to enable soft values of cache
-   * @param parquetRowGroupSize        the size of parquet row group, bytes
-   * @param parquetPageSize            the size of parquet page, bytes
+   * @param writeBufferSize the size of write buffer, bytes
+   * @param writeBatchSize the size of write batch, bytes
+   * @param compactPermits the number of flusher permits
+   * @param cacheCapacity the capacity of cache, bytes
+   * @param cacheTimeout the expiry timeout of cache
+   * @param cacheSoftValues whether to enable soft values of cache
+   * @param parquetRowGroupSize the size of parquet row group, bytes
+   * @param parquetPageSize the size of parquet page, bytes
    * @param parquetMaxOutputBufferSize the size of parquet max output buffer, bytes
    */
   private StorageProperties(
@@ -279,9 +277,7 @@ public class StorageProperties {
         .toString();
   }
 
-  /**
-   * A builder of StorageProperties
-   */
+  /** A builder of StorageProperties */
   public static class Builder {
     public static final String WRITE_BUFFER_SIZE = "write.buffer.size";
     public static final String WRITE_BUFFER_TIMEOUT = "write.buffer.timeout";
@@ -319,8 +315,7 @@ public class StorageProperties {
     private int zstdWorkers = 0;
     private int parquetLz4BufferSize = 256 * 1024; // BYTE
 
-    private Builder() {
-    }
+    private Builder() {}
 
     /**
      * Set the size of write buffer in bytes
@@ -477,7 +472,7 @@ public class StorageProperties {
      * Set the parquet compression codec name
      *
      * @param name the parquet compression codec name
-     *             <p>Supported values: "UNCOMPRESSED", "SNAPPY", "GZIP", "LZO", "ZSTD", "LZ4_RAW"
+     *     <p>Supported values: "UNCOMPRESSED", "SNAPPY", "GZIP", "LZO", "ZSTD", "LZ4_RAW"
      * @return this builder
      */
     public Builder setParquetCompression(String name) {
@@ -525,24 +520,25 @@ public class StorageProperties {
      * Parse properties to set the properties of StorageProperties
      *
      * @param properties the properties to be parsed
-     *                   <p>Supported keys:
-     *                   <ul>
-     *                     <li>write.buffer.size: the size of write buffer, bytes
-     *                     <li>write.buffer.timeout: the timeout of write buffer to flush, iso-8601
-     *                     <li>write.batch.size: the size of write batch, bytes
-     *                     <li>compact.permits: the number of flusher permits
-     *                     <li>cache.capacity: the capacity of cache, bytes
-     *                     <li>cache.timeout: the expiry timeout of cache, iso8601 duration
-     *                     <li>cache.value.soft: whether to enable soft values of cache
-     *                     <li>pool.buffer.recycle.enable: the pool buffer recycle enable
-     *                     <li>pool.buffer.recycle.align: the pool buffer recycle align
-     *                     <li>pool.buffer.recycle.limit: the pool buffer recycle limit
-     *                     <li>parquet.block.size: the size of parquet row group, bytes
-     *                     <li>parquet.page.size: the size of parquet page, bytes
-     *                     <li>parquet.buffer.output.size.max: the size of parquet max output buffer, bytes
-     *                     <li>parquet.compression: the parquet compression codec name
-     *                     <li>zstd.level: the zstd level
-     *                   </ul>
+     *     <p>Supported keys:
+     *     <ul>
+     *       <li>write.buffer.size: the size of write buffer, bytes
+     *       <li>write.buffer.timeout: the timeout of write buffer to flush, iso-8601
+     *       <li>write.batch.size: the size of write batch, bytes
+     *       <li>compact.permits: the number of flusher permits
+     *       <li>cache.capacity: the capacity of cache, bytes
+     *       <li>cache.timeout: the expiry timeout of cache, iso8601 duration
+     *       <li>cache.value.soft: whether to enable soft values of cache
+     *       <li>pool.buffer.recycle.enable: the pool buffer recycle enable
+     *       <li>pool.buffer.recycle.align: the pool buffer recycle align
+     *       <li>pool.buffer.recycle.limit: the pool buffer recycle limit
+     *       <li>parquet.block.size: the size of parquet row group, bytes
+     *       <li>parquet.page.size: the size of parquet page, bytes
+     *       <li>parquet.buffer.output.size.max: the size of parquet max output buffer, bytes
+     *       <li>parquet.compression: the parquet compression codec name
+     *       <li>zstd.level: the zstd level
+     *     </ul>
+     *
      * @return this builder
      */
     public Builder parse(Map<String, String> properties) {

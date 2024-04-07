@@ -50,7 +50,7 @@ public class ParquetReadWriter implements ReadWriter<Long, String, DataType, Obj
 
   private void cleanTempFiles() {
     try (DirectoryStream<Path> stream =
-             Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_TEMP)) {
+        Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_TEMP)) {
       for (Path path : stream) {
         LOGGER.info("remove temp file {}", path);
         Files.deleteIfExists(path);
@@ -223,7 +223,7 @@ public class ParquetReadWriter implements ReadWriter<Long, String, DataType, Obj
   public Iterable<String> tableNames() throws IOException {
     List<String> names = new ArrayList<>();
     try (DirectoryStream<Path> stream =
-             Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
+        Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
       for (Path path : stream) {
         String fileName = path.getFileName().toString();
         String tableName = getTableName(fileName);
@@ -249,7 +249,7 @@ public class ParquetReadWriter implements ReadWriter<Long, String, DataType, Obj
     LOGGER.info("clearing data of {}", dir);
     try {
       try (DirectoryStream<Path> stream =
-               Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
+          Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
         for (Path path : stream) {
           Files.deleteIfExists(path);
           String fileName = path.toString();
