@@ -70,7 +70,7 @@ public class TableStorage<K extends Comparable<K>, F, T, V> implements AutoClose
     this.localFlusherPermits = new Semaphore(localFlusherPermitsTotal, true);
     ThreadFactoryBuilder builder = new ThreadFactoryBuilder();
     builder.setNameFormat("ParquetFlusher(" + name + ")-%d");
-    this.flusher = Executors.newSingleThreadExecutor(builder.build());
+    this.flusher = Executors.newCachedThreadPool(builder.build());
     reload();
   }
 
