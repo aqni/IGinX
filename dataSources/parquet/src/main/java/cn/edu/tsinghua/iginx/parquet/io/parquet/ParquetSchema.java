@@ -22,20 +22,20 @@ import cn.edu.tsinghua.iginx.parquet.util.exception.UnsupportedTypeException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import cn.edu.tsinghua.iginx.utils.Pair;
 import cn.edu.tsinghua.iginx.utils.TagKVUtils;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.Type;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import shaded.iginx.org.apache.parquet.schema.MessageType;
+import shaded.iginx.org.apache.parquet.schema.Type;
 
 public class ParquetSchema {
   private final Integer keyIndex;
   private final List<Pair<String, DataType>> rawHeader;
   private final List<Field> header;
 
-  public ParquetSchema(MessageType schema, Map<String, String> extraMetadata, List<String> prefix) throws UnsupportedTypeException {
+  public ParquetSchema(MessageType schema, Map<String, String> extraMetadata, List<String> prefix)
+      throws UnsupportedTypeException {
     Pair<Integer, List<Pair<String, DataType>>> pair = parseRawHeader(schema, extraMetadata);
     this.keyIndex = pair.getK();
     this.rawHeader = pair.getV();
@@ -63,8 +63,11 @@ public class ParquetSchema {
     return header;
   }
 
-  private Pair<Integer, List<Pair<String, DataType>>> parseRawHeader(MessageType schema, Map<String, String> extraMetadata) throws UnsupportedTypeException {
-    boolean isIginxData = Constants.PARQUET_OBJECT_MODEL_NAME_VALUE.equals(extraMetadata.get(Constants.PARQUET_OBJECT_MODEL_NAME_PROP));
+  private Pair<Integer, List<Pair<String, DataType>>> parseRawHeader(
+      MessageType schema, Map<String, String> extraMetadata) throws UnsupportedTypeException {
+    boolean isIginxData =
+        Constants.PARQUET_OBJECT_MODEL_NAME_VALUE.equals(
+            extraMetadata.get(Constants.PARQUET_OBJECT_MODEL_NAME_PROP));
 
     List<Pair<String, DataType>> fields = new ArrayList<>();
     Integer keyIndex = null;
@@ -86,8 +89,8 @@ public class ParquetSchema {
     return new Pair<>(keyIndex, Collections.unmodifiableList(fields));
   }
 
-
-  private static List<Field> parseHeader(List<Pair<String, DataType>> rawHeader, Integer keyIndex, List<String> prefix) {
+  private static List<Field> parseHeader(
+      List<Pair<String, DataType>> rawHeader, Integer keyIndex, List<String> prefix) {
     List<Field> fields = new ArrayList<>();
 
     for (Pair<String, DataType> rawField : rawHeader) {

@@ -20,7 +20,7 @@ import cn.edu.tsinghua.iginx.engine.physical.storage.domain.ColumnKey;
 import cn.edu.tsinghua.iginx.engine.shared.data.write.BitmapView;
 import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
 import cn.edu.tsinghua.iginx.parquet.db.util.iterator.Scanner;
-import cn.edu.tsinghua.iginx.parquet.manager.utils.TagKVUtils;
+import cn.edu.tsinghua.iginx.parquet.manager.util.TagKVUtils;
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import java.util.*;

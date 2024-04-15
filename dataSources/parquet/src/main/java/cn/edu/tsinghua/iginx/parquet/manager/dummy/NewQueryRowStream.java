@@ -22,6 +22,7 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Header;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Row;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
+import cn.edu.tsinghua.iginx.parquet.manager.util.TagKVUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -44,9 +45,7 @@ public class NewQueryRowStream implements RowStream {
     Set<Long> timeSet = new TreeSet<>();
     List<Field> fields = new ArrayList<>();
     for (Column column : columns) {
-      ColumnKey key =
-          cn.edu.tsinghua.iginx.parquet.manager.utils.TagKVUtils.splitFullName(
-              column.getPathName());
+      ColumnKey key = TagKVUtils.splitFullName(column.getPathName());
       Field field;
       field = new Field(key.getPath(), column.getType(), key.getTags());
       fields.add(field);

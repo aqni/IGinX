@@ -23,8 +23,10 @@ import cn.edu.tsinghua.iginx.utils.Pair;
 import com.google.common.collect.Range;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiFunction;
 import javax.annotation.Nonnull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,15 +46,6 @@ import shaded.iginx.org.apache.parquet.io.SeekableInputStream;
 import shaded.iginx.org.apache.parquet.schema.MessageType;
 import shaded.iginx.org.apache.parquet.schema.PrimitiveType;
 import shaded.iginx.org.apache.parquet.schema.Type;
-
-import javax.annotation.Nonnull;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.function.BiFunction;
 
 public class IParquetReader implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(IParquetReader.class);
@@ -75,7 +68,11 @@ public class IParquetReader implements AutoCloseable {
   }
 
   public boolean isIginxData() {
-    return Constants.PARQUET_OBJECT_MODEL_NAME_VALUE.equals(metadata.getFileMetaData().getKeyValueMetaData().get(Constants.PARQUET_OBJECT_MODEL_NAME_PROP));
+    return Constants.PARQUET_OBJECT_MODEL_NAME_VALUE.equals(
+        metadata
+            .getFileMetaData()
+            .getKeyValueMetaData()
+            .get(Constants.PARQUET_OBJECT_MODEL_NAME_PROP));
   }
 
   public MessageType getSchema() {
@@ -210,7 +207,8 @@ public class IParquetReader implements AutoCloseable {
       }
 
       if (schemaConverter != null) {
-        requestedSchema = schemaConverter.apply(requestedSchema, footer.getFileMetaData().getKeyValueMetaData());
+        requestedSchema =
+            schemaConverter.apply(requestedSchema, footer.getFileMetaData().getKeyValueMetaData());
       }
 
       if (skip) {
@@ -229,7 +227,8 @@ public class IParquetReader implements AutoCloseable {
       return this;
     }
 
-    public Builder withSchemaConverter(BiFunction<MessageType, Map<String, String>, MessageType> schemaConverter) {
+    public Builder withSchemaConverter(
+        BiFunction<MessageType, Map<String, String>, MessageType> schemaConverter) {
       this.schemaConverter = schemaConverter;
       return this;
     }
@@ -258,43 +257,7 @@ public class IParquetReader implements AutoCloseable {
     }
   }
 
-  public static DataType toIginxType(PrimitiveType type) {
-
-    PrimitiveType primitiveType = type.asPrimitiveType();
-    if (!primitiveType.getRepetition().equals(PrimitiveType.Repetition.REPEATED)) {
-      switch (primitiveType.getPrimitiveTypeName()) {
-        case BOOLEAN:
-          return DataType.BOOLEAN;
-        case INT32:
-          return DataType.INTEGER;
-        case INT64:
-          return DataType.LONG;
-        case FLOAT:
-          return DataType.FLOAT;
-        case DOUBLE:
-          return DataType.DOUBLE;
-        case BINARY:
-          return DataType.BINARY;
-      }
-    }
-    throw new StorageRuntimeException("unsupported parquet type: " + type);
-  }
-
   public static MessageType project(MessageType schema, Set<String> fields) {
-    Set<String> schemaFields = new HashSet<>(Objects.requireNonNull(fields));
-    schemaFields.add(Constants.KEY_FIELD_NAME);
-
-    Types.MessageTypeBuilder builder = Types.buildMessage();
-    for (String field : schemaFields) {
-      if (schema.containsField(field)) {
-        Type type = schema.getType(field);
-        if (!type.isPrimitive()) {
-          throw new IllegalArgumentException("not primitive type is not supported: " + field);
-        }
-        builder.addField(schema.getType(field));
-      }
-    }
-
-    return builder.named(schema.getName());
+    return ProjectUtils.projectMessageType(schema, fields);
   }
 }

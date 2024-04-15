@@ -23,7 +23,6 @@ import cn.edu.tsinghua.iginx.parquet.util.exception.UnsupportedTypeException;
 import cn.edu.tsinghua.iginx.parquet.util.record.Record;
 import cn.edu.tsinghua.iginx.parquet.util.record.RecordIterator;
 import com.google.common.collect.Range;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,9 +33,12 @@ public class ParquetRecordIterator implements RecordIterator {
   private final IParquetReader reader;
   private final ParquetSchema schema;
 
-  public ParquetRecordIterator(IParquetReader reader, List<String> prefix) throws UnsupportedTypeException {
+  public ParquetRecordIterator(IParquetReader reader, List<String> prefix)
+      throws UnsupportedTypeException {
     this.reader = reader;
-    this.schema = new ParquetSchema(reader.getSchema(), reader.getMeta().getFileMetaData().getKeyValueMetaData(), prefix);
+    this.schema =
+        new ParquetSchema(
+            reader.getSchema(), reader.getMeta().getFileMetaData().getKeyValueMetaData(), prefix);
   }
 
   @Override

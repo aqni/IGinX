@@ -18,7 +18,6 @@ package cn.edu.tsinghua.iginx.parquet.util.record;
 
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
-
 import java.util.List;
 
 public interface RecordIterator extends AutoCloseable {

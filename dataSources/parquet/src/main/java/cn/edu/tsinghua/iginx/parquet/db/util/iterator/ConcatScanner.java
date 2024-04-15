@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-<<<<<<<< HEAD:dataSources/parquet/src/main/java/cn/edu/tsinghua/iginx/parquet/db/util/iterator/ConcatScanner.java
 package cn.edu.tsinghua.iginx.parquet.db.util.iterator;
-========
-package cn.edu.tsinghua.iginx.parquet.util.iterator;
->>>>>>>> refs/heads/feature-improve_dummy_preformance_of_parquet:dataSources/parquet/src/main/java/cn/edu/tsinghua/iginx/parquet/util/iterator/ConcatScanner.java
 
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
 import java.util.Iterator;

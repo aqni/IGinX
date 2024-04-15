@@ -21,7 +21,6 @@ import static cn.edu.tsinghua.iginx.parquet.util.Constants.SUFFIX_FILE_PARQUET;
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalRuntimeException;
 import cn.edu.tsinghua.iginx.engine.physical.storage.domain.Column;
-import cn.edu.tsinghua.iginx.engine.physical.storage.domain.ColumnKey;
 import cn.edu.tsinghua.iginx.engine.physical.storage.utils.TagKVUtils;
 import cn.edu.tsinghua.iginx.engine.shared.KeyRange;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
@@ -43,17 +42,10 @@ import cn.edu.tsinghua.iginx.parquet.util.record.MergedRecordIterator;
 import cn.edu.tsinghua.iginx.parquet.util.record.RecordsRowStream;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import cn.edu.tsinghua.iginx.utils.Pair;
-import cn.edu.tsinghua.iginx.parquet.manager.utils.RangeUtils;
-import cn.edu.tsinghua.iginx.parquet.manager.utils.TagKVUtils;
 import cn.edu.tsinghua.iginx.utils.StringUtils;
 import com.google.common.collect.Range;
-import com.google.common.collect.TreeRangeSet;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeRangeSet;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
@@ -62,8 +54,9 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static cn.edu.tsinghua.iginx.parquet.util.Constants.SUFFIX_FILE_PARQUET;
+import javax.annotation.Nonnull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DummyManager implements Manager {
 
@@ -136,51 +129,53 @@ public class DummyManager implements Manager {
       List<String> patterns,
       TagFilter tagFilter,
       RangeSet<Long> ranges,
-      Map<String, DataType> declaredTypes) throws IOException {
+      Map<String, DataType> declaredTypes)
+      throws IOException {
 
     AtomicBoolean isIginxData = new AtomicBoolean(false);
     IParquetReader.Builder builder = IParquetReader.builder(path);
-    builder.withSchemaConverter((messageType, extra) -> {
-      ParquetSchema parquetSchema;
-      try {
-        parquetSchema = new ParquetSchema(messageType, extra, prefix);
-      } catch (UnsupportedTypeException e) {
-        throw new StorageRuntimeException(e);
-      }
-
-      isIginxData.set(parquetSchema.getKeyIndex() != null);
-      List<Pair<String, DataType>> rawHeader = parquetSchema.getRawHeader();
-      List<String> rawNames = rawHeader.stream().map(Pair::getK).collect(Collectors.toList());
-      List<DataType> rawTypes = rawHeader.stream().map(Pair::getV).collect(Collectors.toList());
-      List<Field> header = parquetSchema.getHeader();
-
-      Set<String> projectedPath = new HashSet<>();
-      int size = rawNames.size();
-      for (int i = 0; i < size; i++) {
-        if (!rawTypes.get(i).equals(declaredTypes.get(header.get(i).getFullName()))) {
-          continue;
-        }
-
-        Field field = header.get(i);
-        if (parquetSchema.getKeyIndex() != null && tagFilter != null) {
-          if (!TagKVUtils.match(field.getTags(), tagFilter)) {
-            continue;
+    builder.withSchemaConverter(
+        (messageType, extra) -> {
+          ParquetSchema parquetSchema;
+          try {
+            parquetSchema = new ParquetSchema(messageType, extra, prefix);
+          } catch (UnsupportedTypeException e) {
+            throw new StorageRuntimeException(e);
           }
-        }
 
-        if (!patterns.stream().anyMatch(s -> StringUtils.match(field.getName(), s))) {
-          continue;
-        }
+          isIginxData.set(parquetSchema.getKeyIndex() != null);
+          List<Pair<String, DataType>> rawHeader = parquetSchema.getRawHeader();
+          List<String> rawNames = rawHeader.stream().map(Pair::getK).collect(Collectors.toList());
+          List<DataType> rawTypes = rawHeader.stream().map(Pair::getV).collect(Collectors.toList());
+          List<Field> header = parquetSchema.getHeader();
 
-        projectedPath.add(rawNames.get(i));
-      }
+          Set<String> projectedPath = new HashSet<>();
+          int size = rawNames.size();
+          for (int i = 0; i < size; i++) {
+            if (!rawTypes.get(i).equals(declaredTypes.get(header.get(i).getFullName()))) {
+              continue;
+            }
 
-      if (isIginxData.get()) {
-        projectedPath.add(Constants.KEY_FIELD_NAME);
-      }
+            Field field = header.get(i);
+            if (parquetSchema.getKeyIndex() != null && tagFilter != null) {
+              if (!TagKVUtils.match(field.getTags(), tagFilter)) {
+                continue;
+              }
+            }
 
-      return IParquetReader.project(messageType, projectedPath);
-    });
+            if (!patterns.stream().anyMatch(s -> StringUtils.match(field.getName(), s))) {
+              continue;
+            }
+
+            projectedPath.add(rawNames.get(i));
+          }
+
+          if (isIginxData.get()) {
+            projectedPath.add(Constants.KEY_FIELD_NAME);
+          }
+
+          return IParquetReader.project(messageType, projectedPath);
+        });
 
     if (isIginxData.get()) {
       builder.filter(FilterRangeUtils.filterOf(ranges));
@@ -194,7 +189,6 @@ public class DummyManager implements Manager {
 
     return builder.build();
   }
-
 
   @Override
   public void insert(DataView dataView) throws PhysicalException {

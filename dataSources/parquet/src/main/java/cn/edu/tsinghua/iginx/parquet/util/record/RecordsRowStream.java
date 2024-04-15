@@ -22,7 +22,6 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.Header;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Row;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
-
 import java.util.NoSuchElementException;
 
 public class RecordsRowStream implements RowStream {

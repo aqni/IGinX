@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-package cn.edu.tsinghua.iginx.parquet.manager.data;
+package cn.edu.tsinghua.iginx.parquet.manager.util;
 
 import static org.junit.Assert.*;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.*;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Op;
-import cn.edu.tsinghua.iginx.parquet.manager.util.FilterRangeUtils;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;

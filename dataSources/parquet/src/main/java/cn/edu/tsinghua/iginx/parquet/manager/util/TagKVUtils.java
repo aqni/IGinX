@@ -1,4 +1,4 @@
-package cn.edu.tsinghua.iginx.parquet.manager.utils;
+package cn.edu.tsinghua.iginx.parquet.manager.util;
 
 import cn.edu.tsinghua.iginx.engine.physical.storage.domain.ColumnKey;
 import cn.edu.tsinghua.iginx.engine.physical.storage.utils.ColumnKeyTranslator;

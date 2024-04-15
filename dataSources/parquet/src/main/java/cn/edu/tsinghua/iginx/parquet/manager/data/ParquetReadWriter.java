@@ -13,6 +13,7 @@ import cn.edu.tsinghua.iginx.parquet.io.parquet.IParquetReader;
 import cn.edu.tsinghua.iginx.parquet.io.parquet.IParquetWriter;
 import cn.edu.tsinghua.iginx.parquet.io.parquet.IRecord;
 import cn.edu.tsinghua.iginx.parquet.manager.dummy.Storer;
+import cn.edu.tsinghua.iginx.parquet.manager.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.parquet.util.CachePool;
 import cn.edu.tsinghua.iginx.parquet.util.Constants;
 import cn.edu.tsinghua.iginx.parquet.util.Shared;

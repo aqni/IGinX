@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-<<<<<<<< HEAD:dataSources/parquet/src/main/java/cn/edu/tsinghua/iginx/parquet/db/util/iterator/RowUnionScanner.java
 package cn.edu.tsinghua.iginx.parquet.db.util.iterator;
-========
-package cn.edu.tsinghua.iginx.parquet.util.iterator;
->>>>>>>> refs/heads/feature-improve_dummy_preformance_of_parquet:dataSources/parquet/src/main/java/cn/edu/tsinghua/iginx/parquet/util/iterator/RowUnionScanner.java
 
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
 import java.util.*;

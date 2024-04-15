@@ -19,23 +19,20 @@ package cn.edu.tsinghua.iginx.parquet.util.record;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.parquet.io.parquet.ParquetRecordIterator;
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
-
 import java.util.List;
 import java.util.ListIterator;
-import java.util.PriorityQueue;
 
 public class MergedRecordIterator implements RecordIterator {
 
-  private final PriorityQueue<Entry> queue;
+  //  private final PriorityQueue<Entry> queue;
 
   public MergedRecordIterator(Iterable<ParquetRecordIterator> iterators) {
-    try{
+    try {
 
-    }catch (Exception e) {
+    } catch (Exception e) {
 
       throw e;
     }
-
   }
 
   @Override
@@ -49,9 +46,7 @@ public class MergedRecordIterator implements RecordIterator {
   }
 
   @Override
-  public void close() throws StorageException {
-
-  }
+  public void close() throws StorageException {}
 
   private static class Entry implements Comparable<Entry> {
     private final ParquetRecordIterator iterator;
