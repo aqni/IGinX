@@ -301,6 +301,7 @@ public class StorageProperties {
      * @return this builder
      */
     public Builder setWriteBufferTimeout(Duration writeBufferTimeout) {
+      ParseUtils.checkPositive(cacheTimeout);
       this.writeBufferTimeout = writeBufferTimeout;
       return this;
     }

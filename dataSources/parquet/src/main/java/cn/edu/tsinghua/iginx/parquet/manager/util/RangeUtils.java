@@ -1,4 +1,4 @@
-package cn.edu.tsinghua.iginx.parquet.manager.utils;
+package cn.edu.tsinghua.iginx.parquet.manager.util;
 
 import cn.edu.tsinghua.iginx.metadata.entity.KeyInterval;
 import com.google.common.collect.BoundType;
