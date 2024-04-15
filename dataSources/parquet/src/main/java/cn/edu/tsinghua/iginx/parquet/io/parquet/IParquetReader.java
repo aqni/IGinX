@@ -17,8 +17,9 @@
 package cn.edu.tsinghua.iginx.parquet.io.parquet;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+import cn.edu.tsinghua.iginx.parquet.io.parquet.util.FilterUtils;
+import cn.edu.tsinghua.iginx.parquet.io.parquet.util.ProjectUtils;
 import cn.edu.tsinghua.iginx.parquet.util.Constants;
-import cn.edu.tsinghua.iginx.thrift.DataType;
 import cn.edu.tsinghua.iginx.utils.Pair;
 import com.google.common.collect.Range;
 import java.io.IOException;
@@ -143,29 +144,6 @@ public class IParquetReader implements AutoCloseable {
 
   public ParquetMetadata getMeta() {
     return metadata;
-  }
-
-  public static DataType toIginxType(PrimitiveType primitiveType) {
-    if (primitiveType.getRepetition().equals(PrimitiveType.Repetition.REPEATED)) {
-      return DataType.BINARY;
-    }
-    switch (primitiveType.getPrimitiveTypeName()) {
-      case BOOLEAN:
-        return DataType.BOOLEAN;
-      case INT32:
-        return DataType.INTEGER;
-      case INT64:
-        return DataType.LONG;
-      case FLOAT:
-        return DataType.FLOAT;
-      case DOUBLE:
-        return DataType.DOUBLE;
-      case BINARY:
-        return DataType.BINARY;
-      default:
-        throw new RuntimeException(
-            "Unsupported data type: " + primitiveType.getPrimitiveTypeName());
-    }
   }
 
   public static class Builder {

@@ -18,16 +18,22 @@ package cn.edu.tsinghua.iginx.parquet.manager.dummy;
 
 import cn.edu.tsinghua.iginx.parquet.io.parquet.IParquetReader;
 import cn.edu.tsinghua.iginx.parquet.io.parquet.IRecord;
+import cn.edu.tsinghua.iginx.parquet.io.parquet.util.SchemaUtils;
+import cn.edu.tsinghua.iginx.parquet.io.parquet.exception.UnsupportedParquetFormatException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.Range;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.*;
 import shaded.iginx.org.apache.parquet.io.InvalidRecordException;
 import shaded.iginx.org.apache.parquet.schema.GroupType;
 import shaded.iginx.org.apache.parquet.schema.MessageType;
 import shaded.iginx.org.apache.parquet.schema.PrimitiveType;
 import shaded.iginx.org.apache.parquet.schema.Type;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Deprecated
 public class Loader {
@@ -159,7 +165,12 @@ public class Loader {
     typeNameList.add(type.getName());
     if (type.isPrimitive()) {
       PrimitiveType primitiveType = type.asPrimitiveType();
-      DataType iginxType = IParquetReader.toIginxType(primitiveType);
+      DataType iginxType = null;
+      try {
+        iginxType = SchemaUtils.toIginxType(primitiveType);
+      } catch (UnsupportedParquetFormatException e) {
+        throw new IllegalStateException(e);
+      }
       String name = String.join(".", typeNameList);
       indexMap.put(new ArrayList<>(indexList), table.declareColumn(name, iginxType));
     } else {

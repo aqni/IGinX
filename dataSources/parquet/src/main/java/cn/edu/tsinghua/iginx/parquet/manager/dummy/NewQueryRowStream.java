@@ -22,7 +22,7 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Header;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Row;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
-import cn.edu.tsinghua.iginx.parquet.manager.util.TagKVUtils;
+import cn.edu.tsinghua.iginx.parquet.io.parquet.util.TagKVUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;

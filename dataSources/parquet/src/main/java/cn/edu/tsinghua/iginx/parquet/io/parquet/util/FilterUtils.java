@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cn.edu.tsinghua.iginx.parquet.io.parquet;
+package cn.edu.tsinghua.iginx.parquet.io.parquet.util;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.AndFilter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
@@ -28,7 +28,7 @@ import shaded.iginx.org.apache.parquet.filter2.predicate.FilterApi;
 import shaded.iginx.org.apache.parquet.filter2.predicate.FilterPredicate;
 import shaded.iginx.org.apache.parquet.filter2.predicate.Operators;
 
-class FilterUtils {
+public class FilterUtils {
 
   @Nonnull
   public static Pair<FilterPredicate, Boolean> toFilterPredicate(@Nonnull Filter filter) {

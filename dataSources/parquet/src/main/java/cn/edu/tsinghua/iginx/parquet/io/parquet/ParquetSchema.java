@@ -17,6 +17,7 @@
 package cn.edu.tsinghua.iginx.parquet.io.parquet;
 
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
+import cn.edu.tsinghua.iginx.parquet.io.parquet.util.SchemaUtils;
 import cn.edu.tsinghua.iginx.parquet.util.Constants;
 import cn.edu.tsinghua.iginx.parquet.util.exception.UnsupportedTypeException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
@@ -82,7 +83,7 @@ public class ParquetSchema {
         continue;
       }
 
-      DataType iType = IParquetReader.toIginxType(type.asPrimitiveType());
+      DataType iType = SchemaUtils.toIginxType(type.asPrimitiveType());
       Pair<String, DataType> pair = new Pair<>(typeName, iType);
       fields.add(pair);
     }

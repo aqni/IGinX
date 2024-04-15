@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cn.edu.tsinghua.iginx.parquet.io.parquet;
+package cn.edu.tsinghua.iginx.parquet.io.parquet.util;
 
 import cn.edu.tsinghua.iginx.parquet.util.Constants;
 import java.util.HashSet;

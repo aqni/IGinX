@@ -12,6 +12,7 @@ import cn.edu.tsinghua.iginx.parquet.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.parquet.io.parquet.IParquetReader;
 import cn.edu.tsinghua.iginx.parquet.io.parquet.IParquetWriter;
 import cn.edu.tsinghua.iginx.parquet.io.parquet.IRecord;
+import cn.edu.tsinghua.iginx.parquet.io.parquet.util.SchemaUtils;
 import cn.edu.tsinghua.iginx.parquet.manager.dummy.Storer;
 import cn.edu.tsinghua.iginx.parquet.manager.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.parquet.util.CachePool;
@@ -152,7 +153,7 @@ public class ParquetReadWriter implements ReadWriter<Long, String, DataType, Obj
         if (type.getName().equals(Constants.KEY_FIELD_NAME)) {
           continue;
         }
-        DataType iginxType = IParquetReader.toIginxType(type.asPrimitiveType());
+        DataType iginxType = SchemaUtils.toIginxType(type.asPrimitiveType());
         schemaDst.put(type.getName(), iginxType);
       }
 

@@ -16,12 +16,14 @@
 
 package cn.edu.tsinghua.iginx.parquet.util;
 
+import javax.annotation.concurrent.Immutable;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.StringJoiner;
 
 /** The properties of storage engine */
+@Immutable
 public class StorageProperties {
   private final boolean flushOnClose;
   private final long writeBufferSize;
