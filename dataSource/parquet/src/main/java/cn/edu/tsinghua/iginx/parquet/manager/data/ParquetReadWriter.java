@@ -39,9 +39,12 @@ import cn.edu.tsinghua.iginx.parquet.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.LongAdder;
 import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,30 +63,124 @@ public class ParquetReadWriter implements ReadWriter {
 
   private final TombstoneStorage tombstoneStorage;
 
-  public ParquetReadWriter(Shared shared, Path dir) {
+  private final LongAdder writeCounter = new LongAdder();
+
+  private final ConcurrentLinkedQueue<Path> hotFiles = new ConcurrentLinkedQueue<>();
+
+  private final LinkedBlockingQueue<Path> moveQueue = new LinkedBlockingQueue<>();
+
+  private final Path coldDir;
+
+  private ExecutorService moveExecutor;
+
+  public ParquetReadWriter(Shared shared, Path dir, @Nullable Path coldDir) {
     this.shared = shared;
     this.dir = dir;
+    this.coldDir = coldDir;
     this.tombstoneStorage = new TombstoneStorage(shared, dir.resolve(Constants.DIR_NAME_TOMBSTONE));
+
+    startMoveExecutor();
     cleanTempFiles();
   }
 
-  private void cleanTempFiles() {
-    try (DirectoryStream<Path> stream =
-        Files.newDirectoryStream(dir, path -> path.endsWith(Constants.SUFFIX_FILE_TEMP))) {
-      for (Path path : stream) {
-        LOGGER.info("remove temp file {}", path);
-        Files.deleteIfExists(path);
-      }
-    } catch (NoSuchFileException ignored) {
-      LOGGER.debug("no dir named {}", dir);
-    } catch (IOException e) {
-      LOGGER.error("failed to clean temp files", e);
+  private void startMoveExecutor() {
+    if (coldDir == null) {
+      return;
     }
+    LOGGER.info("start moving executor from hotDir {} to coldDir {}", dir, coldDir);
+    ThreadFactory moverFactory =
+        new ThreadFactoryBuilder().setNameFormat("mover-" + coldDir + "-%d").build();
+    this.moveExecutor = Executors.newSingleThreadExecutor(moverFactory);
+    this.moveExecutor.submit(this::moveFiles);
+  }
+
+  private List<Path> getDirs() {
+    List<Path> dirs = new ArrayList<>();
+    dirs.add(dir);
+    if (coldDir != null) {
+      dirs.add(coldDir);
+    }
+    return dirs;
+  }
+
+  private void cleanTempFiles() {
+    for (Path dir : getDirs()) {
+      try (DirectoryStream<Path> stream =
+          Files.newDirectoryStream(dir, path -> path.endsWith(Constants.SUFFIX_FILE_TEMP))) {
+        for (Path path : stream) {
+          LOGGER.info("remove temp file {}", path);
+          Files.deleteIfExists(path);
+        }
+      } catch (NoSuchFileException ignored) {
+        LOGGER.debug("no dir named {}", dir);
+      } catch (IOException e) {
+        LOGGER.error("failed to clean temp files", e);
+      }
+    }
+  }
+
+  private void moveFiles() {
+    if (coldDir == null) {
+      return;
+    }
+    while (true) {
+      try {
+        Path relative = moveQueue.take();
+        doMove(dir.resolve(relative), coldDir.resolve(relative));
+      } catch (InterruptedException e) {
+        LOGGER.warn("interrupted", e);
+        break;
+      } catch (IOException e) {
+        LOGGER.error("failed to move file", e);
+      }
+    }
+  }
+
+  private synchronized void doMove(Path source, Path target) throws IOException {
+    LOGGER.info("move file {} to {}", source, target);
+
+    try {
+      // copy
+      Files.createDirectories(target.getParent());
+      Path temp = target.resolveSibling(target.getFileName() + Constants.SUFFIX_FILE_TEMP);
+      Files.copy(source, temp, StandardCopyOption.REPLACE_EXISTING);
+      Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+      // delete
+      Files.deleteIfExists(source);
+    } catch (NoSuchFileException e) {
+      LOGGER.debug("file not found: {}", source);
+    }
+  }
+
+  @Override
+  public void close() throws IOException {
+    moveExecutor.shutdownNow();
+    try {
+      boolean terminated = moveExecutor.awaitTermination(1, TimeUnit.MINUTES);
+      if (!terminated) {
+        throw new IOException("failed to terminate moveExecutor");
+      }
+    } catch (InterruptedException e) {
+      throw new IOException(e);
+    }
+    tombstoneStorage.close();
   }
 
   @Override
   public String getName() {
     return dir.toString();
+  }
+
+  private Path findTierPath(String fileId) {
+    Path path = Paths.get(fileId);
+    Path relative = dir.relativize(path);
+    if (coldDir != null) {
+      Path coldPath = coldDir.resolve(relative);
+      if (Files.exists(coldPath)) {
+        path = coldPath;
+      }
+    }
+    return path;
   }
 
   @Override
@@ -120,6 +217,18 @@ public class ParquetReadWriter implements ReadWriter {
       LOGGER.warn("file {} already exists, will be replaced", path);
     }
     Files.move(tempPath, path, StandardCopyOption.REPLACE_EXISTING);
+    writeCounter.increment();
+    hotFiles.offer(path);
+    double hotFileNumber = hotFiles.size();
+    double totalNumber = writeCounter.longValue();
+    if (hotFileNumber / totalNumber > shared.getStorageProperties().getHotRatio()) {
+      synchronized (this) {
+        Path hotFile = hotFiles.poll();
+        if (hotFile != null) {
+          moveQueue.add(dir.relativize(hotFile));
+        }
+      }
+    }
   }
 
   private static MessageType getMessageType(Map<String, DataType> schema) {
@@ -160,7 +269,7 @@ public class ParquetReadWriter implements ReadWriter {
   }
 
   private ParquetTableMeta doReadMeta(String fileName) {
-    Path path = Paths.get(fileName);
+    Path path = findTierPath(fileName);
 
     try (IParquetReader reader = IParquetReader.builder(path).build()) {
       ParquetMetadata meta = reader.getMeta();
@@ -184,7 +293,7 @@ public class ParquetReadWriter implements ReadWriter {
       unionFilter = new AndFilter(Arrays.asList(rangeFilter, predicate));
     }
 
-    IParquetReader.Builder builder = IParquetReader.builder(path);
+    IParquetReader.Builder builder = IParquetReader.builder(findTierPath(path.toString()));
     builder.project(fields);
     builder.filter(unionFilter);
 
@@ -206,10 +315,16 @@ public class ParquetReadWriter implements ReadWriter {
   }
 
   @Override
-  public void delete(String name) {
+  public synchronized void delete(String name) {
     Path path = getPath(name);
     try {
+      boolean removedFromHot = hotFiles.remove(path);
+      boolean removedFromMove = moveQueue.remove(path);
+      if (removedFromHot || removedFromMove) {
+        writeCounter.decrement();
+      }
       Files.deleteIfExists(path);
+      Files.deleteIfExists(findTierPath(path.toString()));
       shared.getCachePool().asMap().remove(path.toString());
       tombstoneStorage.removeTable(name);
     } catch (IOException e) {
@@ -218,17 +333,19 @@ public class ParquetReadWriter implements ReadWriter {
   }
 
   @Override
-  public Iterable<String> tableNames() throws IOException {
+  public synchronized Iterable<String> tableNames() throws IOException {
     List<String> names = new ArrayList<>();
-    try (DirectoryStream<Path> stream =
-        Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
-      for (Path path : stream) {
-        String fileName = path.getFileName().toString();
-        String tableName = getTableName(fileName);
-        names.add(tableName);
+    for (Path dir : getDirs()) {
+      try (DirectoryStream<Path> stream =
+          Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
+        for (Path path : stream) {
+          String fileName = path.getFileName().toString();
+          String tableName = getTableName(fileName);
+          names.add(tableName);
+        }
+      } catch (NoSuchFileException ignored) {
+        LOGGER.debug("dir {} not existed.", dir);
       }
-    } catch (NoSuchFileException ignored) {
-      LOGGER.debug("dir {} not existed.", dir);
     }
     return names;
   }
@@ -243,23 +360,30 @@ public class ParquetReadWriter implements ReadWriter {
   }
 
   @Override
-  public void clear() throws IOException {
+  public synchronized void clear() throws IOException {
     LOGGER.info("clearing data of {}", dir);
     try {
-      try (DirectoryStream<Path> stream =
-          Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
-        for (Path path : stream) {
-          Files.deleteIfExists(path);
-          String fileName = path.toString();
-          shared.getCachePool().asMap().remove(fileName);
+      hotFiles.clear();
+      writeCounter.reset();
+      moveQueue.clear();
+
+      for (Path dir : getDirs()) {
+        try (DirectoryStream<Path> stream =
+            Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
+          for (Path path : stream) {
+            Files.deleteIfExists(path);
+            String fileName = path.toString();
+            shared.getCachePool().asMap().remove(fileName);
+          }
+        }
+        try (DirectoryStream<Path> stream =
+            Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_TEMP)) {
+          for (Path path : stream) {
+            Files.deleteIfExists(path);
+          }
         }
       }
-      try (DirectoryStream<Path> stream =
-          Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_TEMP)) {
-        for (Path path : stream) {
-          Files.deleteIfExists(path);
-        }
-      }
+
       tombstoneStorage.clear();
       Files.deleteIfExists(dir);
     } catch (NoSuchFileException e) {

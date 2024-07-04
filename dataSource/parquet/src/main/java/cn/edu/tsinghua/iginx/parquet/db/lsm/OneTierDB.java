@@ -50,6 +50,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 import javax.annotation.WillClose;
+import javax.annotation.WillCloseWhenClosed;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.AutoCloseables;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -67,7 +68,8 @@ public class OneTierDB implements Database {
   private final MemTableQueue memTableQueue;
   private final Flusher flusher;
 
-  public OneTierDB(String name, Shared shared, ReadWriter readerWriter) throws IOException {
+  public OneTierDB(String name, Shared shared, @WillCloseWhenClosed ReadWriter readerWriter)
+      throws IOException {
     this.name = name;
     this.shared = shared;
     this.allocator = shared.getAllocator().newChildAllocator(name, 0, Long.MAX_VALUE);

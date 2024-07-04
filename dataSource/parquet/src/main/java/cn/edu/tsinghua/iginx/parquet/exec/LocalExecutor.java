@@ -67,6 +67,8 @@ public class LocalExecutor implements Executor {
 
   public Path dataDir;
 
+  private Path coldDir;
+
   private FileLock fileLock;
 
   public Path dummyDir;
@@ -84,6 +86,7 @@ public class LocalExecutor implements Executor {
       boolean hasData,
       boolean readOnly,
       String dataDir,
+      String coldDir,
       String dummyDir,
       String dirPrefix)
       throws StorageInitializationException {
@@ -104,6 +107,9 @@ public class LocalExecutor implements Executor {
     }
 
     if (this.dataDir != null) {
+      if (coldDir != null) {
+        this.coldDir = Paths.get(coldDir);
+      }
       recoverFromDisk();
     }
 
@@ -236,7 +242,8 @@ public class LocalExecutor implements Executor {
             throw new IsClosedException("executor is closed: " + dataDir);
           }
           try {
-            return new DataManager(shared, dataDir.resolve(s));
+            return new DataManager(
+                shared, dataDir.resolve(s), coldDir == null ? null : coldDir.resolve(s));
           } catch (IOException e) {
             throw new RuntimeException(e);
           }

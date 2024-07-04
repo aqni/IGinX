@@ -47,6 +47,7 @@ public class StorageProperties {
   private final int zstdLevel;
   private final int zstdWorkers;
   private final int parquetLz4BufferSize;
+  private final double hotRatio;
 
   private StorageProperties(
       boolean flushOnClose,
@@ -67,7 +68,8 @@ public class StorageProperties {
       String parquetCompression,
       int zstdLevel,
       int zstdWorkers,
-      int parquetLz4BufferSize) {
+      int parquetLz4BufferSize,
+      double hotRatio) {
     this.flushOnClose = flushOnClose;
     this.writeBufferSize = writeBufferSize;
     this.writeBufferChunkValuesMax = writeBufferChunkValuesMax;
@@ -87,6 +89,7 @@ public class StorageProperties {
     this.zstdLevel = zstdLevel;
     this.zstdWorkers = zstdWorkers;
     this.parquetLz4BufferSize = parquetLz4BufferSize;
+    this.hotRatio = hotRatio;
   }
 
   /**
@@ -257,6 +260,15 @@ public class StorageProperties {
   }
 
   /**
+   * Get the hot ratio
+   *
+   * @return the hot ratio
+   */
+  public double getHotRatio() {
+    return hotRatio;
+  }
+
+  /**
    * Get a builder of StorageProperties
    *
    * @return a builder of StorageProperties
@@ -287,6 +299,7 @@ public class StorageProperties {
         .add("zstdLevel=" + zstdLevel)
         .add("zstdWorkers=" + zstdWorkers)
         .add("parquetLz4BufferSize=" + parquetLz4BufferSize)
+        .add("hotRatio=" + hotRatio)
         .toString();
   }
 
@@ -311,6 +324,7 @@ public class StorageProperties {
     public static final String ZSTD_LEVEL = "zstd.level";
     public static final String ZSTD_WORKERS = "zstd.workers";
     public static final String PARQUET_LZ4_BUFFER_SIZE = "parquet.lz4.buffer.size";
+    public static final String HOT_RATIO = "tier.hot.ratio";
 
     private boolean flushOnClose = true;
     private long writeBufferSize = 100 * 1024 * 1024; // BYTE
@@ -331,6 +345,7 @@ public class StorageProperties {
     private int zstdLevel = 3;
     private int zstdWorkers = 0;
     private int parquetLz4BufferSize = 256 * 1024; // BYTE
+    private double hotRatio = 1;
 
     private Builder() {}
 
@@ -561,6 +576,17 @@ public class StorageProperties {
     }
 
     /**
+     * Set the hot ratio
+     *
+     * @param hotRatio the hot ratio
+     * @return this builder
+     */
+    public Builder setHotRatio(double hotRatio) {
+      this.hotRatio = hotRatio;
+      return this;
+    }
+
+    /**
      * Parse properties to set the properties of StorageProperties
      *
      * @param properties the properties to be parsed
@@ -597,6 +623,7 @@ public class StorageProperties {
       ParseUtils.getOptionalInteger(properties, ZSTD_WORKERS).ifPresent(this::setZstdWorkers);
       ParseUtils.getOptionalInteger(properties, PARQUET_LZ4_BUFFER_SIZE)
           .ifPresent(this::setParquetLz4BufferSize);
+      ParseUtils.getOptionalDouble(properties, HOT_RATIO).ifPresent(this::setHotRatio);
       return this;
     }
 
@@ -625,7 +652,8 @@ public class StorageProperties {
           parquetCompression,
           zstdLevel,
           zstdWorkers,
-          parquetLz4BufferSize);
+          parquetLz4BufferSize,
+          hotRatio);
     }
   }
 }

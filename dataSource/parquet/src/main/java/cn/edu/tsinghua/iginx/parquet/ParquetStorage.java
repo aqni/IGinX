@@ -77,6 +77,7 @@ public class ParquetStorage implements IStorage {
   private void initLocalStorage(StorageEngineMeta meta) throws StorageInitializationException {
     Map<String, String> extraParams = meta.getExtraParams();
     String dataDir = extraParams.get("dir");
+    String coldDir = extraParams.get("cold_dir");
     String dummyDir = extraParams.get("dummy_dir");
     String dirPrefix = extraParams.get("embedded_prefix");
 
@@ -93,7 +94,7 @@ public class ParquetStorage implements IStorage {
 
     this.executor =
         new LocalExecutor(
-            shared, meta.isHasData(), meta.isReadOnly(), dataDir, dummyDir, dirPrefix);
+            shared, meta.isHasData(), meta.isReadOnly(), dataDir, coldDir, dummyDir, dirPrefix);
     this.server = new ParquetServer(meta.getPort(), executor);
     this.thread = new Thread(server);
     thread.start();

@@ -38,6 +38,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.StreamSupport;
+import javax.annotation.WillCloseWhenClosed;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +50,8 @@ public class TableStorage implements AutoCloseable {
   private final ReadWriter readWriter;
   private long sqnBase;
 
-  public TableStorage(Shared shared, ReadWriter readWriter) throws IOException {
+  public TableStorage(Shared shared, @WillCloseWhenClosed ReadWriter readWriter)
+      throws IOException {
     this.readWriter = readWriter;
 
     Iterable<String> tableNames = readWriter.tableNames();
@@ -135,7 +137,9 @@ public class TableStorage implements AutoCloseable {
   }
 
   @Override
-  public void close() {}
+  public void close() throws IOException {
+    readWriter.close();
+  }
 
   public Map<String, DataType> schema() {
     return tableIndex.getType();

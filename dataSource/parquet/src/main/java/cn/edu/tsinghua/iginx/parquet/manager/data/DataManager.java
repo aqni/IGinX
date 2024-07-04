@@ -32,7 +32,6 @@ import cn.edu.tsinghua.iginx.parquet.db.lsm.api.ReadWriter;
 import cn.edu.tsinghua.iginx.parquet.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.parquet.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.parquet.manager.Manager;
-import cn.edu.tsinghua.iginx.parquet.util.Constants;
 import cn.edu.tsinghua.iginx.parquet.util.Shared;
 import cn.edu.tsinghua.iginx.parquet.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.parquet.util.exception.StorageException;
@@ -41,6 +40,7 @@ import com.google.common.collect.RangeSet;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
+import javax.annotation.Nullable;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,10 +52,9 @@ public class DataManager implements Manager {
 
   private final Shared shared;
 
-  public DataManager(Shared shared, Path dir) throws IOException {
+  public DataManager(Shared shared, Path dir, @Nullable Path coldDir) throws IOException {
     this.shared = shared;
-    Path dataDir = dir.resolve(Constants.DIR_NAME_TABLE);
-    ReadWriter readWriter = new ParquetReadWriter(shared, dataDir);
+    ReadWriter readWriter = new ParquetReadWriter(shared, dir, coldDir);
     this.db = new OneTierDB(dir.toString(), shared, readWriter);
   }
 

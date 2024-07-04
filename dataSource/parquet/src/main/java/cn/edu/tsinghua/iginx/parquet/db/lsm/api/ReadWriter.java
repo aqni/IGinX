@@ -22,10 +22,11 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.parquet.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.parquet.db.util.iterator.Scanner;
 import com.google.common.collect.RangeSet;
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Set;
 
-public interface ReadWriter {
+public interface ReadWriter extends Closeable {
 
   String getName();
 

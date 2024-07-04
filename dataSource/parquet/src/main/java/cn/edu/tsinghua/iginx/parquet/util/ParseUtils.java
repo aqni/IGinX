@@ -47,6 +47,10 @@ public class ParseUtils {
     return getOptional(properties, key, str -> str);
   }
 
+  public static Optional<Double> getOptionalDouble(Map<String, String> properties, String key) {
+    return getOptional(properties, key, Double::parseDouble);
+  }
+
   private static <V> Optional<V> getOptional(
       Map<String, String> properties, String key, Function<String, V> parser) {
     String value = properties.get(key);
