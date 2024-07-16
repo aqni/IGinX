@@ -44,6 +44,7 @@ public class ActiveMemTable {
 
   private final Shared shared;
   private final BufferAllocator allocator;
+  private final ConflictScheduler scheduler;
 
   private long activeId = 0;
   private BufferAllocator activeAllocator = null;
@@ -53,6 +54,7 @@ public class ActiveMemTable {
   ActiveMemTable(Shared shared, BufferAllocator allocator) {
     this.shared = Preconditions.checkNotNull(shared);
     this.allocator = Preconditions.checkNotNull(allocator);
+    this.scheduler = new ConflictScheduler();
   }
 
   public boolean isOverloaded() {
@@ -70,7 +72,7 @@ public class ActiveMemTable {
     switchTableLock.readLock().lock();
     try {
       createMemtableIfNotExist();
-      activeTable.store(data);
+      scheduler.append(activeTable, data);
     } finally {
       switchTableLock.readLock().unlock();
     }
@@ -211,6 +213,7 @@ public class ActiveMemTable {
     flushLock.writeLock().lock();
     switchTableLock.writeLock().lock();
     try {
+      scheduler.reset();
       if (activeTable != null) {
         activeTable.close();
         activeAllocator.close();
