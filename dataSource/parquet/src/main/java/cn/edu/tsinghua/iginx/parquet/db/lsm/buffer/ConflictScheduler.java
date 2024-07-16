@@ -1,44 +1,68 @@
 package cn.edu.tsinghua.iginx.parquet.db.lsm.buffer;
 
 import cn.edu.tsinghua.iginx.parquet.db.lsm.buffer.chunk.Chunk;
+import org.apache.arrow.vector.types.pojo.Field;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.*;
-import org.apache.arrow.vector.types.pojo.Field;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ConflictScheduler {
 
-  private final ConcurrentMap<Field, ExecutorService> executors = new ConcurrentHashMap<>();
-  private final Set<Field> touched = Collections.newSetFromMap(new ConcurrentHashMap<>());
+  private final ConcurrentHashMap<Field, Lock> locks = new ConcurrentHashMap<>();
 
   public void reset() {
-    // remove all untouched fields
-    executors.keySet().removeIf(field -> !touched.contains(field));
-    touched.clear();
+    locks.clear();
   }
 
-  private ExecutorService getExecutor(Field field) {
-    touched.add(field);
-    return executors.computeIfAbsent(field, f -> Executors.newSingleThreadExecutor());
+  private Lock getLock(Field field) {
+    return locks.computeIfAbsent(field, f -> new ReentrantLock());
   }
 
-  private ExecutorService getExecutor(Chunk.Snapshot data) {
-    return getExecutor(data.getField());
+  private Lock getLock(Chunk.Snapshot data) {
+    return getLock(data.getField());
   }
 
   public void append(MemTable activeTable, Iterable<Chunk.Snapshot> data) {
-    List<CompletableFuture<Void>> futures = new ArrayList<>();
-    for (Chunk.Snapshot chunk : data) {
-      CompletableFuture<Void> future =
-          CompletableFuture.runAsync(
-              () -> {
-                activeTable.store(chunk);
-              },
-              getExecutor(chunk));
-      futures.add(future);
-    }
-    CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+    List<Chunk.Snapshot> blocked = tryAppend(activeTable, data);
+
+    Collections.shuffle(blocked);
+
+    awaitAppend(activeTable, blocked);
   }
+
+  private List<Chunk.Snapshot> tryAppend(MemTable activeTable, Iterable<Chunk.Snapshot> data) {
+    List<Chunk.Snapshot> blocked = new ArrayList<>();
+
+    for (Chunk.Snapshot snapshot : data) {
+      Lock lock = getLock(snapshot);
+      if(lock.tryLock()) {
+        try {
+          activeTable.store(snapshot);
+        } finally {
+          lock.unlock();
+        }
+      }else{
+        blocked.add(snapshot);
+      }
+    }
+    return blocked;
+  }
+
+  private void awaitAppend(MemTable activeTable, Iterable<Chunk.Snapshot> data) {
+    for(Chunk.Snapshot snapshot : data) {
+      Lock lock = getLock(snapshot);
+      lock.lock();
+      try {
+        activeTable.store(snapshot);
+      } finally {
+        lock.unlock();
+      }
+    }
+  }
+
+
 }
