@@ -31,7 +31,6 @@ import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.util.TransferPair;
-import org.apache.arrow.vector.util.VectorBatchAppender;
 
 public class ArrowVectors {
 
@@ -176,11 +175,13 @@ public class ArrowVectors {
     indexes.setValueCount(unique);
   }
 
-  public static void append(ValueVector to, ValueVector from) {
-    if (to.getValueCount() == 0) {
+  public static void transferAppend(ValueVector to, ValueVector from) {
+    // TODO: move this branch to VectorAppender
+    if (to.getValueCount() == 0 && from.getValueCount() != 0) {
       to.allocateNew();
     }
-    VectorBatchAppender.batchAppend(to, from);
+    TransferVectorAppender appender = new TransferVectorAppender(to);
+    from.accept(appender, null);
   }
 
   public static void collect(IntVector indexes, Iterable<Integer> values) {

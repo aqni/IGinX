@@ -36,7 +36,7 @@ public class ArrowTypes {
         return toIginxType((ArrowType.Int) arrowType);
       case FloatingPoint:
         return toIginxType((ArrowType.FloatingPoint) arrowType);
-      case Binary:
+      case BinaryView:
         return DataType.BINARY;
       default:
         throw new IllegalArgumentException("Unsupported arrow type: " + arrowType);
@@ -81,7 +81,7 @@ public class ArrowTypes {
       case DOUBLE:
         return Types.MinorType.FLOAT8; // 64-bit
       case BINARY:
-        return Types.MinorType.VARBINARY; // variable length
+        return Types.MinorType.VIEWVARBINARY; // variable-length
       default:
         throw new IllegalArgumentException("Unsupported data type: " + dataType);
     }

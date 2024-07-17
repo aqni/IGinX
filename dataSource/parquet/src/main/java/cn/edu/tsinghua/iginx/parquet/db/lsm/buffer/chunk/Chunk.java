@@ -64,8 +64,8 @@ public class Chunk implements AutoCloseable {
 
   public synchronized int store(Snapshot data) {
     int offset = keys.getValueCount();
-    ArrowVectors.append(keys, data.keys);
-    ArrowVectors.append(values, data.values);
+    ArrowVectors.transferAppend(keys, data.keys);
+    ArrowVectors.transferAppend(values, data.values);
     return offset;
   }
 
@@ -90,8 +90,6 @@ public class Chunk implements AutoCloseable {
       Preconditions.checkNotNull(keys);
       Preconditions.checkNotNull(values);
       Preconditions.checkArgument(keys.getValueCount() == values.getValueCount());
-      Preconditions.checkArgument(!keys.getField().isNullable());
-      Preconditions.checkArgument(!values.getField().isNullable());
 
       this.keys = keys;
       this.values = values;
