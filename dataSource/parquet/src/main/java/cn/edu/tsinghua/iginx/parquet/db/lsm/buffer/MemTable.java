@@ -21,7 +21,6 @@ import cn.edu.tsinghua.iginx.parquet.db.lsm.buffer.chunk.Chunk;
 import cn.edu.tsinghua.iginx.parquet.db.lsm.buffer.chunk.IndexedChunk;
 import cn.edu.tsinghua.iginx.parquet.db.lsm.table.MemoryTable;
 import cn.edu.tsinghua.iginx.parquet.db.util.AreaSet;
-import cn.edu.tsinghua.iginx.parquet.util.arrow.ArrowFields;
 import com.google.common.collect.RangeSet;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -112,10 +111,9 @@ public class MemTable implements AutoCloseable {
       if (closed) {
         throw new IllegalStateException("MemTable is closed");
       }
-      Field field = ArrowFields.nullable(data.getField());
       MemColumn column =
           columns.computeIfAbsent(
-              field,
+              data.getField(),
               key -> new MemColumn(factory, allocator, maxChunkValueCount, minChunkValueCount));
       column.store(data);
     } finally {
