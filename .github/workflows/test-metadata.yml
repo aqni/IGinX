@@ -69,11 +69,11 @@ jobs:
 
             - name: Run test for meta manager
               shell: bash
-              run: mvn test -Dtest=IMetaManagerTest -Dsurefire.failIfNoSpecifiedTests=false -P-format
+              run: mvn test -Dtest=IMetaManagerTest "-Dsurefire.failIfNoSpecifiedTests=false" -P-format
 
             - name: Run test for sync protocol
               shell: bash
-              run: mvn test -Dtest=ETCDSyncProtocolTest -Dsurefire.failIfNoSpecifiedTests=false -P-format
+              run: mvn test -Dtest=ETCDSyncProtocolTest "-Dsurefire.failIfNoSpecifiedTests=false" -P-format
 
             - uses: codecov/codecov-action@v1
               with:
