@@ -1,8 +1,13 @@
-name: "Bug Regression Test"
+name: "Union Database Test With Push Down"
 
 on:
     workflow_call:
         inputs:
+            push-down:
+                description: "Whether to enable push down"
+                type: boolean
+                required: false
+                default: true
             java-matrix:
                 description: "The java version to run the test on"
                 type: string
@@ -23,10 +28,15 @@ on:
                 type: string
                 required: false
                 default: '["zookeeper", "etcd"]'
+            db-matrix:
+                description: "The database to run the test on"
+                type: string
+                required: false
+                default: '["FileSystem", "IoTDB12", "InfluxDB", "PostgreSQL", "Redis", "MongoDB", "Parquet", "MySQL"]'
 
 jobs:
-    MixCluster-ShowTimeseries:
-        timeout-minutes: 15
+    Union-DB-Test-Push_Down:
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
@@ -34,6 +44,7 @@ jobs:
                 python-version: ${{ fromJSON(inputs.python-matrix) }}
                 os: ${{ fromJSON(inputs.os-matrix) }}
                 metadata: ${{ fromJSON(inputs.metadata-matrix) }}
+                DB-name: ${{ fromJSON(inputs.db-matrix) }}
         runs-on: ${{ matrix.os }}
         steps:
             - uses: actions/checkout@v4
@@ -43,6 +54,11 @@ jobs:
                   python-version: ${{ matrix.python-version }}
                   java: ${{ matrix.java }}
 
+            - name: Install IGinX with Maven
+              shell: bash
+              run: |
+                  mvn clean package -DskipTests -P-format
+
             - name: Run Metadata
               uses: ./.github/actions/metadataRunner
               with:
@@ -51,26 +67,33 @@ jobs:
             - name: Run DB
               uses: ./.github/actions/dbRunner
               with:
-                  DB-name: "Mix-IoTDB12-InfluxDB"
+                  DB-name: ${{ matrix.DB-name }}
 
-            - name: Install IGinX with Maven
-              shell: bash
-              run: |
-                  mvn clean package -DskipTests -P-format -q
-
-            - name: Write Conf
+            - name: Change IGinX config
               uses: ./.github/actions/confWriter
               with:
+                  DB-name: ${{ matrix.DB-name }}
+                  Push-Down: "${{ inputs.push-down }}"
+                  Set-Filter-Fragment-OFF: "true"
                   Metadata: ${{ matrix.metadata }}
 
             - name: Start IGinX
               uses: ./.github/actions/iginxRunner
 
-            - name: TestMixCluster
+            - name: TestController IT
+              if: always()
+              shell: bash
+              env:
+                  METADATA_STORAGE: ${{ matrix.metadata }}
+              run: |
+                  chmod +x "${GITHUB_WORKSPACE}/.github/scripts/test/test_union.sh"
+                  mvn test -Dtest=Controller -Dsurefire.failIfNoSpecifiedTests=false -P-format
+
+            - name: Show test result
               if: always()
               shell: bash
               run: |
-                  mvn test -q -Dtest=MixClusterShowColumnsRegressionTest -DfailIfNoTests=false -P-format
+                  cat ${GITHUB_WORKSPACE}/test/src/test/resources/testResult.txt
 
             - name: Show IGinX log
               if: always()
