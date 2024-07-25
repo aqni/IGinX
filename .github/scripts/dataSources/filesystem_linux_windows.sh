@@ -20,7 +20,7 @@
 
 set -e
 
-cp -f conf/config.properties.bak $7
+cp -f conf/config.properties $7
 
 sed -i "s/^storageEngineList=127.0.0.1#6667#iotdb12/#storageEngineList=127.0.0.1#6667#iotdb12/" $7
 

@@ -54,6 +54,11 @@ jobs:
                   python-version: ${{ matrix.python-version }}
                   java: ${{ matrix.java }}
 
+            - name: Install IGinX with Maven
+              shell: bash
+              run: |
+                  mvn clean package -DskipTests -P-format
+
             - name: Run Metadata
               uses: ./.github/actions/metadataRunner
               with:
@@ -63,11 +68,6 @@ jobs:
               uses: ./.github/actions/dbRunner
               with:
                   DB-name: ${{ matrix.DB-name }}
-
-            - name: Install IGinX with Maven
-              shell: bash
-              run: |
-                  mvn clean package -DskipTests -P-format
 
             - name: Prepare CapExp environment oriHasDataExpHasData
               uses: ./.github/actions/capacityExpansionUnionTest
@@ -128,6 +128,11 @@ jobs:
                   python-version: ${{ matrix.python-version }}
                   java: ${{ matrix.java }}
 
+            - name: Install IGinX with Maven
+              shell: bash
+              run: |
+                  mvn clean package -DskipTests -P-format
+
             - name: Run Metadata
               uses: ./.github/actions/metadataRunner
               with:
@@ -137,11 +142,6 @@ jobs:
               uses: ./.github/actions/dbRunner
               with:
                   DB-name: ${{ matrix.DB-name }}
-
-            - name: Install IGinX with Maven
-              shell: bash
-              run: |
-                  mvn clean package -DskipTests -P-format
 
             - name: Prepare CapExp environment oriNoDataExpNoData
               uses: ./.github/actions/capacityExpansionUnionTest
@@ -202,6 +202,11 @@ jobs:
                   python-version: ${{ matrix.python-version }}
                   java: ${{ matrix.java }}
 
+            - name: Install IGinX with Maven
+              shell: bash
+              run: |
+                  mvn clean package -DskipTests -P-format
+
             - name: Run Metadata
               uses: ./.github/actions/metadataRunner
               with:
@@ -211,11 +216,6 @@ jobs:
               uses: ./.github/actions/dbRunner
               with:
                   DB-name: ${{ matrix.DB-name }}
-
-            - name: Install IGinX with Maven
-              shell: bash
-              run: |
-                  mvn clean package -DskipTests -P-format
 
             - name: Prepare CapExp environment oriHasDataExpNoData
               uses: ./.github/actions/capacityExpansionUnionTest
@@ -277,6 +277,11 @@ jobs:
                   python-version: ${{ matrix.python-version }}
                   java: ${{ matrix.java }}
 
+            - name: Install IGinX with Maven
+              shell: bash
+              run: |
+                  mvn clean package -DskipTests -P-format
+
             - name: Run Metadata
               uses: ./.github/actions/metadataRunner
               with:
@@ -286,11 +291,6 @@ jobs:
               uses: ./.github/actions/dbRunner
               with:
                   DB-name: ${{ matrix.DB-name }}
-
-            - name: Install IGinX with Maven
-              shell: bash
-              run: |
-                  mvn clean package -DskipTests -P-format
 
             - name: Prepare CapExp environment oriNoDataExpHasData
               uses: ./.github/actions/capacityExpansionUnionTest
@@ -352,6 +352,11 @@ jobs:
                   python-version: ${{ matrix.python-version }}
                   java: ${{ matrix.java }}
 
+            - name: Install IGinX with Maven
+              shell: bash
+              run: |
+                mvn clean package -DskipTests -P-format
+
             - name: Run Metadata
               uses: ./.github/actions/metadataRunner
               with:
@@ -361,11 +366,6 @@ jobs:
               uses: ./.github/actions/dbRunner
               with:
                   DB-name: ${{ matrix.DB-name }}
-
-            - name: Install IGinX with Maven
-              shell: bash
-              run: |
-                  mvn clean package -DskipTests -P-format
 
             - name: Prepare CapExp environment for testReadOnly
               uses: ./.github/actions/capacityExpansionUnionTest

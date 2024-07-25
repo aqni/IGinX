@@ -43,6 +43,11 @@ jobs:
                   python-version: ${{ matrix.python-version }}
                   java: ${{ matrix.java }}
 
+            - name: Install IGinX with Maven
+              shell: bash
+              run: |
+                  mvn clean package -DskipTests -P-format
+
             - name: Run Metadata
               uses: ./.github/actions/metadataRunner
               with:
@@ -52,11 +57,6 @@ jobs:
               uses: ./.github/actions/dbRunner
               with:
                   DB-name: "Mix-IoTDB12-InfluxDB"
-
-            - name: Install IGinX with Maven
-              shell: bash
-              run: |
-                  mvn clean package -DskipTests -P-format
 
             - name: Write Conf
               uses: ./.github/actions/confWriter

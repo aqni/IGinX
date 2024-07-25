@@ -12,7 +12,7 @@ runs:
         - name: Modify IGinX Config
           uses: ./.github/actions/edit
           with:
-              paths: conf/config.properties
+              paths: core/target/iginx-core-${{ env.VERSION }}/conf/config.properties
               statements: s/^storageEngineList=/#storageEngineList=/g
 
         - if: inputs.DB-name=='InfluxDB' || inputs.DB-name=='Mix-IoTDB12-InfluxDB'
@@ -81,16 +81,15 @@ runs:
           name: Run DB
           shell: bash
           run: |
-              cp -f "${GITHUB_WORKSPACE}/conf/config.properties" "${GITHUB_WORKSPACE}/conf/config.properties.bak"
               if [[ "$RUNNER_OS" == "Linux" ]]; then
                 chmod +x "${GITHUB_WORKSPACE}/.github/scripts/dataSources/parquet_linux_windows.sh"
-                "${GITHUB_WORKSPACE}/.github/scripts/dataSources/parquet_linux_windows.sh" 6667 6888 test/mn ${GITHUB_WORKSPACE}/test/iginx_mn false false conf/config.properties
+                "${GITHUB_WORKSPACE}/.github/scripts/dataSources/parquet_linux_windows.sh" 6667 6888 test/mn ${GITHUB_WORKSPACE}/test/iginx_mn false false core/target/iginx-core-${{ env.VERSION }}/conf/config.properties
               elif [[ "$RUNNER_OS" == "Windows" ]]; then
                 chmod +x "${GITHUB_WORKSPACE}/.github/scripts/dataSources/parquet_linux_windows.sh"
-                "${GITHUB_WORKSPACE}/.github/scripts/dataSources/parquet_linux_windows.sh" 6667 6888 test/mn test/iginx_mn false false conf/config.properties
+                "${GITHUB_WORKSPACE}/.github/scripts/dataSources/parquet_linux_windows.sh" 6667 6888 test/mn test/iginx_mn false false core/target/iginx-core-${{ env.VERSION }}/conf/config.properties
               elif [ "$RUNNER_OS" == "macOS" ]; then
                 chmod +x "${GITHUB_WORKSPACE}/.github/scripts/dataSources/parquet_macos.sh"
-                "${GITHUB_WORKSPACE}/.github/scripts/dataSources/parquet_macos.sh" 6667 6888 test/mn test/iginx_mn false false conf/config.properties
+                "${GITHUB_WORKSPACE}/.github/scripts/dataSources/parquet_macos.sh" 6667 6888 test/mn test/iginx_mn false false core/target/iginx-core-${{ env.VERSION }}/conf/config.properties
               else
                 echo "$RUNNER_OS is not supported"
                 exit 1
@@ -113,23 +112,22 @@ runs:
           name: Modify IGinX Config
           uses: ./.github/actions/edit
           with:
-              paths: conf/config.properties
+              paths: core/target/iginx-core-${{ env.VERSION }}/conf/config.properties
               statements: s/^#storageEngineList=127.0.0.1#27017/storageEngineList=127.0.0.1#27017/g
 
         - if: inputs.DB-name=='FileSystem' #test/iginx_mn is the path for IT test data
           name: Run DB
           shell: bash
           run: |
-              cp -f "${GITHUB_WORKSPACE}/conf/config.properties" "${GITHUB_WORKSPACE}/conf/config.properties.bak"
               if [[ "$RUNNER_OS" == "Linux" ]]; then
                 chmod +x "${GITHUB_WORKSPACE}/.github/scripts/dataSources/filesystem_linux_windows.sh"
-                "${GITHUB_WORKSPACE}/.github/scripts/dataSources/filesystem_linux_windows.sh" 6667 6888 test/mn ${GITHUB_WORKSPACE}/test/iginx_mn false false conf/config.properties
+                "${GITHUB_WORKSPACE}/.github/scripts/dataSources/filesystem_linux_windows.sh" 6667 6888 test/mn ${GITHUB_WORKSPACE}/test/iginx_mn false false core/target/iginx-core-${{ env.VERSION }}/conf/config.properties
               elif [[ "$RUNNER_OS" == "Windows" ]]; then
                 chmod +x "${GITHUB_WORKSPACE}/.github/scripts/dataSources/filesystem_linux_windows.sh"
-                "${GITHUB_WORKSPACE}/.github/scripts/dataSources/filesystem_linux_windows.sh" 6667 6888 test/mn test/iginx_mn false false conf/config.properties
+                "${GITHUB_WORKSPACE}/.github/scripts/dataSources/filesystem_linux_windows.sh" 6667 6888 test/mn test/iginx_mn false false core/target/iginx-core-${{ env.VERSION }}/conf/config.properties
               elif [ "$RUNNER_OS" == "macOS" ]; then
                 chmod +x "${GITHUB_WORKSPACE}/.github/scripts/dataSources/filesystem_macos.sh"
-                "${GITHUB_WORKSPACE}/.github/scripts/dataSources/filesystem_macos.sh" 6667 6888 test/mn test/iginx_mn false false conf/config.properties
+                "${GITHUB_WORKSPACE}/.github/scripts/dataSources/filesystem_macos.sh" 6667 6888 test/mn test/iginx_mn false false core/target/iginx-core-${{ env.VERSION }}/conf/config.properties
               else
                 echo "$RUNNER_OS is not supported"
                 exit 1
@@ -152,7 +150,7 @@ runs:
           name: Modify IGinX Config
           uses: ./.github/actions/edit
           with:
-              paths: conf/config.properties
+              paths: core/target/iginx-core-${{ env.VERSION }}/conf/config.properties
               statements: s/^#storageEngineList=127.0.0.1#6379/storageEngineList=127.0.0.1#6379/g
 
         - if: inputs.DB-name=='PostgreSQL'
@@ -172,7 +170,7 @@ runs:
           name: Modify IGinX Config
           uses: ./.github/actions/edit
           with:
-              paths: conf/config.properties
+              paths: core/target/iginx-core-${{ env.VERSION }}/conf/config.properties
               statements: s/^#storageEngineList=127.0.0.1#5432#relational#engine=postgresql/storageEngineList=127.0.0.1#5432#relational#engine=postgresql/g
 
         - if: inputs.DB-name=='MySQL'
@@ -201,5 +199,5 @@ runs:
           name: Modify IGinX Config
           uses: ./.github/actions/edit
           with:
-              paths: conf/config.properties
+              paths: core/target/iginx-core-${{ env.VERSION }}/conf/config.properties
               statements: s|^#storageEngineList=127.0.0.1#3306#relational#engine=mysql#username=root#password=mysql#has_data=false#meta_properties_path=your-meta-properties-path|storageEngineList=127.0.0.1#3306#relational#engine=mysql#username=root#has_data=false#meta_properties_path=${{ steps.mysql-properties.outputs.path }}|g
