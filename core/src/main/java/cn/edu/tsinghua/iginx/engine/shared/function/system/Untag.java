@@ -11,6 +11,7 @@ import cn.edu.tsinghua.iginx.engine.shared.function.MappingFunction;
 import cn.edu.tsinghua.iginx.engine.shared.function.MappingType;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 
+import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.stream.Collectors;
 
