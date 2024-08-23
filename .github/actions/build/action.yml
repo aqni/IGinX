@@ -1,0 +1,22 @@
+name: "download-built-artifact"
+description: "Download the compiled artifact from the previous build job"
+
+inputs:
+  os:
+    description: "The operating system to run the test on"
+    required: true
+  java:
+    description: "The java version to run the test on"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: compiled-iginx-${{ inputs.os }}-${{ inputs.java }}
+        path: ..
+    - uses: actions/download-artifact@v4
+      with:
+        name: packaged-iginx-${{ inputs.os }}-${{ inputs.java }}
+        path: ..

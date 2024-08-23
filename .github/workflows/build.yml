@@ -51,27 +51,26 @@ jobs:
     needs: compile
     runs-on: ${{ inputs.os }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: ./.github/actions/build
         with:
-          name: compiled-iginx
-      - name: Run tests
-        run: |
+          os: ${{ inputs.os }}
+          java: ${{ inputs.java }}
+      - run: |
           mvn test --batch-mode -P-format -P-thrift-generation
 
   package:
     needs: compile
     runs-on: ${{ inputs.os }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: ./.github/actions/build
         with:
-          name: compiled-iginx
-      - name: package IGinX
-        shell: bash
+          os: ${{ inputs.os }}
+          java: ${{ inputs.java }}
+      - shell: bash
         run: |
           mvn package --batch-mode -DskipTests -P-format -P release -P-thrift-generation
-      - name: upload packaged files
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: packaged-iginx
+          name: packaged-iginx-${{ inputs.os }}-${{ inputs.java }}
           if-no-files-found: error
-          path: "assembly/target/iginx-assembly-*-server.tar.gz"
+          path: "assembly/target/iginx-assembly-*-server/*"
