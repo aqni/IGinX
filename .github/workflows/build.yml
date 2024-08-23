@@ -42,7 +42,11 @@ jobs:
         with:
           name: compiled-iginx
           if-no-files-found: error
-          path: "*"
+          path: |
+            "*"
+            !".github/**"
+            !".git/**"
+
   test:
     needs: compile
     runs-on: ${{ inputs.os }}
@@ -53,6 +57,7 @@ jobs:
       - name: Run tests
         run: |
           mvn test --batch-mode -P-format
+
   package:
     needs: compile
     runs-on: ${{ inputs.os }}
