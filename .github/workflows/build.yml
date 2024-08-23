@@ -18,7 +18,7 @@ on:
   workflow_call:
     inputs:
       java:
-        type: number
+        type: string
       os:
         type: string
 
