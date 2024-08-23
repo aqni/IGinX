@@ -1,0 +1,71 @@
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      java:
+        description: "The java version to run the test on"
+        type: choice
+        options:
+          - "8"
+      os:
+        description: "The operating system to run the test on"
+        type: choice
+        options:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+  workflow_call:
+    inputs:
+      java:
+        type: number
+      os:
+        type: string
+
+jobs:
+  compile:
+    runs-on: ${{ inputs.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs.java }}
+          distribution: "temurin"
+          cache: "maven"
+      - name: build IGinX
+        run: |
+          mvn clean compile --batch-mode -DskipTests -P-format
+      - name: upload compiled files
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-iginx
+          if-no-files-found: error
+          path: *
+  test:
+    needs: compile
+    runs-on: ${{ inputs.os }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiled-iginx
+      - name: Run tests
+        run: |
+          mvn test --batch-mode -P-format
+  package:
+    needs: compile
+    runs-on: ${{ inputs.os }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiled-iginx
+      - name: package IGinX
+        run: |
+          mvn package -DskipTests -P-format -P release
+      - name: upload packaged files
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-iginx
+          if-no-files-found: error
+          path: "assembly/target/iginx-assembly-*.tar.gz"
