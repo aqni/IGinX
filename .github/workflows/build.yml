@@ -27,8 +27,6 @@ jobs:
     runs-on: ${{ inputs.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - uses: actions/setup-java@v4
         with:
           java-version: ${{ inputs.java }}
@@ -51,6 +49,7 @@ jobs:
     needs: compile
     runs-on: ${{ inputs.os }}
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/build
         with:
           os: ${{ inputs.os }}
@@ -62,6 +61,7 @@ jobs:
     needs: compile
     runs-on: ${{ inputs.os }}
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/build
         with:
           os: ${{ inputs.os }}
