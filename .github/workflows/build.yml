@@ -1,4 +1,4 @@
-name: build
+name: Build
 
 on:
   workflow_dispatch:
@@ -42,7 +42,7 @@ jobs:
         with:
           name: compiled-iginx
           if-no-files-found: error
-          path: *
+          path: "*"
   test:
     needs: compile
     runs-on: ${{ inputs.os }}
