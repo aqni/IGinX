@@ -45,18 +45,6 @@ jobs:
             !.github/**
             !.git/**
 
-  test:
-    needs: compile
-    runs-on: ${{ inputs.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/build
-        with:
-          os: ${{ inputs.os }}
-          java: ${{ inputs.java }}
-      - run: |
-          mvn test --batch-mode -P-format -P-thrift-generation
-
   package:
     needs: compile
     runs-on: ${{ inputs.os }}

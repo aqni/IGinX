@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ "8" ]
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+    uses: ./.github/workflows/build.yml
+    with:
+      java: ${{ matrix.java }}
+      os: ${{ matrix.os }}
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ "8" ]
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build
+        with:
+          os: ${{ inputs.os }}
+          java: ${{ inputs.java }}
+          need-packaged: true
+      - shell: bash
+        run: tree
