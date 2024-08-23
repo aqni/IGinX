@@ -56,7 +56,7 @@ jobs:
           name: compiled-iginx
       - name: Run tests
         run: |
-          mvn test --batch-mode -P-format
+          mvn test --batch-mode -P-format -P-thrift-generation
 
   package:
     needs: compile
@@ -66,11 +66,12 @@ jobs:
         with:
           name: compiled-iginx
       - name: package IGinX
+        shell: bash
         run: |
-          mvn package -DskipTests -P-format -P release
+          mvn package --batch-mode -DskipTests -P-format -P release -P-thrift-generation
       - name: upload packaged files
         uses: actions/upload-artifact@v4
         with:
           name: packaged-iginx
           if-no-files-found: error
-          path: "assembly/target/iginx-assembly-*.tar.gz"
+          path: "assembly/target/iginx-assembly-*-server.tar.gz"
