@@ -8,6 +8,10 @@ inputs:
   java:
     description: "The java version to run the test on"
     required: true
+  need-packaged:
+    description: "Whether to download the packaged artifact"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -16,7 +20,8 @@ runs:
       with:
         name: compiled-iginx-${{ inputs.os }}-${{ inputs.java }}
         path: ..
-    - uses: actions/download-artifact@v4
+    - if: inputs.need-packaged
+      uses: actions/download-artifact@v4
       with:
         name: packaged-iginx-${{ inputs.os }}-${{ inputs.java }}
         path: core/target/
