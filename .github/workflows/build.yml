@@ -43,9 +43,9 @@ jobs:
           name: compiled-iginx
           if-no-files-found: error
           path: |
-            "*"
-            !".github/**"
-            !".git/**"
+            *
+            !.github/**
+            !.git/**
 
   test:
     needs: compile
