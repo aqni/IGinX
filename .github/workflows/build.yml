@@ -38,7 +38,7 @@ jobs:
       - name: upload compiled files
         uses: actions/upload-artifact@v4
         with:
-          name: compiled-iginx
+          name: compiled-iginx-${{ inputs.os }}-${{ inputs.java }}
           if-no-files-found: error
           path: |
             *
@@ -73,4 +73,5 @@ jobs:
         with:
           name: packaged-iginx-${{ inputs.os }}-${{ inputs.java }}
           if-no-files-found: error
-          path: "assembly/target/iginx-assembly-*-server/*"
+          path: |
+            core/target/iginx-core-*/*
