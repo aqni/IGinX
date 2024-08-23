@@ -28,6 +28,6 @@ jobs:
         with:
           os: ${{ inputs.os }}
           java: ${{ inputs.java }}
-          need-packaged: true
+          need-package: true
       - shell: bash
         run: tree
