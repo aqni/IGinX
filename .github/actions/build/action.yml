@@ -19,4 +19,4 @@ runs:
     - uses: actions/download-artifact@v4
       with:
         name: packaged-iginx-${{ inputs.os }}-${{ inputs.java }}
-        path: ..
+        path: core/target/
