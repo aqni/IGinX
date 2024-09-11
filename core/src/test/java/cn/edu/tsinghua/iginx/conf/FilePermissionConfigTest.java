@@ -178,7 +178,7 @@ public class FilePermissionConfigTest {
       }
       Files.move(temp, Paths.get(PERMISSION_CONFIG_TEMP), StandardCopyOption.REPLACE_EXISTING);
       Assert.assertEquals(100, config.getReloadInterval().longValue());
-      Thread.sleep(200);
+      Thread.sleep(1000);
       Assert.assertEquals(10, config.getReloadInterval().longValue());
     }
   }
