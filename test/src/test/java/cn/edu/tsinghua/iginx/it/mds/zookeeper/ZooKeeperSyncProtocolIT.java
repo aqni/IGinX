@@ -16,30 +16,31 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package cn.edu.tsinghua.iginx.it.mds;
+package cn.edu.tsinghua.iginx.it.mds.zookeeper;
 
+import cn.edu.tsinghua.iginx.it.env.metadata.MetadataEnv;
+import cn.edu.tsinghua.iginx.it.env.metadata.zookeeper.ZookeeperEnv;
+import cn.edu.tsinghua.iginx.it.mds.BaseSyncProtocolIT;
 import cn.edu.tsinghua.iginx.metadata.sync.protocol.SyncProtocol;
-import cn.edu.tsinghua.iginx.metadata.sync.protocol.etcd.ETCDSyncProtocolImpl;
-import io.etcd.jetcd.Client;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-public class ETCDSyncProtocolIT extends SyncProtocolIT {
-  @SuppressWarnings("unused")
-  private static final Logger LOGGER = LoggerFactory.getLogger(ETCDSyncProtocolIT.class);
+public class ZooKeeperSyncProtocolIT extends BaseSyncProtocolIT {
 
-  public static final String END_POINTS = "http://localhost:2379";
+  private static final MetadataEnv metadataEnv = new ZookeeperEnv();
 
   @BeforeClass
-  public static void beforeClass() {
-    System.setProperty("etcd.endpoints", END_POINTS);
+  public static void beforeClass() throws Exception {
+    metadataEnv.init();
   }
 
+  @AfterClass
+  public static void afterClass() throws Exception {
+    metadataEnv.clean();
+  }
 
   @Override
-  protected SyncProtocol newSyncProtocol(String category) {
-    return new ETCDSyncProtocolImpl(
-        category, Client.builder().endpoints(END_POINTS.split(",")).build());
+  protected SyncProtocol newSyncProtocol(String category) throws Exception {
+    return metadataEnv.newSyncProtocol(category);
   }
 }
