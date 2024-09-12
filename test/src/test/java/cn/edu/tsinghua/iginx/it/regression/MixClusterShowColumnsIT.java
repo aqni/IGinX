@@ -32,8 +32,7 @@ import org.slf4j.LoggerFactory;
 
 public class MixClusterShowColumnsIT {
 
-  private static final Logger LOGGER =
-      LoggerFactory.getLogger(MixClusterShowColumnsIT.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(MixClusterShowColumnsIT.class);
 
   private Session session;
 

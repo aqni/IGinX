@@ -1,11 +1,10 @@
 package cn.edu.tsinghua.iginx.it.env;
 
-import org.apache.commons.lang3.SystemUtils;
-
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import org.apache.commons.lang3.SystemUtils;
 
-public interface TestEnvironment {
+public interface TestEnv {
 
   void init() throws Exception;
 
@@ -26,5 +25,4 @@ public interface TestEnvironment {
   static Path getWorkspaceRoot() {
     return Paths.get("target", "it");
   }
-
 }

@@ -19,8 +19,6 @@ package cn.edu.tsinghua.iginx.it.mds;
 
 import static org.junit.Assert.assertEquals;
 
-import cn.edu.tsinghua.iginx.conf.ConfigDescriptor;
-import cn.edu.tsinghua.iginx.metadata.DefaultMetaManager;
 import cn.edu.tsinghua.iginx.metadata.IMetaManager;
 import cn.edu.tsinghua.iginx.metadata.entity.StorageEngineMeta;
 import cn.edu.tsinghua.iginx.thrift.StorageEngineType;
@@ -30,44 +28,21 @@ import java.util.List;
 import java.util.Map;
 import org.junit.*;
 
-public class IMetaManagerIT {
+public abstract class BaseMetaManagerIT {
 
   private static IMetaManager iMetaManager;
 
-  @BeforeClass
-  public static void beforeClass() {
-    if (System.getenv("STORAGE") != null) {
-      switch (System.getenv("STORAGE")) {
-        case "zookeeper":
-          ConfigDescriptor.getInstance().getConfig().setMetaStorage("zookeeper");
-          ConfigDescriptor.getInstance()
-              .getConfig()
-              .setZookeeperConnectionString(System.getenv("ZOOKEEPER_CONNECTION_STRING"));
-          System.out.println("use zookeeper as meta storage engine");
-          break;
-        case "etcd":
-          ConfigDescriptor.getInstance().getConfig().setMetaStorage("etcd");
-          ConfigDescriptor.getInstance()
-              .getConfig()
-              .setEtcdEndpoints(System.getenv("ETCD_ENDPOINTS"));
-          System.out.println("use etcd as meta storage engine");
-          break;
-      }
-    }
-    ConfigDescriptor.getInstance().getConfig().setStorageEngineList("");
-    iMetaManager = DefaultMetaManager.getInstance();
-  }
-
-  @AfterClass
-  public static void afterClass() {
-    iMetaManager = null;
-  }
+  protected abstract IMetaManager getIMetaManager() throws Exception;
 
   @Before
-  public void setUp() {}
+  public void setUp() throws Exception {
+    iMetaManager = getIMetaManager();
+  }
 
   @After
-  public void tearDown() {}
+  public void tearDown() {
+    iMetaManager = null;
+  }
 
   @Test
   public void schemaMappingTest() {

@@ -20,6 +20,7 @@ package cn.edu.tsinghua.iginx.it.mds;
 
 import static org.junit.Assert.*;
 
+import cn.edu.tsinghua.iginx.it.tool.RandomUtils;
 import cn.edu.tsinghua.iginx.metadata.sync.proposal.ProposalListener;
 import cn.edu.tsinghua.iginx.metadata.sync.proposal.SyncProposal;
 import cn.edu.tsinghua.iginx.metadata.sync.proposal.SyncVote;
@@ -37,12 +38,12 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public abstract class SyncProtocolIT {
-  private static final Logger LOGGER = LoggerFactory.getLogger(SyncProtocolIT.class);
+public abstract class BaseSyncProtocolIT {
+  private static final Logger LOGGER = LoggerFactory.getLogger(BaseSyncProtocolIT.class);
 
-  protected abstract SyncProtocol newSyncProtocol(String category);
+  protected abstract SyncProtocol newSyncProtocol(String category) throws Exception;
 
-  @Test(timeout = 300000)
+  @Test(timeout = 5000)
   public void testSingleNodeSingleDecision() throws Exception {
     String category = RandomUtils.randomString(10);
     String key = RandomUtils.randomString(5);
@@ -117,7 +118,7 @@ public abstract class SyncProtocolIT {
     protocol.close();
   }
 
-  @Test(timeout = 300000)
+  @Test(timeout = 5000)
   public void testTwoNodeSingleDecision() throws Exception {
     String category = RandomUtils.randomString(10);
     String key = RandomUtils.randomString(5);
@@ -229,7 +230,7 @@ public abstract class SyncProtocolIT {
     threadB.join();
   }
 
-  @Test(timeout = 300000)
+  @Test(timeout = 5000)
   public void testMultiNodeSingleDecision() throws Exception {
     for (int c = 0; c < 1; c++) { // 随机 3-6个节点，测试10次
       int N = RandomUtils.randomNumber(2, 4);
@@ -350,7 +351,7 @@ public abstract class SyncProtocolIT {
     }
   }
 
-  @Test(timeout = 300000)
+  @Test(timeout = 5000)
   public void testMultiNodeSingleDecisionPartialVote() throws Exception {
     for (int c = 0; c < 1; c++) { // 随机 2-4 个节点，测试10次
       int N = RandomUtils.randomNumber(2, 5);
