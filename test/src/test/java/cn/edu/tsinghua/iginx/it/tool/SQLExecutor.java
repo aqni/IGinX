@@ -19,7 +19,7 @@
 package cn.edu.tsinghua.iginx.it.tool;
 
 import static cn.edu.tsinghua.iginx.constant.GlobalConstant.CLEAR_DUMMY_DATA_CAUTION;
-import static cn.edu.tsinghua.iginx.it.controller.Controller.*;
+import static cn.edu.tsinghua.iginx.it.func.Controller.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 

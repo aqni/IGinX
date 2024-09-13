@@ -25,7 +25,7 @@ import cn.edu.tsinghua.iginx.exception.SessionException;
 import cn.edu.tsinghua.iginx.filestore.format.raw.RawFormat;
 import cn.edu.tsinghua.iginx.filestore.service.FileStoreConfig;
 import cn.edu.tsinghua.iginx.filestore.struct.tree.FileTree;
-import cn.edu.tsinghua.iginx.it.expansion.BaseCapacityExpansionIT;
+import cn.edu.tsinghua.iginx.it.expansion.BaseExpansionIT;
 import cn.edu.tsinghua.iginx.it.expansion.utils.SQLTestTools;
 import cn.edu.tsinghua.iginx.it.tool.TempDummyDataSource;
 import java.util.LinkedHashMap;
@@ -36,7 +36,7 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class FileStoreCapacityExpansionIT extends BaseCapacityExpansionIT {
+public class FileStoreCapacityExpansionIT extends BaseExpansionIT {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(FileStoreCapacityExpansionIT.class);
 

@@ -18,12 +18,12 @@
 
 package cn.edu.tsinghua.iginx.it.func.sql;
 
-import static cn.edu.tsinghua.iginx.it.controller.Controller.SUPPORT_KEY;
-import static cn.edu.tsinghua.iginx.it.controller.Controller.clearAllData;
+import static cn.edu.tsinghua.iginx.it.func.Controller.SUPPORT_KEY;
+import static cn.edu.tsinghua.iginx.it.func.Controller.clearAllData;
 import static org.junit.Assert.*;
 
 import cn.edu.tsinghua.iginx.exception.SessionException;
-import cn.edu.tsinghua.iginx.it.controller.Controller;
+import cn.edu.tsinghua.iginx.it.func.Controller;
 import cn.edu.tsinghua.iginx.it.func.session.InsertAPIType;
 import cn.edu.tsinghua.iginx.it.tool.*;
 import cn.edu.tsinghua.iginx.it.tool.DBConf.DBConfType;

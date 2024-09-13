@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package cn.edu.tsinghua.iginx.it.other;
+package cn.edu.tsinghua.iginx.it.func.udf;
 
 import cn.edu.tsinghua.iginx.exception.SessionException;
 import cn.edu.tsinghua.iginx.it.expansion.utils.SQLTestTools;

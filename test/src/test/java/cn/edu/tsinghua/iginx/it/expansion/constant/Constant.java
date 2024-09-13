@@ -18,7 +18,7 @@
 
 package cn.edu.tsinghua.iginx.it.expansion.constant;
 
-import cn.edu.tsinghua.iginx.it.controller.Controller;
+import cn.edu.tsinghua.iginx.it.func.Controller;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import java.util.Arrays;
 import java.util.Collections;

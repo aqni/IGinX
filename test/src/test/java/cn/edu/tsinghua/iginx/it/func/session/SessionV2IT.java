@@ -20,11 +20,11 @@ package cn.edu.tsinghua.iginx.it.func.session;
 
 import static cn.edu.tsinghua.iginx.engine.shared.Constants.WINDOW_END_COL;
 import static cn.edu.tsinghua.iginx.engine.shared.Constants.WINDOW_START_COL;
-import static cn.edu.tsinghua.iginx.it.controller.Controller.SUPPORT_KEY;
+import static cn.edu.tsinghua.iginx.it.func.Controller.SUPPORT_KEY;
 import static cn.edu.tsinghua.iginx.thrift.StorageEngineType.influxdb;
 import static org.junit.Assert.*;
 
-import cn.edu.tsinghua.iginx.it.controller.Controller;
+import cn.edu.tsinghua.iginx.it.func.Controller;
 import cn.edu.tsinghua.iginx.it.tool.ConfLoader;
 import cn.edu.tsinghua.iginx.session_v2.*;
 import cn.edu.tsinghua.iginx.session_v2.annotations.Field;

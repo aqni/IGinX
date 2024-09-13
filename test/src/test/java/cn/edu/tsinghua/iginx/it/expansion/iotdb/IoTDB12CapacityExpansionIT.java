@@ -22,11 +22,11 @@ import static cn.edu.tsinghua.iginx.it.expansion.utils.SQLTestTools.executeShell
 import static cn.edu.tsinghua.iginx.thrift.StorageEngineType.iotdb12;
 import static org.junit.Assert.fail;
 
-import cn.edu.tsinghua.iginx.it.expansion.BaseCapacityExpansionIT;
+import cn.edu.tsinghua.iginx.it.expansion.BaseExpansionIT;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class IoTDB12CapacityExpansionIT extends BaseCapacityExpansionIT {
+public class IoTDB12CapacityExpansionIT extends BaseExpansionIT {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(IoTDB12CapacityExpansionIT.class);
 

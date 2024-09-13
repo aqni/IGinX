@@ -18,7 +18,7 @@
 package cn.edu.tsinghua.iginx.it.tpch;
 
 import cn.edu.tsinghua.iginx.exception.SessionException;
-import cn.edu.tsinghua.iginx.it.controller.Controller;
+import cn.edu.tsinghua.iginx.it.func.Controller;
 import cn.edu.tsinghua.iginx.it.tool.ConfLoader;
 import cn.edu.tsinghua.iginx.session.Session;
 import java.io.BufferedWriter;

@@ -20,8 +20,8 @@ package cn.edu.tsinghua.iginx.it.expansion.redis;
 
 import static cn.edu.tsinghua.iginx.thrift.StorageEngineType.redis;
 
-import cn.edu.tsinghua.iginx.it.controller.Controller;
-import cn.edu.tsinghua.iginx.it.expansion.BaseCapacityExpansionIT;
+import cn.edu.tsinghua.iginx.it.func.Controller;
+import cn.edu.tsinghua.iginx.it.expansion.BaseExpansionIT;
 import cn.edu.tsinghua.iginx.it.expansion.constant.Constant;
 import cn.edu.tsinghua.iginx.it.expansion.utils.SQLTestTools;
 import cn.edu.tsinghua.iginx.it.tool.ConfLoader;
@@ -29,7 +29,7 @@ import cn.edu.tsinghua.iginx.it.tool.DBConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class RedisCapacityExpansionIT extends BaseCapacityExpansionIT {
+public class RedisCapacityExpansionIT extends BaseExpansionIT {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RedisCapacityExpansionIT.class);
 

@@ -2,6 +2,7 @@ package cn.edu.tsinghua.iginx.it.env.metadata.etcd;
 
 import cn.edu.tsinghua.iginx.conf.Config;
 import cn.edu.tsinghua.iginx.conf.ConfigDescriptor;
+import cn.edu.tsinghua.iginx.conf.Constants;
 import cn.edu.tsinghua.iginx.it.env.metadata.MetadataEnv;
 import cn.edu.tsinghua.iginx.metadata.DefaultMetaManager;
 import cn.edu.tsinghua.iginx.metadata.IMetaManager;
@@ -38,5 +39,11 @@ public class ETCDEnv implements MetadataEnv {
   public SyncProtocol newSyncProtocol(String category) {
     return new ETCDSyncProtocolImpl(
         category, Client.builder().endpoints(DEFAULT_END_POINTS).build());
+  }
+
+  @Override
+  public void set(Config config) throws Exception {
+    config.setMetaStorage(Constants.ETCD_META);
+    config.setEtcdEndpoints(DEFAULT_END_POINTS);
   }
 }

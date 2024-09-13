@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package cn.edu.tsinghua.iginx.it.compaction;
+package cn.edu.tsinghua.iginx.it.func.compaction;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;

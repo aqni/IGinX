@@ -16,12 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package cn.edu.tsinghua.iginx.it.other;
+package cn.edu.tsinghua.iginx.it.func.session;
 
 import static org.junit.Assert.fail;
 
 import cn.edu.tsinghua.iginx.exception.SessionException;
-import cn.edu.tsinghua.iginx.it.controller.Controller;
+import cn.edu.tsinghua.iginx.it.func.Controller;
 import cn.edu.tsinghua.iginx.session.Session;
 import cn.edu.tsinghua.iginx.session.SessionQueryDataSet;
 import cn.edu.tsinghua.iginx.thrift.DataType;

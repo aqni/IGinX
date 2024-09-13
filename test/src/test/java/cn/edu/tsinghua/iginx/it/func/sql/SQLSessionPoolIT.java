@@ -18,9 +18,9 @@
 
 package cn.edu.tsinghua.iginx.it.func.sql;
 
-import static cn.edu.tsinghua.iginx.it.controller.Controller.SUPPORT_KEY;
+import static cn.edu.tsinghua.iginx.it.func.Controller.SUPPORT_KEY;
 
-import cn.edu.tsinghua.iginx.it.controller.Controller;
+import cn.edu.tsinghua.iginx.it.func.Controller;
 import cn.edu.tsinghua.iginx.it.tool.ConfLoader;
 import java.io.IOException;
 

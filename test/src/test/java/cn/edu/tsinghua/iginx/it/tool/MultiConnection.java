@@ -19,7 +19,7 @@
 package cn.edu.tsinghua.iginx.it.tool;
 
 import static cn.edu.tsinghua.iginx.constant.GlobalConstant.*;
-import static cn.edu.tsinghua.iginx.it.controller.Controller.*;
+import static cn.edu.tsinghua.iginx.it.func.Controller.*;
 import static org.junit.Assert.fail;
 
 import cn.edu.tsinghua.iginx.exception.SessionException;

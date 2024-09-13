@@ -21,8 +21,8 @@ package cn.edu.tsinghua.iginx.it.expansion.postgresql;
 import static cn.edu.tsinghua.iginx.it.expansion.utils.SQLTestTools.executeShellScript;
 import static org.junit.Assert.fail;
 
-import cn.edu.tsinghua.iginx.it.controller.Controller;
-import cn.edu.tsinghua.iginx.it.expansion.BaseCapacityExpansionIT;
+import cn.edu.tsinghua.iginx.it.func.Controller;
+import cn.edu.tsinghua.iginx.it.expansion.BaseExpansionIT;
 import cn.edu.tsinghua.iginx.it.expansion.constant.Constant;
 import cn.edu.tsinghua.iginx.it.expansion.utils.SQLTestTools;
 import cn.edu.tsinghua.iginx.it.tool.ConfLoader;
@@ -33,7 +33,7 @@ import java.sql.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PostgreSQLCapacityExpansionIT extends BaseCapacityExpansionIT {
+public class PostgreSQLCapacityExpansionIT extends BaseExpansionIT {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(PostgreSQLCapacityExpansionIT.class);
 

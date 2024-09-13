@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package cn.edu.tsinghua.iginx.it.controller;
+package cn.edu.tsinghua.iginx.it.func;
 
 import static cn.edu.tsinghua.iginx.constant.GlobalConstant.CLEAR_DUMMY_DATA_CAUTION;
 import static cn.edu.tsinghua.iginx.it.expansion.constant.Constant.expPort;
@@ -35,8 +35,9 @@ import cn.edu.tsinghua.iginx.session.SessionExecuteSqlResult;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import cn.edu.tsinghua.iginx.thrift.StorageEngineType;
 import cn.edu.tsinghua.iginx.utils.ShellRunner;
+
 import java.util.*;
-import org.junit.Test;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -387,8 +388,7 @@ public class Controller {
     return outputList;
   }
 
-  @Test
-  public void testUnion() throws Exception {
+  public static void testNormalIT() throws Exception {
     // load the test conf
     ConfLoader testConfLoader = new ConfLoader(CONFIG_FILE);
     testConfLoader.loadTestConf();

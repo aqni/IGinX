@@ -18,14 +18,14 @@
 
 package cn.edu.tsinghua.iginx.it.func.session;
 
-import static cn.edu.tsinghua.iginx.it.controller.Controller.clearAllData;
+import static cn.edu.tsinghua.iginx.it.func.Controller.clearAllData;
 import static org.junit.Assert.*;
 
 import cn.edu.tsinghua.iginx.conf.Config;
 import cn.edu.tsinghua.iginx.conf.ConfigDescriptor;
 import cn.edu.tsinghua.iginx.conf.Constants;
 import cn.edu.tsinghua.iginx.exception.SessionException;
-import cn.edu.tsinghua.iginx.it.controller.Controller;
+import cn.edu.tsinghua.iginx.it.func.Controller;
 import cn.edu.tsinghua.iginx.it.tool.ConfLoader;
 import cn.edu.tsinghua.iginx.it.tool.DBConf;
 import cn.edu.tsinghua.iginx.it.tool.MultiConnection;

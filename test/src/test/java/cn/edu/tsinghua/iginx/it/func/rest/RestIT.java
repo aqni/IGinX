@@ -18,11 +18,11 @@
 
 package cn.edu.tsinghua.iginx.it.func.rest;
 
-import static cn.edu.tsinghua.iginx.it.controller.Controller.clearAllData;
+import static cn.edu.tsinghua.iginx.it.func.Controller.clearAllData;
 import static org.junit.Assert.assertEquals;
 
 import cn.edu.tsinghua.iginx.exception.SessionException;
-import cn.edu.tsinghua.iginx.it.controller.Controller;
+import cn.edu.tsinghua.iginx.it.func.Controller;
 import cn.edu.tsinghua.iginx.it.func.session.InsertAPIType;
 import cn.edu.tsinghua.iginx.it.tool.ConfLoader;
 import cn.edu.tsinghua.iginx.it.tool.DBConf;

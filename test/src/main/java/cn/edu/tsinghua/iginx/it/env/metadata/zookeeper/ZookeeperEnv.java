@@ -2,6 +2,7 @@ package cn.edu.tsinghua.iginx.it.env.metadata.zookeeper;
 
 import cn.edu.tsinghua.iginx.conf.Config;
 import cn.edu.tsinghua.iginx.conf.ConfigDescriptor;
+import cn.edu.tsinghua.iginx.conf.Constants;
 import cn.edu.tsinghua.iginx.it.env.metadata.MetadataEnv;
 import cn.edu.tsinghua.iginx.metadata.DefaultMetaManager;
 import cn.edu.tsinghua.iginx.metadata.IMetaManager;
@@ -47,5 +48,11 @@ public class ZookeeperEnv implements MetadataEnv {
             .build();
     client.start();
     return new ZooKeeperSyncProtocolImpl(category, client, null);
+  }
+
+  @Override
+  public void set(Config config) throws Exception {
+    config.setMetaStorage(Constants.ZOOKEEPER_META);
+    config.setZookeeperConnectionString(DEFAULT_CONNECTION_STRING);
   }
 }

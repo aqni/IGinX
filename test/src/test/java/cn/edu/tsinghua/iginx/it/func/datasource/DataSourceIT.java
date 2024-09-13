@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package cn.edu.tsinghua.iginx.it.datasource;
+package cn.edu.tsinghua.iginx.it.func.datasource;
 
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
@@ -38,7 +38,7 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.Project;
 import cn.edu.tsinghua.iginx.engine.shared.operator.SetTransform;
 import cn.edu.tsinghua.iginx.engine.shared.source.FragmentSource;
 import cn.edu.tsinghua.iginx.engine.shared.source.OperatorSource;
-import cn.edu.tsinghua.iginx.it.controller.Controller;
+import cn.edu.tsinghua.iginx.it.func.Controller;
 import cn.edu.tsinghua.iginx.it.tool.ConfLoader;
 import cn.edu.tsinghua.iginx.it.tool.DBConf;
 import cn.edu.tsinghua.iginx.metadata.entity.StorageEngineMeta;

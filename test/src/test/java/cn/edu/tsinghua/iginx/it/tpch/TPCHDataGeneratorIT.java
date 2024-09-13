@@ -23,7 +23,7 @@ import static cn.edu.tsinghua.iginx.it.tpch.TPCHDataGeneratorIT.FieldType.STR;
 import static org.junit.Assert.fail;
 
 import cn.edu.tsinghua.iginx.exception.SessionException;
-import cn.edu.tsinghua.iginx.it.controller.Controller;
+import cn.edu.tsinghua.iginx.it.func.Controller;
 import cn.edu.tsinghua.iginx.it.tool.ConfLoader;
 import cn.edu.tsinghua.iginx.session.Session;
 import java.io.BufferedReader;

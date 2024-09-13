@@ -19,12 +19,12 @@
 package cn.edu.tsinghua.iginx.it.func.tag;
 
 import static cn.edu.tsinghua.iginx.constant.GlobalConstant.CLEAR_DUMMY_DATA_CAUTION;
-import static cn.edu.tsinghua.iginx.it.controller.Controller.*;
+import static cn.edu.tsinghua.iginx.it.func.Controller.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import cn.edu.tsinghua.iginx.exception.SessionException;
-import cn.edu.tsinghua.iginx.it.controller.Controller;
+import cn.edu.tsinghua.iginx.it.func.Controller;
 import cn.edu.tsinghua.iginx.it.func.session.InsertAPIType;
 import cn.edu.tsinghua.iginx.it.tool.ConfLoader;
 import cn.edu.tsinghua.iginx.it.tool.DBConf;

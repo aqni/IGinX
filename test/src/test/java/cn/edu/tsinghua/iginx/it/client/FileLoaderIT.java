@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package cn.edu.tsinghua.iginx.it.other;
+package cn.edu.tsinghua.iginx.it.client;
 
 import static org.junit.Assert.fail;
 
