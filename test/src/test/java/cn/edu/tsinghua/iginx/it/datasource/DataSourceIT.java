@@ -42,7 +42,7 @@ import cn.edu.tsinghua.iginx.it.controller.Controller;
 import cn.edu.tsinghua.iginx.it.tool.ConfLoader;
 import cn.edu.tsinghua.iginx.it.tool.DBConf;
 import cn.edu.tsinghua.iginx.metadata.entity.StorageEngineMeta;
-import cn.edu.tsinghua.iginx.shared.MockClassGenerator;
+import cn.edu.tsinghua.iginx.it.MockClassGenerator;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
