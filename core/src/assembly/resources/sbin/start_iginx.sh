@@ -41,9 +41,18 @@ if [[ -z "$IGINX_CONF_DIR" ]]; then
   IGINX_CONF_DIR="${IGINX_HOME}/conf"
 fi
 
-IGINX_CONF="${IGINX_CONF_DIR}/config.properties"
-IGINX_DRIVER="${IGINX_HOME}/driver"
-IGINX_ENV="${IGINX_CONF_DIR}/iginx-env.sh"
+if [[ -z "$IGINX_CONF" ]]; then
+  IGINX_CONF="${IGINX_CONF_DIR}/config.properties"
+fi
+
+if [[ -z "$IGINX_CONF" ]]; then
+  IGINX_DRIVER="${IGINX_HOME}/driver"
+fi
+
+if [[ -z "$IGINX_ENV" ]]; then
+  IGINX_ENV="${IGINX_CONF_DIR}/iginx-env.sh"
+fi
+
 if [[ -f "${IGINX_ENV}" ]]; then
   source "${IGINX_ENV}"
 fi

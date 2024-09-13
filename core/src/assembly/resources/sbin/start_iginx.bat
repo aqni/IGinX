@@ -29,10 +29,9 @@ if NOT DEFINED IGINX_HOME set IGINX_HOME=%CD%
 popd
 
 if NOT DEFINED IGINX_CONF_DIR set IGINX_CONF_DIR=%IGINX_HOME%\conf
-
-set IGINX_ENV=%IGINX_CONF_DIR%\iginx-env.cmd
-set IGINX_CONF=%IGINX_CONF_DIR%\config.properties
-set IGINX_DRIVER=%IGINX_HOME%\driver
+if NOT DEFINED IGINX_ENV set IGINX_ENV=%IGINX_CONF_DIR%\iginx-env.cmd
+if NOT DEFINED IGINX_CONF set IGINX_CONF=%IGINX_CONF_DIR%\config.properties
+if NOT DEFINED IGINX_DRIVER set IGINX_DRIVER=%IGINX_HOME%\driver
 
 if exist "%IGINX_ENV%" (
     call "%IGINX_ENV%"
@@ -67,8 +66,6 @@ IF "%JAVA_VERSION%" == "7" (
 )
 
 if "%OS%" == "Windows_NT" setlocal
-
-set IGINX_CONF=%IGINX_HOME%\conf\config.properties
 
 @setlocal ENABLEDELAYEDEXPANSION ENABLEEXTENSIONS
 set is_conf_path=false
