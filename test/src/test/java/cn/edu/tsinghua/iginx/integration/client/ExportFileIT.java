@@ -29,7 +29,8 @@ import java.util.List;
 import java.util.Objects;
 import org.junit.Test;
 
-public class ExportFileIT {
+public class ExportFileIT
+{
 
   @Test
   public void checkExportByteStream() {
