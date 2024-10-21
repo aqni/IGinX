@@ -8,7 +8,7 @@ SELECT
     AVG( lineitem.l_quantity ) AS avg_qty,
     AVG( lineitem.l_extendedprice ) AS avg_price,
     AVG( lineitem.l_discount ) AS avg_disc,
-    COUNT( lineitem.l_returnflag ) AS count_order
+    COUNT(   lineitem.l_returnflag ) AS count_order
 FROM
     (
         SELECT
