@@ -1,27 +1,27 @@
 /*
  * IGinX - the polystore system with high performance
  * Copyright (C) Tsinghua University
+ * TSIGinX@gmail.com
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 package cn.edu.tsinghua.iginx.session;
 
-import static cn.edu.tsinghua.iginx.utils.ByteUtils.getLongArrayFromByteBuffer;
-import static cn.edu.tsinghua.iginx.utils.ByteUtils.getValuesFromBufferAndBitmaps;
-
 import cn.edu.tsinghua.iginx.constant.GlobalConstant;
 import cn.edu.tsinghua.iginx.thrift.*;
+import cn.edu.tsinghua.iginx.utils.ByteUtils;
 import cn.edu.tsinghua.iginx.utils.FormatUtils;
 import java.util.*;
 
@@ -81,12 +81,18 @@ public class SessionExecuteSqlResult {
         this.pointsNum = resp.getPointsNum();
         break;
       case Query:
-        constructQueryResult(resp);
+        ByteUtils.DataSet dataSet = ByteUtils.getDataFromArrowData(resp.getQueryArrowData());
+        this.keys = dataSet.getKeys();
+        this.paths = dataSet.getPaths();
+        this.dataTypeList = dataSet.getDataTypeList();
+        this.values = dataSet.getValues();
         break;
       case ShowColumns:
-        this.paths = resp.getPaths();
-        this.dataTypeList = resp.getDataTypeList();
-        break;
+        // TODO: refactor this part
+        throw new UnsupportedOperationException("Not implemented yet");
+        // this.paths = resp.getPaths();
+        // this.dataTypeList = resp.getDataTypeList();
+        // break;
       case ShowClusterInfo:
         this.iginxInfos = resp.getIginxInfos();
         this.storageEngineInfos = resp.getStorageEngineInfos();
@@ -127,24 +133,6 @@ public class SessionExecuteSqlResult {
         break;
       default:
         break;
-    }
-  }
-
-  private void constructQueryResult(ExecuteSqlResp resp) {
-    this.paths = resp.getPaths();
-    this.dataTypeList = resp.getDataTypeList();
-
-    if (resp.keys != null) {
-      this.keys = getLongArrayFromByteBuffer(resp.keys);
-    }
-
-    // parse values
-    if (resp.getQueryDataSet() != null) {
-      this.values =
-          getValuesFromBufferAndBitmaps(
-              resp.dataTypeList, resp.queryDataSet.valuesList, resp.queryDataSet.bitmapList);
-    } else {
-      this.values = new ArrayList<>();
     }
   }
 
@@ -219,13 +207,35 @@ public class SessionExecuteSqlResult {
   private String buildQueryResult(boolean needFormatTime, String timePrecision) {
     StringBuilder builder = new StringBuilder();
     builder.append("ResultSets:").append("\n");
-
-    List<List<String>> cache =
-        cacheResult(needFormatTime, FormatUtils.DEFAULT_TIME_FORMAT, timePrecision);
+    List<List<String>> cache = cacheArrowResult(needFormatTime, timePrecision);
     builder.append(FormatUtils.formatResult(cache));
-
     builder.append(FormatUtils.formatCount(cache.size() - 1));
     return builder.toString();
+  }
+
+  private List<List<String>> cacheArrowResult(boolean needFormatTime, String timePrecision) {
+    // TODO: time format
+    List<List<String>> cache = new ArrayList<>();
+    boolean hasKey = keys.length > 0;
+    for (int index = 0; index < values.size(); index++) {
+      List<String> rowCache = new ArrayList<>();
+      if (hasKey) {
+        rowCache.add(String.valueOf(keys[index]));
+      }
+      boolean isNull = !values.get(index).isEmpty();
+      for (Object o : values.get(index)) {
+        String rowValue = FormatUtils.valueToString(o);
+        rowCache.add(rowValue);
+        if (!rowValue.equalsIgnoreCase("null")) {
+          isNull = false;
+        }
+      }
+      if (!isNull) {
+        cache.add(rowCache);
+      }
+    }
+    cache.add(0, paths);
+    return cache;
   }
 
   private List<List<String>> cacheResult(
@@ -261,7 +271,7 @@ public class SessionExecuteSqlResult {
       }
 
       List<Object> rowData = values.get(i);
-      boolean isNull = true; // TODO 该行除系统级时间序列之外全部为空
+      boolean isNull = !rowData.isEmpty();
       for (int j = 0; j < rowData.size(); j++) {
         if (j == annotationPathIndex) {
           continue;
@@ -367,15 +377,19 @@ public class SessionExecuteSqlResult {
       builder.append("Functions info:").append("\n");
       List<List<String>> cache = new ArrayList<>();
       cache.add(
-          new ArrayList<>(Arrays.asList("NAME", "CLASS_NAME", "FILE_NAME", "IP", "UDF_TYPE")));
+          new ArrayList<>(Arrays.asList("NAME", "CLASS_NAME", "FILE_NAME", "IP:PORT", "UDF_TYPE")));
       for (RegisterTaskInfo info : registerTaskInfos) {
+        StringJoiner joiner = new StringJoiner(", ");
+        for (IpPortPair p : info.getIpPortPair()) {
+          joiner.add(String.format("%s:%d", p.getIp(), p.getPort()));
+        }
         cache.add(
             new ArrayList<>(
                 Arrays.asList(
                     info.getName(),
                     info.getClassName(),
                     info.getFileName(),
-                    info.getIp(),
+                    joiner.toString(),
                     info.getType().toString())));
       }
       builder.append(FormatUtils.formatResult(cache));
@@ -469,15 +483,19 @@ public class SessionExecuteSqlResult {
 
     if (registerTaskInfos != null && !registerTaskInfos.isEmpty()) {
       resList.add(
-          new ArrayList<>(Arrays.asList("NAME", "CLASS_NAME", "FILE_NAME", "IP", "UDF_TYPE")));
+          new ArrayList<>(Arrays.asList("NAME", "CLASS_NAME", "FILE_NAME", "IP:PORT", "UDF_TYPE")));
       for (RegisterTaskInfo info : registerTaskInfos) {
+        StringJoiner joiner = new StringJoiner(", ");
+        for (IpPortPair p : info.getIpPortPair()) {
+          joiner.add(String.format("%s:%d", p.getIp(), p.getPort()));
+        }
         resList.add(
             new ArrayList<>(
                 Arrays.asList(
                     info.getName(),
                     info.getClassName(),
                     info.getFileName(),
-                    info.getIp(),
+                    joiner.toString(),
                     info.getType().toString())));
       }
     }
