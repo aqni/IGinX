@@ -117,7 +117,7 @@ public class Constant {
       Arrays.asList(Collections.singletonList(66123.23), Collections.singletonList(77123.71));
 
   public static List<List<Object>> READ_ONLY_VALUES_LIST =
-      Arrays.asList(Arrays.asList(55555555L, 10012.01), Arrays.asList(66666666L, 99123.99));
+      Arrays.asList(Arrays.asList(55555555L, 10012.01), Arrays.asList(68896889L, 99123.99));
 
   public static List<List<Object>> READ_ONLY_FLOAT_VALUES_LIST =
       Arrays.asList(Collections.singletonList(22.33F), Collections.singletonList(44.55F));
@@ -145,7 +145,7 @@ public class Constant {
   public static final Map<Integer, Integer> PORT_TO_RESTPORT =
       new HashMap<Integer, Integer>() {
         {
-          put(oriPort, 6666);
+          put(oriPort, 6889);
           put(expPort, 6665);
           put(readOnlyPort, 6664);
         }
