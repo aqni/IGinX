@@ -290,7 +290,7 @@ Then, modify IGinX configuration file `$IGINX_HOME/conf/config.properties`:
    ```properties
    # example
    ip:11.272.81.34
-   storageEngineList=11.272.81.34#6667#parquet#dir=/path/to/your/parquet#dummy_dir=/path/to/your/data#iginx_port=6888#has_data=false#is_read_only=false
+   storageEngineList=11.272.81.34#6668#parquet#dir=/path/to/your/parquet#dummy_dir=/path/to/your/data#iginx_port=6888#has_data=false#is_read_only=false
    ```
 
    b. If you want to connect to a remote parquet server, use it's IP address.
@@ -298,7 +298,7 @@ Then, modify IGinX configuration file `$IGINX_HOME/conf/config.properties`:
    ```properties
    # example
    ip:11.272.81.34
-   storageEngineList=11.272.83.2#6667#parquet#dir=/path/to/your/parquet#dummy_dir=/path/to/your/data#iginx_port=6888#has_data=false#is_read_only=false
+   storageEngineList=11.272.83.2#6668#parquet#dir=/path/to/your/parquet#dummy_dir=/path/to/your/data#iginx_port=6888#has_data=false#is_read_only=false
    ```
 3. IP for ZooKeeper service:
 

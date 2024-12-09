@@ -289,7 +289,7 @@ $ ./bin/zkServer.sh start
    ```properties
    # example
    ip:11.272.81.34
-   storageEngineList=11.272.81.34#6667#parquet#dir=/path/to/your/parquet#dummy_dir=/path/to/your/data#iginx_port=6888#has_data=false#is_read_only=false
+   storageEngineList=11.272.81.34#6668#parquet#dir=/path/to/your/parquet#dummy_dir=/path/to/your/data#iginx_port=6888#has_data=false#is_read_only=false
    ```
 
    b. 如果需要连接一个已存在的远程Parquet服务，则配置相应的IP地址
@@ -297,7 +297,7 @@ $ ./bin/zkServer.sh start
    ```properties
    # example
    ip:11.272.81.34
-   storageEngineList=11.272.83.2#6667#parquet#dir=/path/to/your/parquet#dummy_dir=/path/to/your/data#iginx_port=6888#has_data=false#is_read_only=false
+   storageEngineList=11.272.83.2#6668#parquet#dir=/path/to/your/parquet#dummy_dir=/path/to/your/data#iginx_port=6888#has_data=false#is_read_only=false
    ```
 3. ZooKeeper服务的IP:
 
