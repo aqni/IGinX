@@ -23,14 +23,15 @@ import cn.edu.tsinghua.iginx.exception.SessionException;
 import cn.edu.tsinghua.iginx.integration.controller.Controller;
 import cn.edu.tsinghua.iginx.integration.tool.ConfLoader;
 import cn.edu.tsinghua.iginx.session.Session;
-import java.util.ArrayList;
-import java.util.List;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class TPCHRegressionMainIT {
 
@@ -114,5 +115,22 @@ public class TPCHRegressionMainIT {
           queryId, iterationTimes, timeCost);
     }
     TPCHUtils.clearAndRewriteTimeCostsToFile(timeCosts, MAIN_TIME_COSTS_PATH);
+  }
+
+  @Test
+  public void testWarmupMainBranch() {
+    for (int queryId : queryIds) {
+      long lastTimeCost = TPCHUtils.executeTPCHQuery(session, queryId, true);
+      LOGGER.info("warmup query {} success, time cost: {}ms", queryId, lastTimeCost);
+      for (int i = 0; i < 5; i++) {
+        long timeCost = TPCHUtils.executeTPCHQuery(session, queryId, false);
+        long diff = Math.abs(timeCost - lastTimeCost);
+        LOGGER.info("warmup query {} success, time cost: {}ms, diff: {}ms", queryId, timeCost, diff);
+        if (diff < timeCost / 10) {
+          LOGGER.info("warmup enough for query {}", queryId);
+          break;
+        }
+      }
+    }
   }
 }

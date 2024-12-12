@@ -238,4 +238,22 @@ public class TPCHRegressionNewIT {
       Assert.fail();
     }
   }
+
+  @Test
+  public void testWarmupNewBranch() {
+    for (int queryId : queryIds) {
+      long lastTimeCost = TPCHUtils.executeTPCHQuery(session, queryId, true);
+      LOGGER.info("warmup query {} success, time cost: {}ms", queryId, lastTimeCost);
+      for (int i = 0; i < 5; i++) {
+        long timeCost = TPCHUtils.executeTPCHQuery(session, queryId, false);
+        long diff = Math.abs(timeCost - lastTimeCost);
+        LOGGER.info("warmup query {} success, time cost: {}ms, diff: {}ms", queryId, timeCost, diff);
+        if (diff < timeCost / 10) {
+          LOGGER.info("warmup enough for query {}", queryId);
+          break;
+        }
+      }
+    }
+  }
+
 }
