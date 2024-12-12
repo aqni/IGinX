@@ -34,13 +34,13 @@ runs:
         - name: Warmup TPCH Test on Old IGinX
           if: inputs.status != 'ok'
           shell: bash
-          workplace: IGinX
+          working-directory: IGinX
           run: mvn test -q -Dtest=TPCHRegressionMainIT#testWarmupMainBranch -DfailIfNoTests=false -P-format
 
         - name: Run TPCH Test on Old IGinX
           if: inputs.status != 'ok'
           shell: bash
-          workplace: IGinX
+          working-directory: IGinX
           run: mvn test -q -Dtest=TPCHRegressionMainIT#testMainBranch -DfailIfNoTests=false -P-format
 
         - name: Show Old IGinX log
