@@ -25,6 +25,7 @@ import cn.edu.tsinghua.iginx.engine.physical.task.TaskMetrics;
 import java.util.ArrayDeque;
 import java.util.Objects;
 import java.util.Queue;
+import org.apache.arrow.util.Preconditions;
 
 public class FetchMetricsRowStream implements RowStream {
 
@@ -36,6 +37,7 @@ public class FetchMetricsRowStream implements RowStream {
   public FetchMetricsRowStream(RowStream delegate, TaskMetrics metrics, int batchRowCount) {
     this.delegate = Objects.requireNonNull(delegate);
     this.metrics = Objects.requireNonNull(metrics);
+    Preconditions.checkArgument(batchRowCount > 0);
     this.batchRowCount = batchRowCount;
   }
 
@@ -51,18 +53,19 @@ public class FetchMetricsRowStream implements RowStream {
 
   @Override
   public boolean hasNext() throws PhysicalException {
-    return !cache.isEmpty() || delegate.hasNext();
+    if (cache.isEmpty()) {
+      fetchBatch();
+    }
+    return !cache.isEmpty();
   }
 
   @Override
   public Row next() throws PhysicalException {
-    if (cache.isEmpty() && delegate.hasNext()) {
-      fetchBatch();
-    }
     return cache.remove();
   }
 
   private void fetchBatch() throws PhysicalException {
+    assert cache.isEmpty();
     try (StopWatch watch = new StopWatch(metrics::accumulateCpuTime)) {
       for (int i = 0; i < batchRowCount && delegate.hasNext(); i++) {
         cache.add(delegate.next());
