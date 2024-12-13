@@ -1,19 +1,21 @@
 /*
  * IGinX - the polystore system with high performance
  * Copyright (C) Tsinghua University
+ * TSIGinX@gmail.com
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 package cn.edu.tsinghua.iginx.engine.physical.memory;
 
@@ -22,8 +24,8 @@ import cn.edu.tsinghua.iginx.conf.ConfigDescriptor;
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.physical.memory.queue.MemoryPhysicalTaskQueue;
 import cn.edu.tsinghua.iginx.engine.physical.memory.queue.MemoryPhysicalTaskQueueImpl;
-import cn.edu.tsinghua.iginx.engine.physical.task.MemoryPhysicalTask;
-import cn.edu.tsinghua.iginx.engine.physical.task.TaskExecuteResult;
+import cn.edu.tsinghua.iginx.engine.physical.task.TaskResult;
+import cn.edu.tsinghua.iginx.engine.physical.task.memory.MemoryPhysicalTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.slf4j.Logger;
@@ -53,7 +55,7 @@ public class MemoryPhysicalTaskDispatcher {
     return INSTANCE;
   }
 
-  public boolean addMemoryTask(MemoryPhysicalTask task) {
+  public boolean addMemoryTask(MemoryPhysicalTask<?> task) {
     return taskQueue.addTask(task);
   }
 
@@ -62,29 +64,28 @@ public class MemoryPhysicalTaskDispatcher {
         () -> {
           try {
             while (true) {
-              final MemoryPhysicalTask task = taskQueue.getTask();
-              if (isCancelled(task.getSessionId())) {
-                LOGGER.warn("MemoryPhysicalTask[sessionId={}] is cancelled.", task.getSessionId());
+              final MemoryPhysicalTask<?> task = taskQueue.getTask();
+              if (isCancelled(task.getContext().getSessionId())) {
+                LOGGER.warn(
+                    "MemoryPhysicalTask[sessionId={}] is cancelled.",
+                    task.getContext().getSessionId());
                 continue;
               }
               taskExecuteThreadPool.submit(
                   () -> {
-                    MemoryPhysicalTask currentTask = task;
+                    MemoryPhysicalTask<?> currentTask = task;
                     while (currentTask != null) {
-                      TaskExecuteResult result;
-                      long startTime = System.currentTimeMillis();
+                      TaskResult<?> result;
                       try {
                         result = currentTask.execute();
-                      } catch (Exception e) {
+                      } catch (Throwable e) {
                         LOGGER.error("execute memory task failure: ", e);
-                        result = new TaskExecuteResult(new PhysicalException(e));
+                        result = new TaskResult<>(new PhysicalException(e));
                       }
-                      long span = System.currentTimeMillis() - startTime;
-                      currentTask.setSpan(span);
                       currentTask.setResult(result);
                       if (currentTask.getFollowerTask() != null) { // 链式执行可以被执行的任务
-                        MemoryPhysicalTask followerTask =
-                            (MemoryPhysicalTask) currentTask.getFollowerTask();
+                        MemoryPhysicalTask<?> followerTask =
+                            (MemoryPhysicalTask<?>) currentTask.getFollowerTask();
                         if (followerTask.notifyParentReady()) {
                           currentTask = followerTask;
                         } else {

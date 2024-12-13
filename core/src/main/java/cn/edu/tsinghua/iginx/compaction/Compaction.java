@@ -1,26 +1,30 @@
 /*
  * IGinX - the polystore system with high performance
  * Copyright (C) Tsinghua University
+ * TSIGinX@gmail.com
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
 package cn.edu.tsinghua.iginx.compaction;
 
 import cn.edu.tsinghua.iginx.engine.physical.PhysicalEngine;
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
+import cn.edu.tsinghua.iginx.engine.physical.task.TaskMetrics;
+import cn.edu.tsinghua.iginx.engine.physical.task.memory.row.BatchStreamToRowStreamWrapper;
 import cn.edu.tsinghua.iginx.engine.shared.RequestContext;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.BatchStream;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Row;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.Delete;
@@ -140,16 +144,21 @@ public abstract class Compaction {
         Set<String> pathRegexSet = new HashSet<>();
         ShowColumns showColumns =
             new ShowColumns(new GlobalSource(), pathRegexSet, null, Integer.MAX_VALUE, 0);
-        RowStream rowStream = physicalEngine.execute(new RequestContext(), showColumns);
+
         SortedSet<String> pathSet = new TreeSet<>();
-        while (rowStream != null && rowStream.hasNext()) {
-          Row row = rowStream.next();
-          String timeSeries = new String((byte[]) row.getValue(0));
-          if (timeSeries.contains("{") && timeSeries.contains("}")) {
-            timeSeries = timeSeries.split("\\{")[0];
-          }
-          if (fragmentMeta.getColumnsInterval().isContain(timeSeries)) {
-            pathSet.add(timeSeries);
+        try (BatchStream batchStream = physicalEngine.execute(new RequestContext(), showColumns);
+            RowStream rowStream =
+                new BatchStreamToRowStreamWrapper(batchStream, TaskMetrics.NO_OP)) {
+
+          while (rowStream.hasNext()) {
+            Row row = rowStream.next();
+            String timeSeries = new String((byte[]) row.getValue(0));
+            if (timeSeries.contains("{") && timeSeries.contains("}")) {
+              timeSeries = timeSeries.split("\\{")[0];
+            }
+            if (fragmentMeta.getColumnsInterval().isContain(timeSeries)) {
+              pathSet.add(timeSeries);
+            }
           }
         }
 
