@@ -120,16 +120,14 @@ public class TPCHRegressionMainIT {
   @Test
   public void testWarmupMainBranch() {
     for (int queryId : queryIds) {
-      long lastTimeCost = TPCHUtils.executeTPCHQuery(session, queryId, true);
-      LOGGER.info("warmup query {} success, time cost: {}ms", queryId, lastTimeCost);
+      long lastTimeCost = Long.MAX_VALUE;
       for (int i = 0; i < 5; i++) {
-        long timeCost = TPCHUtils.executeTPCHQuery(session, queryId, false);
-        long diff = Math.abs(timeCost - lastTimeCost);
-        LOGGER.info("warmup query {} success, time cost: {}ms, diff: {}ms", queryId, timeCost, diff);
-        if (diff < timeCost / 10) {
-          LOGGER.info("warmup enough for query {}", queryId);
+        long timeCost = TPCHUtils.executeTPCHQuery(session, queryId, i == 0);
+        System.out.printf("warmup query %d success, time cost: %dms", queryId, timeCost);
+        if (timeCost > lastTimeCost) {
           break;
         }
+        lastTimeCost = timeCost;
       }
     }
   }
