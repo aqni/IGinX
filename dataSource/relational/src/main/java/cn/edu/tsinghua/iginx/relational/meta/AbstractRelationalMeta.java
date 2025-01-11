@@ -162,7 +162,9 @@ public abstract class AbstractRelationalMeta {
    */
   public abstract String getUpsertConflictStatement();
 
-  /** 是否支持Full Join */
+  /**
+   * 是否支持Full Join
+   */
   public abstract boolean isSupportFullJoin();
 
   /**
@@ -179,6 +181,10 @@ public abstract class AbstractRelationalMeta {
    */
   public abstract String getNotRegexpOp();
 
-  /** jdbc获取元数据是否支持反斜杠的识别 */
+  /**
+   * jdbc获取元数据是否支持反斜杠的识别
+   */
   public abstract boolean jdbcSupportSpecialChar();
+
+  public abstract boolean isSupportInformationSchema();
 }

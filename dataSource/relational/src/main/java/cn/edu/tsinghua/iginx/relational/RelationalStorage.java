@@ -19,11 +19,6 @@
  */
 package cn.edu.tsinghua.iginx.relational;
 
-import static cn.edu.tsinghua.iginx.constant.GlobalConstant.SEPARATOR;
-import static cn.edu.tsinghua.iginx.relational.tools.Constants.*;
-import static cn.edu.tsinghua.iginx.relational.tools.TagKVUtils.splitFullName;
-import static cn.edu.tsinghua.iginx.relational.tools.TagKVUtils.toFullName;
-
 import cn.edu.tsinghua.iginx.engine.logical.utils.LogicalFilterUtils;
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.physical.exception.StorageInitializationException;
@@ -62,13 +57,16 @@ import cn.edu.tsinghua.iginx.utils.StringUtils;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.pool.HikariPool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.*;
 import java.util.*;
@@ -76,9 +74,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static cn.edu.tsinghua.iginx.constant.GlobalConstant.SEPARATOR;
+import static cn.edu.tsinghua.iginx.relational.tools.Constants.*;
+import static cn.edu.tsinghua.iginx.relational.tools.TagKVUtils.splitFullName;
+import static cn.edu.tsinghua.iginx.relational.tools.TagKVUtils.toFullName;
 
 public class RelationalStorage implements IStorage {
 
@@ -184,10 +184,10 @@ public class RelationalStorage implements IStorage {
     String connUrl =
         password == null
             ? String.format(
-                "jdbc:%s://%s:%s/?user=%s", engineName, meta.getIp(), meta.getPort(), username)
+            "jdbc:%s://%s:%s/?user=%s", engineName, meta.getIp(), meta.getPort(), username)
             : String.format(
-                "jdbc:%s://%s:%s/?user=%s&password=%s",
-                engineName, meta.getIp(), meta.getPort(), username, password);
+            "jdbc:%s://%s:%s/?user=%s&password=%s",
+            engineName, meta.getIp(), meta.getPort(), username, password);
     try {
       connection = DriverManager.getConnection(connUrl);
       Statement statement = connection.createStatement();
@@ -246,10 +246,10 @@ public class RelationalStorage implements IStorage {
     String connUrl =
         password == null
             ? String.format(
-                "jdbc:%s://%s:%s/?user=%s", engine, meta.getIp(), meta.getPort(), username)
+            "jdbc:%s://%s:%s/?user=%s", engine, meta.getIp(), meta.getPort(), username)
             : String.format(
-                "jdbc:%s://%s:%s/?user=%s&password=%s",
-                engine, meta.getIp(), meta.getPort(), username, password);
+            "jdbc:%s://%s:%s/?user=%s&password=%s",
+            engine, meta.getIp(), meta.getPort(), username, password);
 
     try {
       Class.forName(relationalMeta.getDriverClass());
@@ -300,7 +300,7 @@ public class RelationalStorage implements IStorage {
               databaseName,
               relationalMeta.getSchemaPattern(),
               tablePattern,
-              new String[] {"TABLE"});
+              new String[]{"TABLE"});
       List<String> tableNames = new ArrayList<>();
 
       while (rs.next()) {
@@ -542,7 +542,7 @@ public class RelationalStorage implements IStorage {
       // 如果table>1的情况下存在Value或Path Filter，说明filter的匹配需要跨table，此时需要将所有table join到一起进行查询
       if (!filter.toString().contains("*")
           && !(tableNameToColumnNames.size() > 1
-              && filterContainsType(Arrays.asList(FilterType.Value, FilterType.Path), filter))) {
+          && filterContainsType(Arrays.asList(FilterType.Value, FilterType.Path), filter))) {
         for (Map.Entry<String, String> entry : tableNameToColumnNames.entrySet()) {
           String tableName = entry.getKey();
           String quotColumnNames = getQuotColumnNames(entry.getValue());
@@ -1113,7 +1113,7 @@ public class RelationalStorage implements IStorage {
         // 如果table没有带通配符，那直接简单构建起查询语句即可
         if (!filter.toString().contains("*")
             && !(tableNameToColumnNames.size() > 1
-                && filterContainsType(Arrays.asList(FilterType.Value, FilterType.Path), filter))) {
+            && filterContainsType(Arrays.asList(FilterType.Value, FilterType.Path), filter))) {
           Filter expandFilter = expandFilter(filter.copy(), tableNameToColumnNames);
           for (Map.Entry<String, String> entry : splitEntry.getValue().entrySet()) {
             String tableName = entry.getKey();
@@ -1413,6 +1413,13 @@ public class RelationalStorage implements IStorage {
   @Override
   public Pair<ColumnsInterval, KeyInterval> getBoundaryOfStorage(String dataPrefix)
       throws PhysicalException {
+    if (relationalMeta.isSupportInformationSchema() && dataPrefix == null) {
+      try {
+        return new Pair<>(getBoundaryFromInformationSchema(), KeyInterval.getDefaultKeyInterval());
+      } catch (SQLException e) {
+        throw new RelationalTaskExecuteFailureException(e.toString(), e);
+      }
+    }
     ColumnsInterval columnsInterval;
     List<String> paths = new ArrayList<>();
     try {
@@ -1448,6 +1455,62 @@ public class RelationalStorage implements IStorage {
     }
 
     return new Pair<>(columnsInterval, KeyInterval.getDefaultKeyInterval());
+  }
+
+  private ColumnsInterval getBoundaryFromInformationSchema()
+      throws PhysicalException, SQLException {
+    StringBuilder sqlGetDBBuilder = new StringBuilder();
+    sqlGetDBBuilder.append("SELECT min(datname), max(datname)");
+    sqlGetDBBuilder.append(" FROM ( ").append(relationalMeta.getDatabaseQuerySql(), 0, relationalMeta.getDatabaseQuerySql().length() - 1).append(" )");
+    sqlGetDBBuilder.append(" WHERE datname NOT IN ('").append(relationalMeta.getDefaultDatabaseName()).append("'");
+    for (String systemDatabaseName : relationalMeta.getSystemDatabaseName()) {
+      sqlGetDBBuilder.append(", '").append(systemDatabaseName).append("'");
+    }
+    sqlGetDBBuilder.append(")");
+
+    String sqlGetDB = sqlGetDBBuilder.toString();
+
+    LOGGER.debug("[Query] execute query: {}", sqlGetDB);
+
+    try (Connection conn = getConnection(relationalMeta.getDefaultDatabaseName());
+         Statement statement = conn.createStatement();
+         ResultSet rs = statement.executeQuery(sqlGetDB)) {
+      if (rs.next()) {
+        String minDatabaseName = rs.getString(1);
+        String maxDatabaseName = rs.getString(2);
+        if (minDatabaseName != null && maxDatabaseName != null) {
+          return getBoundaryFromInformationSchemaInCatalog(minDatabaseName, maxDatabaseName);
+        }
+      }
+      throw new RelationalTaskExecuteFailureException("no data!");
+    }
+  }
+
+  private ColumnsInterval getBoundaryFromInformationSchemaInCatalog(String minDb, String maxDb) throws SQLException, RelationalTaskExecuteFailureException {
+    String conditionStatement = relationalMeta.getSchemaPattern() == null ? "" : " WHERE table_schema LIKE '" + relationalMeta.getSchemaPattern() + "'";
+    String sqlMin = "SELECT table_catalog, table_name, column_name FROM information_schema.columns" + conditionStatement + " ORDER BY table_catalog, table_name, column_name LIMIT 1";
+    String sqlMax = "SELECT table_catalog, table_name, column_name FROM information_schema.columns" + conditionStatement + " ORDER BY table_catalog DESC, table_name DESC, column_name DESC LIMIT 1";
+
+    String minPath = null;
+    try (Connection conn = getConnection(minDb);
+         Statement statement = conn.createStatement();
+         ResultSet rs = statement.executeQuery(sqlMin)) {
+      if (rs.next()) {
+        minPath = rs.getString(1) + SEPARATOR + rs.getString(2) + SEPARATOR + rs.getString(3);
+      }
+    }
+    String maxPath = null;
+    try (Connection conn = getConnection(maxDb);
+         Statement statement = conn.createStatement();
+         ResultSet rs = statement.executeQuery(sqlMax)) {
+      if (rs.next()) {
+        maxPath = rs.getString(1) + SEPARATOR + rs.getString(2) + SEPARATOR + rs.getString(3);
+      }
+    }
+    if (minPath == null || maxPath == null) {
+      throw new RelationalTaskExecuteFailureException("no data!");
+    }
+    return new ColumnsInterval(minPath, maxPath);
   }
 
   private List<Pattern> getRegexPatternByName(
@@ -1565,7 +1628,9 @@ public class RelationalStorage implements IStorage {
     return tableNameToColumnNames;
   }
 
-  /** JDBC中的路径中的 . 不需要转义 */
+  /**
+   * JDBC中的路径中的 . 不需要转义
+   */
   private String reformatForJDBC(String path) {
     return StringUtils.reformatPath(path).replace("\\.", ".");
   }

@@ -25,6 +25,7 @@ import cn.edu.tsinghua.iginx.relational.datatype.transformer.JDBCDataTypeTransfo
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 public class JDBCMeta extends AbstractRelationalMeta {
   private final char quote;
@@ -56,6 +57,8 @@ public class JDBCMeta extends AbstractRelationalMeta {
 
   private final boolean jdbcSupportBackslash;
 
+  private final boolean supportInformationSchema;
+
   public JDBCMeta(StorageEngineMeta meta, Properties properties) {
     super(meta);
     quote = properties.getProperty("quote").charAt(0);
@@ -74,6 +77,7 @@ public class JDBCMeta extends AbstractRelationalMeta {
     notRegexOp = properties.getProperty("not_regex_like_symbol");
     jdbcSupportBackslash =
         Boolean.parseBoolean(properties.getProperty("jdbc_support_special_char"));
+    supportInformationSchema = Boolean.parseBoolean(properties.getProperty("support_information_schema"));
   }
 
   @Override
@@ -149,5 +153,10 @@ public class JDBCMeta extends AbstractRelationalMeta {
   @Override
   public boolean jdbcSupportSpecialChar() {
     return jdbcSupportBackslash;
+  }
+
+  @Override
+  public boolean isSupportInformationSchema() {
+    return supportInformationSchema;
   }
 }
