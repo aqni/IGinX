@@ -293,9 +293,14 @@ public class RelationQueryRowStream implements RowStream {
               // 在Dummy查询的Join操作中，key列的值是由多个Join表的所有列的值拼接而成的，但实际上的Key列仅由一个表的所有列的值拼接而成
               // 所以在这里需要将key列的值截断为一个表的所有列的值，因为能合并在一行里的不同表的数据一定是key相同的
               // 所以查询出来的KEY值一定是（我们需要的KEY值 * 表的数量），因此只需要裁剪取第一个表的key列的值即可
-              String keyString = resultSet.getString(fullKeyName);
-              keyString = keyString.substring(0, keyString.length() / tableNameSet.size());
-              tempKey = toHash(keyString);
+              Object keyObject = resultSet.getObject(fullKeyName);
+              if(keyObject instanceof Long){
+                tempKey = (Long) keyObject;
+              } else {
+                String keyString = keyObject.toString();
+                keyString = keyString.substring(0, keyString.length() / tableNameSet.size());
+                tempKey = toHash(keyString);
+              }
             } else {
               tempKey = resultSet.getLong(fullKeyName);
             }
