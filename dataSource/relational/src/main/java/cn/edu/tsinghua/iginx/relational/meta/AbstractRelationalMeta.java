@@ -159,4 +159,6 @@ public abstract class AbstractRelationalMeta {
   public abstract boolean jdbcSupportSpecialChar();
 
   public abstract boolean jdbcSupportGetTableNameFromResultSet();
+
+  public abstract boolean isSupportInformationSchema();
 }
