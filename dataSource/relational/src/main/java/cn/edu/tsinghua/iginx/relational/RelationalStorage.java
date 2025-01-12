@@ -54,7 +54,6 @@ import cn.edu.tsinghua.iginx.relational.tools.RelationSchema;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import cn.edu.tsinghua.iginx.utils.Pair;
 import cn.edu.tsinghua.iginx.utils.StringUtils;
-import com.google.common.collect.HashMultimap;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.pool.HikariPool;
@@ -174,7 +173,7 @@ public class RelationalStorage implements IStorage {
     String username = extraParams.get(USERNAME);
     String password = extraParams.get(PASSWORD);
     engineName = extraParams.get("engine");
-    String connUrl = password == null ? String.format("jdbc:%s://%s:%s/?user=%s", engineName, meta.getIp(), meta.getPort(), username) : String.format("jdbc:%s://%s:%s/?user=%s&password=%s", engineName, meta.getIp(), meta.getPort(), username, password);
+    String connUrl = password == null ? String.format("jdbc:%s://%s:%s/postgres?user=%s", engineName, meta.getIp(), meta.getPort(), username) : String.format("jdbc:%s://%s:%s/postgres?user=%s&password=%s", engineName, meta.getIp(), meta.getPort(), username, password);
     try {
       connection = DriverManager.getConnection(connUrl);
       Statement statement = connection.createStatement();
@@ -229,7 +228,7 @@ public class RelationalStorage implements IStorage {
     String username = extraParams.get(USERNAME);
     String password = extraParams.get(PASSWORD);
     String engine = meta.getExtraParams().get("engine");
-    String connUrl = password == null ? String.format("jdbc:%s://%s:%s/?user=%s", engine, meta.getIp(), meta.getPort(), username) : String.format("jdbc:%s://%s:%s/?user=%s&password=%s", engine, meta.getIp(), meta.getPort(), username, password);
+    String connUrl = password == null ? String.format("jdbc:%s://%s:%s/postgres?user=%s", engine, meta.getIp(), meta.getPort(), username) : String.format("jdbc:%s://%s:%s/postgres?user=%s&password=%s", engine, meta.getIp(), meta.getPort(), username, password);
 
     try {
       Class.forName(relationalMeta.getDriverClass());
@@ -1032,24 +1031,24 @@ public class RelationalStorage implements IStorage {
     List<String> patterns = project.getPatterns();
 
     // pre-process patterns
-    HashMultimap<String, String> dbToPatternSet = HashMultimap.create();
+    HashMap<String, HashSet<String>> dbToPatternSet = new HashMap<>();
     for (String pattern : patterns) {
       String[] parts = pattern.split("\\.");
       switch (parts.length) {
         case 1:
           if (parts[0].equals("*")) {
-            dbToPatternSet.put("*", "*.*");
+            dbToPatternSet.computeIfAbsent("*", k -> new HashSet<>()).add("*.*");
           }
           break;
         case 2:
           if (parts[0].equals("*")) {
-            dbToPatternSet.put("*", "*." + parts[1]);
+            dbToPatternSet.computeIfAbsent("*", k -> new HashSet<>()).add("*." + parts[1]);
           } else if (parts[1].equals("*")) {
-            dbToPatternSet.put(parts[0], "*.*");
+            dbToPatternSet.computeIfAbsent(parts[0], k -> new HashSet<>()).add("*.*");
           }
           break;
         case 3:
-          dbToPatternSet.put(parts[0], parts[1] + "." + parts[2]);
+          dbToPatternSet.computeIfAbsent(parts[0], k -> new HashSet<>()).add(parts[1] + "." + parts[2]);
           break;
         default:
           throw new RelationalTaskExecuteFailureException("invalid pattern: " + pattern);
@@ -1090,14 +1089,15 @@ public class RelationalStorage implements IStorage {
     }
 
     // post-process patterns
-    Set<String> patternInAllDatabases = new HashSet<>(dbToPatternSet.get("*"));
+    if (dbToPatternSet.containsKey("*")) {
+      for(String databaseName : matchedDatabases) {
+        dbToPatternSet.computeIfAbsent(databaseName, k -> new HashSet<>()).addAll(dbToPatternSet.get("*"));
+      }
+    }
     dbToPatternSet.keySet().retainAll(matchedDatabases);
     dbToPatternSet.keySet().remove(relationalMeta.getDefaultDatabaseName());
     relationalMeta.getSystemDatabaseName().forEach(dbToPatternSet.keySet()::remove);
-    for (Collection<String> patternsInDb : dbToPatternSet.asMap().values()) {
-      patternsInDb.addAll(patternInAllDatabases);
-    }
-    for (Collection<String> patternSet : dbToPatternSet.asMap().values()) {
+    for (Collection<String> patternSet : dbToPatternSet.values()) {
       if (patternSet.contains("*.*")) {
         patternSet.clear();
         patternSet.add("*.*");
@@ -1109,7 +1109,7 @@ public class RelationalStorage implements IStorage {
     List<ResultSet> resultSets = new ArrayList<>();
 
     try {
-      for (Map.Entry<String, Collection<String>> entry : dbToPatternSet.asMap().entrySet()) {
+      for (Map.Entry<String, HashSet<String>> entry : dbToPatternSet.entrySet()) {
         String databaseName = entry.getKey();
         Collection<String> patternSet = entry.getValue();
         Connection conn = getConnection(databaseName);
@@ -1314,11 +1314,11 @@ public class RelationalStorage implements IStorage {
       }
       String orderByKey = relationalMeta.getQuote() + KEY_NAME + relationalMeta.getQuote();
       StringBuilder fullTableName = new StringBuilder();
-      String concatKey = "CAST(" + relationalMeta.getQuote() + tableToKey.get(tableNames.get(0)) + relationalMeta.getQuote() + " AS BIGINT) AS "+orderByKey;
+      String concatKey = "CAST(" + relationalMeta.getQuote() + tableToKey.get(tableNames.get(0)) + relationalMeta.getQuote() + " AS BIGINT) AS " + orderByKey;
       fullTableName.append("(SELECT ").append(concatKey).append(", * FROM ").append(getQuotName(tableNames.get(0))).append(") AS ").append(getQuotName(tableNames.get(0)));
       for (int i = 1; i < tableNames.size(); i++) {
         fullTableName.insert(0, "(");
-        concatKey = "CAST(" + relationalMeta.getQuote() + tableToKey.get(tableNames.get(i)) + relationalMeta.getQuote() + " AS BIGINT) AS "+orderByKey;
+        concatKey = "CAST(" + relationalMeta.getQuote() + tableToKey.get(tableNames.get(i)) + relationalMeta.getQuote() + " AS BIGINT) AS " + orderByKey;
         fullTableName.append(" FULL OUTER JOIN ")
             .append("(SELECT ").append(concatKey).append(", * FROM ").append(getQuotName(tableNames.get(i))).append(") AS ").append(getQuotName(tableNames.get(i)));
         fullTableName.append(" USING (").append(relationalMeta.getQuote()).append(KEY_NAME).append(relationalMeta.getQuote()).append(")");
