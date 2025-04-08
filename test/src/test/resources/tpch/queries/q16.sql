@@ -9,24 +9,17 @@ JOIN part ON
     part.p_partkey = partsupp.ps_partkey
 WHERE
     part.p_brand <> 'Brand#45'
-    AND part.p_partkey NOT IN(
-        SELECT
-            p_partkey
-        FROM
-            part AS p
-        WHERE
-            p.p_type LIKE '.*MEDIUM POLISHED.*'
+    AND part.p_size IN(
+        3,
+        9,
+        14,
+        19,
+        23,
+        36,
+        45,
+        49
     )
-    AND(
-        part.p_size = 3
-        OR part.p_size = 9
-        OR part.p_size = 14
-        OR part.p_size = 19
-        OR part.p_size = 23
-        OR part.p_size = 36
-        OR part.p_size = 45
-        OR part.p_size = 49
-    )
+    AND part.p_type NOT LIKE '.*MEDIUM POLISHED.*'
     AND partsupp.ps_suppkey NOT IN(
         SELECT
             s_suppkey

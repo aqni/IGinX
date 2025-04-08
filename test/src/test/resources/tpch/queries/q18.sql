@@ -1,9 +1,9 @@
 SELECT
-    customer.c_name,
-    customer.c_custkey,
-    orders.o_orderkey,
-    orders.o_orderdate,
-    orders.o_totalprice,
+    customer.c_name AS c_name,
+    customer.c_custkey AS c_custkey,
+    orders.o_orderkey AS o_orderkey,
+    orders.o_orderdate AS o_orderdate,
+    orders.o_totalprice AS o_totalprice,
     SUM( lineitem.l_quantity )
 FROM
     customer
@@ -14,25 +14,20 @@ JOIN lineitem ON
 WHERE
     orders.o_orderkey IN(
         SELECT
-            lineitem.l_orderkey
+            l_orderkey
         FROM
-            (
-                SELECT
-                    l_orderkey,
-                    SUM( l_quantity )
-                FROM
-                    lineitem
-                GROUP BY
-                    l_orderkey
-                HAVING
-                    SUM( l_quantity )> 300
-            )
+            lineitem
+        GROUP BY
+            l_orderkey
+        HAVING
+            SUM( l_quantity )> 300
     )
 GROUP BY
-    customer.c_name,
-    customer.c_custkey,
-    orders.o_orderkey,
-    orders.o_orderdate,
-    orders.o_totalprice
+    c_name,
+    c_custkey,
+    o_orderkey,
+    o_orderdate,
+    o_totalprice
 ORDER BY
-    orders.o_totalprice DESC LIMIT 100;
+    o_totalprice DESC,
+    o_orderdate LIMIT 100;

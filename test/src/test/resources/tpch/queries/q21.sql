@@ -1,5 +1,5 @@
 SELECT
-    supplier.s_name,
+    supplier.s_name AS s_name,
     COUNT( supplier.s_name ) AS numwait
 FROM
     lineitem AS l1
@@ -33,7 +33,7 @@ WHERE
     )
     AND nation.n_name = 'SAUDI ARABIA'
 GROUP BY
-    supplier.s_name
+    s_name
 ORDER BY
     numwait DESC,
-    supplier.s_name LIMIT 100;
+    s_name LIMIT 100;

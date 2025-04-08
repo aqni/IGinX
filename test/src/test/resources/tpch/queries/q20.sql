@@ -1,26 +1,19 @@
 WITH tmpTableA AS(
     SELECT
-        partkey,
-        suppkey,
-        0.5 * tmp AS val
+        l_partkey AS partkey,
+        l_suppkey AS suppkey,
+        0.5 * SUM( l_quantity ) AS val
     FROM
-        (
-            SELECT
-                l_partkey AS partkey,
-                l_suppkey AS suppkey,
-                SUM( l_quantity ) AS tmp
-            FROM
-                lineitem
-            WHERE
-                lineitem.l_shipdate >= 757353600000
-                AND lineitem.l_shipdate < 788889600000
-            GROUP BY
-                l_partkey,
-                l_suppkey
-        )
+        lineitem
+    WHERE
+        l_shipdate >= 757353600000
+        AND l_shipdate < 788889600000
+    GROUP BY
+        l_partkey,
+        l_suppkey
 ) SELECT
-    supplier.s_name,
-    supplier.s_address
+    supplier.s_name AS s_name,
+    supplier.s_address AS s_address
 FROM
     supplier
 JOIN nation ON
@@ -47,4 +40,4 @@ WHERE
     )
     AND nation.n_name = 'CANADA'
 ORDER BY
-    supplier.s_name;
+    s_name;
