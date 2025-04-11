@@ -21,13 +21,13 @@
 
 port=$1
 echo "Starting InfluxDB on port $port"
-pathPrefix="influxdb2-2.0.7-windows-amd64-$port"
+pathPrefix="influxdb2-2.7.11-windows-amd64-$port"
 
 arguments="-ArgumentList 'run', '--bolt-path=$pathPrefix/.influxdbv2/influxd.bolt', '--engine-path=$pathPrefix/.influxdbv2/engine', '--http-bind-address=:$port', '--query-memory-bytes=300971520', '--query-concurrency=2'"
 
 redirect="-RedirectStandardOutput '$pathPrefix/logs/db.log' -RedirectStandardError '$pathPrefix/logs/db-error.log'"
 
-powershell -command "Start-Process -FilePath 'influxdb2-2.0.7-windows-amd64-$port/influxd' $arguments -NoNewWindow $redirect"
+powershell -command "Start-Process -FilePath 'influxdb2-2.7.11-windows-amd64-$port/influxd' $arguments -NoNewWindow $redirect"
 sleep 3
 
 sudo lsof -i:$port
