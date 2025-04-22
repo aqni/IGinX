@@ -83,7 +83,7 @@ ruleAssignment
    ;
 
 cteName
-   : identifier
+   : ID
    ;
 
 columnsList
@@ -91,7 +91,7 @@ columnsList
    ;
 
 cteColumn
-   : identifier
+   : ID
    ;
 
 queryClause
@@ -337,7 +337,7 @@ aggLen
    ;
 
 asClause
-   : AS? identifier
+   : AS? ID
    ;
 
 timeInterval
@@ -490,8 +490,9 @@ jobStatus
    ;
 
 nodeName
-   : identifier
+   : ID
    | STAR
+   | BACK_QUOTE_STRING_LITERAL_NOT_EMPTY
    | keyWords
    ;
 
@@ -632,11 +633,6 @@ realLiteral
 
 removedStorageEngine
    : LR_BRACKET ip = stringLiteral COMMA port = INT COMMA schemaPrefix = stringLiteral COMMA dataPrefix = stringLiteral RR_BRACKET
-   ;
-
-identifier
-   : ID
-   | BACK_QUOTE_STRING_LITERAL_NOT_EMPTY
    ;
    //============================
    
