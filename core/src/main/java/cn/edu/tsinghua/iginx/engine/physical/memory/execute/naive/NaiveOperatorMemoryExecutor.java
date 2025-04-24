@@ -169,6 +169,10 @@ public class NaiveOperatorMemoryExecutor implements OperatorMemoryExecutor {
         case InnerJoin:
         case SingleJoin:
           return Table.EMPTY_TABLE;
+        case MarkJoin:
+          if(tableA.isEmpty()) {
+            return Table.EMPTY_TABLE;
+          }
       }
     }
     switch (operator.getType()) {
