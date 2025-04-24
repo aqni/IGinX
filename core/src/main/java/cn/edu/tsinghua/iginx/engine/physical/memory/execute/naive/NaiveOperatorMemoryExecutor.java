@@ -114,6 +114,9 @@ public class NaiveOperatorMemoryExecutor implements OperatorMemoryExecutor {
       UnaryOperator operator, RowStream stream, RequestContext context) throws PhysicalException {
     Table table = transformToTable(stream);
     table.setContext(context);
+    if(table.isEmpty()) {
+      return table;
+    }
     switch (operator.getType()) {
       case Project:
         return executeProject((Project) operator, table);
@@ -160,6 +163,14 @@ public class NaiveOperatorMemoryExecutor implements OperatorMemoryExecutor {
     Table tableB = transformToTable(streamB);
     tableA.setContext(context);
     tableB.setContext(context);
+    if(tableA.isEmpty() || tableB.isEmpty()) {
+      switch (operator.getType()) {
+        case CrossJoin:
+        case InnerJoin:
+        case SingleJoin:
+          return Table.EMPTY_TABLE;
+      }
+    }
     switch (operator.getType()) {
       case Join:
         return executeJoin((Join) operator, tableA, tableB);
@@ -2253,13 +2264,6 @@ public class NaiveOperatorMemoryExecutor implements OperatorMemoryExecutor {
   }
 
   private RowStream executeUnion(Union union, Table tableA, Table tableB) throws PhysicalException {
-    if(tableA.isEmpty() || tableB.isEmpty()) {
-      if (tableA.isEmpty()) {
-        return tableB;
-      } else {
-        return tableA;
-      }
-    }
     // 将左右两表的列Reorder
     Reorder reorderA = new Reorder(EmptySource.EMPTY_SOURCE, union.getLeftOrder());
     Reorder reorderB = new Reorder(EmptySource.EMPTY_SOURCE, union.getRightOrder());
@@ -2278,6 +2282,11 @@ public class NaiveOperatorMemoryExecutor implements OperatorMemoryExecutor {
   }
 
   private RowStream executeUnionAll(Table tableA, Table tableB) {
+    if(tableA.isEmpty()){
+      return tableB;
+    }else if(tableB.isEmpty()){
+      return tableA;
+    }
     boolean hasKey = tableA.getHeader().hasKey();
     Header targetHeader = tableA.getHeader();
     List<Row> targetRows = tableA.getRows();
