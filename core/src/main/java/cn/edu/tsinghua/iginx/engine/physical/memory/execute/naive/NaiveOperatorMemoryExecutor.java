@@ -163,20 +163,22 @@ public class NaiveOperatorMemoryExecutor implements OperatorMemoryExecutor {
     Table tableB = transformToTable(streamB);
     tableA.setContext(context);
     tableB.setContext(context);
-    if(tableA.isEmpty() || tableB.isEmpty()) {
+    if(tableA.isEmpty()|| tableA.getHeader().getFieldSize()==0 || tableB.isEmpty()|| tableB.getHeader().getFieldSize()==0) {
       switch (operator.getType()) {
         case CrossJoin:
         case InnerJoin:
         case SingleJoin:
           return Table.EMPTY_TABLE;
         case MarkJoin:
-          if(tableA.isEmpty()) {
+          if(tableA.isEmpty()|| tableA.getHeader().getFieldSize()==0) {
             return Table.EMPTY_TABLE;
           }
+          break;
         case OuterJoin:
-          if(tableA.isEmpty() && tableB.isEmpty()) {
+          if((tableA.isEmpty() || tableA.getHeader().getFieldSize()==0) && (tableB.isEmpty() || tableB.getHeader().getFieldSize()==0)) {
             return Table.EMPTY_TABLE;
           }
+          break;
       }
     }
     switch (operator.getType()) {
