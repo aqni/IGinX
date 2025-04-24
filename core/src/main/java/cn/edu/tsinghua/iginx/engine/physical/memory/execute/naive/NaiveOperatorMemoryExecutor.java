@@ -173,6 +173,10 @@ public class NaiveOperatorMemoryExecutor implements OperatorMemoryExecutor {
           if(tableA.isEmpty()) {
             return Table.EMPTY_TABLE;
           }
+        case OuterJoin:
+          if(tableA.isEmpty() && tableB.isEmpty()) {
+            return Table.EMPTY_TABLE;
+          }
       }
     }
     switch (operator.getType()) {
