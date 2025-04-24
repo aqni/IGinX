@@ -2033,6 +2033,16 @@ public class NaiveOperatorMemoryExecutor implements OperatorMemoryExecutor {
               tableA.getHeader(), tableB.getHeader(), markJoin.getExtraJoinPrefix());
     }
 
+    if(tableB.isEmpty() || tableB.getHeader().getFieldSize()==0){
+      Header newHeader = constructNewHead(tableA.getHeader(), markJoin.getMarkColumn());
+      List<Row> transformedRows = new ArrayList<>();
+      for (Row rowA : tableA.getRows()) {
+        Row unmatchedRow = RowUtils.constructNewRowWithMark(newHeader, rowA, markJoin.isAntiJoin());
+        transformedRows.add(unmatchedRow);
+      }
+      return new Table(newHeader, transformedRows);
+    }
+
     // 计算建立和访问哈希表所用的path
     Pair<String, String> pair =
         calculateHashJoinPath(
