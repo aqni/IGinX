@@ -2253,6 +2253,13 @@ public class NaiveOperatorMemoryExecutor implements OperatorMemoryExecutor {
   }
 
   private RowStream executeUnion(Union union, Table tableA, Table tableB) throws PhysicalException {
+    if(tableA.isEmpty() || tableB.isEmpty()) {
+      if (tableA.isEmpty()) {
+        return tableB;
+      } else {
+        return tableA;
+      }
+    }
     // 将左右两表的列Reorder
     Reorder reorderA = new Reorder(EmptySource.EMPTY_SOURCE, union.getLeftOrder());
     Reorder reorderB = new Reorder(EmptySource.EMPTY_SOURCE, union.getRightOrder());
