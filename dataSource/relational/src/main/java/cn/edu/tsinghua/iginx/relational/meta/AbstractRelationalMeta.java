@@ -161,4 +161,6 @@ public abstract class AbstractRelationalMeta {
   public abstract boolean jdbcSupportGetTableNameFromResultSet();
 
   public abstract boolean isSupportInformationSchema();
+
+  public abstract  boolean isUseApproximateBoundary();
 }
