@@ -25,7 +25,9 @@ public class ColumnsIntervalUtils {
 
   public static ColumnsInterval fromString(String str) {
     String[] parts = str.split("-");
-    assert parts.length == 2;
+    if (parts.length != 2) {
+      throw new IllegalArgumentException("Invalid ColumnsInterval string: " + str);
+    }
     return new ColumnsInterval(
         parts[0].equals("null") ? null : parts[0], parts[1].equals("null") ? null : parts[1]);
   }
