@@ -47,8 +47,8 @@ public class ProjectUtils {
     for (String field : schemaFields) {
       if (schema.containsField(field)) {
         Type type = schema.getType(field);
-        if (!type.isPrimitive()) {
-          throw new IllegalArgumentException("not primitive type is not supported: " + field);
+        if (!type.isPrimitive() || type.isRepetition(Type.Repetition.REPEATED)) {
+          throw new IllegalArgumentException("type is not supported: " + type);
         }
         builder.addField(schema.getType(field));
       }
@@ -60,12 +60,11 @@ public class ProjectUtils {
   public static List<Field> toFields(MessageType schema) {
     List<Field> fields = new ArrayList<>();
     for (Type type : schema.getFields()) {
-      if (!type.isPrimitive()) {
-        throw new IllegalArgumentException("unsupported parquet type: " + type);
+      if (type.isPrimitive() && !type.isRepetition(Type.Repetition.REPEATED)) {
+        String rawName = type.getName();
+        DataType iType = IParquetReader.toIginxType(type.asPrimitiveType());
+        fields.add(new Field(rawName, iType));
       }
-      String rawName = type.getName();
-      DataType iType = IParquetReader.toIginxType(type.asPrimitiveType());
-      fields.add(new Field(rawName, iType));
     }
     return fields;
   }
