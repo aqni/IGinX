@@ -349,7 +349,10 @@ public class StatementExecutor {
         }
 
         before(ctx, prePhysicalProcessors);
+        long startTime = System.nanoTime();
         RowStream stream = engine.execute(ctx, root);
+        long endTime = System.nanoTime();
+        LOGGER.info("SQL(head={},len={}) execute by engine in {} ms", ctx.getSql().substring(0,7), ctx.getSql().length(), (endTime - startTime) / 1000000);
         after(ctx, postPhysicalProcessors);
 
         if (type == StatementType.SELECT) {

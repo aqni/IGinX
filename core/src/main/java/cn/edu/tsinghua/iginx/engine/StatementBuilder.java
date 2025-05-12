@@ -32,8 +32,12 @@ import java.util.Map;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class StatementBuilder {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(StatementBuilder.class);
 
   private static final Map<StatementType, SqlType> typeMap = new HashMap<>();
 
@@ -84,6 +88,17 @@ public class StatementBuilder {
 
   public void buildFromSQL(RequestContext ctx) {
     String sql = ctx.getSql();
+    long startTime = System.nanoTime();
+    ParseTree tree = getParseTree(sql);
+    long endTime = System.nanoTime();
+    LOGGER.info("SQL(head={},len={}) parsed by antlr in {} ms", sql.substring(0,7), sql.length(), (endTime - startTime) / 1000000);
+    IginXSqlVisitor visitor = new IginXSqlVisitor();
+    Statement statement = visitor.visit(tree);
+    ctx.setStatement(statement);
+    ctx.setSqlType(typeMap.get(statement.getType()));
+  }
+
+  private ParseTree getParseTree(String sql) {
     SqlLexer lexer = new SqlLexer(CharStreams.fromString(sql));
     lexer.removeErrorListeners();
     lexer.addErrorListener(SQLParseError.INSTANCE);
@@ -92,11 +107,6 @@ public class StatementBuilder {
     SqlParser parser = new SqlParser(tokens);
     parser.removeErrorListeners();
     parser.addErrorListener(SQLParseError.INSTANCE);
-
-    IginXSqlVisitor visitor = new IginXSqlVisitor();
-    ParseTree tree = parser.sqlStatement();
-    Statement statement = visitor.visit(tree);
-    ctx.setStatement(statement);
-    ctx.setSqlType(typeMap.get(statement.getType()));
+    return parser.sqlStatement();
   }
 }
