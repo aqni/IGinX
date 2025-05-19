@@ -87,6 +87,14 @@ runs:
           with:
               if-stop: "true"
 
+        - name: Show InfluxDB Logs
+          if: (!success()) && inputs.status != 'ok' && matrix.DB-name == 'InfluxDB'
+          shell: bash
+          run: |
+            cd influxdb2-2.0.7-linux-amd64
+            cat db.log
+            
+
         - name: Get Test Result
           id: get
           shell: bash
