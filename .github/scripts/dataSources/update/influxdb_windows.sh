@@ -22,7 +22,7 @@
 
 set -e
 
-cd influxdb2-2.7.11-windows-amd64/
+cd influxdb2-2.0.7-windows-amd64/
 
 # 所有org的信息
 output=$(influx org list)

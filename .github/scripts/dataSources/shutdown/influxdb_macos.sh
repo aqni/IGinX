@@ -20,7 +20,7 @@
 # usage:.sh <target_port>
 
 port=$1
-cd influxdb2-2.7.11-darwin-amd64-$port/
+cd influxdb2-2.0.7-darwin-amd64-$port/
 ls
 pid=$(cat "influxdb.pid")
 if [ ! -z "$pid" ]; then
