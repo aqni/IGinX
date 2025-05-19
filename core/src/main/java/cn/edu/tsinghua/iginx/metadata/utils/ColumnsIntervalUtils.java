@@ -20,13 +20,40 @@
 package cn.edu.tsinghua.iginx.metadata.utils;
 
 import cn.edu.tsinghua.iginx.metadata.entity.ColumnsInterval;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 public class ColumnsIntervalUtils {
 
   public static ColumnsInterval fromString(String str) {
-    String[] parts = str.split("-");
+    String[] parts = str.split(":", 2); // 使用 ":" 作为分隔符，避免与列名中的 "-" 冲突
     assert parts.length == 2;
     return new ColumnsInterval(
-        parts[0].equals("null") ? null : parts[0], parts[1].equals("null") ? null : parts[1]);
+        "null".equals(parts[0]) ? null : decode(parts[0]),
+        "null".equals(parts[1]) ? null : decode(parts[1]));
+  }
+
+  public static String toString(ColumnsInterval interval) {
+    String start = interval.getStartColumn() == null ? "null" : encode(interval.getStartColumn());
+    String end = interval.getEndColumn() == null ? "null" : encode(interval.getEndColumn());
+    return start + ":" + end; // 使用 ":" 作为分隔符
+  }
+
+  private static String encode(String value) {
+    try {
+      return URLEncoder.encode(value, StandardCharsets.UTF_8.name());
+    } catch (UnsupportedEncodingException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  private static String decode(String value) {
+    try {
+      return URLDecoder.decode(value, StandardCharsets.UTF_8.name());
+    } catch (UnsupportedEncodingException e) {
+      throw new IllegalStateException(e);
+    }
   }
 }
