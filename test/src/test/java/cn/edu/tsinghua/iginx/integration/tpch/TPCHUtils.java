@@ -37,6 +37,7 @@ import java.nio.file.Paths;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import org.junit.Assert;
 import org.slf4j.Logger;
@@ -311,6 +312,19 @@ public class TPCHUtils {
   }
 
   public static long executeTPCHQuery(Session session, String queryId, boolean needValidate) {
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    Future<Long> future =
+        executor.submit(() -> executeTPCHQuerySync(session, queryId, needValidate));
+    try {
+      return future.get(5, TimeUnit.MINUTES);
+    } catch (TimeoutException | InterruptedException | ExecutionException e) {
+      throw new IllegalStateException("Query execution failed", e);
+    } finally {
+      executor.shutdown();
+    }
+  }
+
+  private static long executeTPCHQuerySync(Session session, String queryId, boolean needValidate) {
     String sqlString = null;
     try {
       sqlString =
