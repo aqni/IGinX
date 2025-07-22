@@ -194,7 +194,11 @@ public class IginxClient {
       Terminal terminal = TerminalBuilder.builder().system(true).build();
 
       LineReader reader =
-          LineReaderBuilder.builder().terminal(terminal).completer(buildIginxCompleter()).build();
+          LineReaderBuilder.builder()
+              .terminal(terminal)
+              .option(LineReader.Option.DISABLE_EVENT_EXPANSION, true)
+              .completer(buildIginxCompleter())
+              .build();
 
       host = parseArg(HOST_ARGS, HOST_NAME, false, "127.0.0.1");
       port = parseArg(PORT_ARGS, PORT_NAME, false, "6888");
@@ -294,7 +298,7 @@ public class IginxClient {
       return OperationResult.STOP;
     }
     long startTime = System.currentTimeMillis();
-    if (isQuery(trimedStatement)) {
+    if (isSqlWithStream(trimedStatement)) {
       processSqlWithStream(statement);
     } else if (isLoadDataFromCsv(trimedStatement)) {
       processLoadCsv(statement);
@@ -316,8 +320,8 @@ public class IginxClient {
     return sql.startsWith("create") && sql.contains("function");
   }
 
-  private static boolean isQuery(String sql) {
-    return sql.startsWith("select") || sql.startsWith("with");
+  private static boolean isSqlWithStream(String sql) {
+    return sql.startsWith("select") || sql.startsWith("with") || sql.startsWith("show columns");
   }
 
   private static boolean isLoadDataFromCsv(String sql) {
