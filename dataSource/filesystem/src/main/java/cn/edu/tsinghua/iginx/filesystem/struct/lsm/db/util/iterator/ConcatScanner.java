@@ -20,7 +20,6 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
-
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 

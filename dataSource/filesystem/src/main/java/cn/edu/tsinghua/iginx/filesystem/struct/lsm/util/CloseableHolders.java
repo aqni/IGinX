@@ -19,9 +19,8 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util;
 
-import org.apache.arrow.util.Preconditions;
-
 import java.util.NoSuchElementException;
+import org.apache.arrow.util.Preconditions;
 
 public class CloseableHolders {
 

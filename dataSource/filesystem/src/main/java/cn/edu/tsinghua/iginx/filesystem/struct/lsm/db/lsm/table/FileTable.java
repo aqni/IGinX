@@ -24,13 +24,12 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.ReadWriter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.TableMeta;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import com.google.common.collect.RangeSet;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Set;
 import java.util.StringJoiner;
+import javax.annotation.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class FileTable implements Table {
   private static final Logger LOGGER = LoggerFactory.getLogger(FileTable.class);

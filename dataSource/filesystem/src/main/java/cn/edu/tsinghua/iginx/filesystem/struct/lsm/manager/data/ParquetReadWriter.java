@@ -24,6 +24,7 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.format.parquet.IParquetReader;
 import cn.edu.tsinghua.iginx.filesystem.format.parquet.IParquetWriter;
 import cn.edu.tsinghua.iginx.filesystem.format.parquet.IRecord;
+import cn.edu.tsinghua.iginx.filesystem.struct.legacy.parquet.manager.dummy.Storer;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.ReadWriter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.TableMeta;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table.DeletedTableMeta;
@@ -31,7 +32,6 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.AreaFilterScanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.IteratorScanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.legacy.parquet.manager.dummy.Storer;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.CachePool;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Constants;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
@@ -40,17 +40,16 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageRuntime
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
+import java.io.IOException;
+import java.nio.file.*;
+import java.util.*;
+import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import shaded.iginx.org.apache.parquet.hadoop.metadata.ColumnPath;
 import shaded.iginx.org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import shaded.iginx.org.apache.parquet.schema.MessageType;
 import shaded.iginx.org.apache.parquet.schema.Type;
-
-import javax.annotation.Nullable;
-import java.io.IOException;
-import java.nio.file.*;
-import java.util.*;
 
 public class ParquetReadWriter implements ReadWriter {
 
@@ -91,7 +90,10 @@ public class ParquetReadWriter implements ReadWriter {
   public static IRecord getRecord(MessageType schema, Long key, Scanner<String, Object> value)
       throws StorageException {
     IRecord record = new IRecord();
-    record.add(schema.getFieldIndex(cn.edu.tsinghua.iginx.filesystem.struct.legacy.parquet.util.Constants.KEY_FIELD_NAME), key);
+    record.add(
+        schema.getFieldIndex(
+            cn.edu.tsinghua.iginx.filesystem.struct.legacy.parquet.util.Constants.KEY_FIELD_NAME),
+        key);
     while (value.iterate()) {
       record.add(schema.getFieldIndex(value.key()), value.value());
     }

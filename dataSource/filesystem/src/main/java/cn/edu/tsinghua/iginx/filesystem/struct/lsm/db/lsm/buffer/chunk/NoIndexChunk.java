@@ -22,13 +22,12 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowVectors;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeRangeSet;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.vector.IntVector;
-
-import javax.annotation.WillCloseWhenClosed;
-import javax.annotation.concurrent.ThreadSafe;
 import java.util.Map;
 import java.util.TreeMap;
+import javax.annotation.WillCloseWhenClosed;
+import javax.annotation.concurrent.ThreadSafe;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.IntVector;
 
 @ThreadSafe
 public class NoIndexChunk extends IndexedChunk {

@@ -25,12 +25,11 @@ import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeRangeSet;
-
-import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import javax.annotation.Nullable;
 
 public class DeletedTableMeta implements TableMeta {
   private final Map<String, DataType> schema;

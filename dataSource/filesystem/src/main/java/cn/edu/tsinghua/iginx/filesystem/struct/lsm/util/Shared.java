@@ -19,12 +19,11 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util;
 
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.memory.RootAllocator;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.Semaphore;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
 
 public class Shared implements Closeable {
   private final StorageProperties storageProperties;

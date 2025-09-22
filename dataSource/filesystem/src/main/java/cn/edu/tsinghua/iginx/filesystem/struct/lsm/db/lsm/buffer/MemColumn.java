@@ -24,17 +24,16 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.IndexedCh
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.iterator.DedupIterator;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.iterator.StableMergeIterator;
 import com.google.common.collect.*;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.util.Preconditions;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import javax.annotation.WillCloseWhenClosed;
-import javax.annotation.concurrent.ThreadSafe;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import javax.annotation.WillCloseWhenClosed;
+import javax.annotation.concurrent.ThreadSafe;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.util.Preconditions;
 
 @ThreadSafe
 public class MemColumn implements AutoCloseable {

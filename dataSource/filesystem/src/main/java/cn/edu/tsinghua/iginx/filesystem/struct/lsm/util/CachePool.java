@@ -22,10 +22,9 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Scheduler;
-import org.ehcache.sizeof.SizeOf;
-
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
+import org.ehcache.sizeof.SizeOf;
 
 public class CachePool {
 

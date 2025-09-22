@@ -20,10 +20,9 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow;
 
 import cn.edu.tsinghua.iginx.thrift.DataType;
+import java.util.Objects;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.ArrowType;
-
-import java.util.Objects;
 
 public class ArrowTypes {
   public static ArrowType of(DataType dataType) {

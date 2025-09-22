@@ -21,13 +21,12 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.conflict;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.MemTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.Chunk;
-import org.apache.arrow.vector.types.pojo.Field;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
+import org.apache.arrow.vector.types.pojo.Field;
 
 public class ThreadPoolResolver implements ConflictResolver {
   private final ConcurrentMap<Field, ExecutorService> executors = new ConcurrentHashMap<>();

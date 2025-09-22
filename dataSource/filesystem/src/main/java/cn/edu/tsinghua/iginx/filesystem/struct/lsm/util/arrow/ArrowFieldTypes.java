@@ -20,12 +20,11 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow;
 
 import cn.edu.tsinghua.iginx.thrift.DataType;
+import java.util.Map;
+import javax.annotation.Nullable;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.types.pojo.DictionaryEncoding;
 import org.apache.arrow.vector.types.pojo.FieldType;
-
-import javax.annotation.Nullable;
-import java.util.Map;
 
 public class ArrowFieldTypes {
 

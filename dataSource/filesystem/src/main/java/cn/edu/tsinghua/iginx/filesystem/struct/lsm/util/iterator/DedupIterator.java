@@ -22,7 +22,6 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.iterator;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.PeekingIterator;
 import com.google.common.collect.UnmodifiableIterator;
-
 import java.util.Iterator;
 import java.util.function.Function;
 

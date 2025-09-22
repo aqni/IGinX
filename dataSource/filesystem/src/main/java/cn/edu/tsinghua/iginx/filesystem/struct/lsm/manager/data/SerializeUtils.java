@@ -22,11 +22,10 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.data;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Constants;
 import com.google.common.collect.*;
-
-import javax.json.*;
 import java.io.StringReader;
 import java.util.Collections;
 import java.util.Map;
+import javax.json.*;
 
 public class SerializeUtils {
 

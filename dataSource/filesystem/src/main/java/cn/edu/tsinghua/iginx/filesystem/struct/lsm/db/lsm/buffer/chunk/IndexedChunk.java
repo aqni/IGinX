@@ -21,17 +21,16 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowVectors;
 import com.google.common.collect.RangeSet;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.util.Preconditions;
-import org.apache.arrow.vector.IntVector;
-import org.apache.arrow.vector.types.Types;
-
+import java.util.Map;
 import javax.annotation.Nullable;
 import javax.annotation.WillClose;
 import javax.annotation.WillCloseWhenClosed;
 import javax.annotation.concurrent.Immutable;
 import javax.annotation.concurrent.ThreadSafe;
-import java.util.Map;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.util.Preconditions;
+import org.apache.arrow.vector.IntVector;
+import org.apache.arrow.vector.types.Types;
 
 @ThreadSafe
 public abstract class IndexedChunk extends Chunk {

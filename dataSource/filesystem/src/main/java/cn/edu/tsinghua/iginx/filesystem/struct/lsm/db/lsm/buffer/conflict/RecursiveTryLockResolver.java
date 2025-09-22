@@ -21,7 +21,6 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.conflict;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.MemTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.Chunk;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;

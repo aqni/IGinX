@@ -22,12 +22,11 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.IndexedChunk;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.IndexedChunkType;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.conflict.ConflictResolverType;
-import org.apache.arrow.vector.BaseValueVector;
-
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.StringJoiner;
+import org.apache.arrow.vector.BaseValueVector;
 
 /** The properties of storage engine */
 public class StorageProperties {

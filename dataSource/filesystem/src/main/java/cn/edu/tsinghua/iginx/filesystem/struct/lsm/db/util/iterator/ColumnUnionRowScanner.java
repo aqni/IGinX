@@ -20,12 +20,11 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
-import org.apache.arrow.util.AutoCloseables;
-
 import java.util.Comparator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.PriorityQueue;
+import org.apache.arrow.util.AutoCloseables;
 
 public class ColumnUnionRowScanner<K extends Comparable<K>, F, V>
     implements Scanner<K, Scanner<F, V>> {

@@ -25,11 +25,10 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.RangeSet;
-import org.apache.arrow.vector.types.pojo.Field;
-
 import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
+import org.apache.arrow.vector.types.pojo.Field;
 
 public interface Database extends AutoCloseable {
 

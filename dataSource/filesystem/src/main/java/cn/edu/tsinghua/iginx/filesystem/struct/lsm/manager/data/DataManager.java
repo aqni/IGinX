@@ -41,13 +41,12 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.RangeSet;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DataManager implements Manager {
   private static final Logger LOGGER = LoggerFactory.getLogger(DataManager.class);
@@ -119,8 +118,7 @@ public class DataManager implements Manager {
   public void delete(List<String> paths, List<KeyRange> keyRanges, TagFilter tagFilter)
       throws PhysicalException {
 
-    RangeSet<Long> rangeSet =
-        com.google.common.collect.TreeRangeSet.create();
+    RangeSet<Long> rangeSet = com.google.common.collect.TreeRangeSet.create();
     if (keyRanges != null && !keyRanges.isEmpty()) {
       for (KeyRange range : keyRanges) {
         rangeSet.add(

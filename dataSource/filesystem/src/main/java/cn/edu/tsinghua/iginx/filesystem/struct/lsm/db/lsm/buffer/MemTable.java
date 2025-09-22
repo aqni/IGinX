@@ -24,13 +24,12 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.IndexedCh
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table.MemoryTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import com.google.common.collect.RangeSet;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.vector.types.pojo.Field;
-
-import javax.annotation.concurrent.ThreadSafe;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import javax.annotation.concurrent.ThreadSafe;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.types.pojo.Field;
 
 @ThreadSafe
 public class MemTable implements AutoCloseable {

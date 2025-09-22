@@ -23,13 +23,12 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowVectors;
 import com.google.common.collect.BoundType;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.vector.IntVector;
-
-import javax.annotation.WillCloseWhenClosed;
-import javax.annotation.concurrent.ThreadSafe;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import javax.annotation.WillCloseWhenClosed;
+import javax.annotation.concurrent.ThreadSafe;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.IntVector;
 
 @ThreadSafe
 public class SkipListChunk extends IndexedChunk {

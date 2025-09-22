@@ -21,7 +21,6 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.data;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.*;
 import com.google.common.collect.*;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;

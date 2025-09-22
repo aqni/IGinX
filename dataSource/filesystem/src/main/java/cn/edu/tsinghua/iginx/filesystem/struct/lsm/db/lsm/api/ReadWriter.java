@@ -23,7 +23,6 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import com.google.common.collect.RangeSet;
-
 import java.io.IOException;
 import java.util.Set;
 

@@ -23,15 +23,14 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table.MemoryTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
 import com.google.common.collect.RangeSet;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.util.Preconditions;
-import org.apache.arrow.vector.types.pojo.Field;
-
-import javax.annotation.WillCloseWhenClosed;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import javax.annotation.WillCloseWhenClosed;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.util.Preconditions;
+import org.apache.arrow.vector.types.pojo.Field;
 
 public class ArchivedMemTable implements NoexceptAutoCloseable {
   private final MemTable memTable;

@@ -25,10 +25,9 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.AreaFilterScanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import com.google.common.collect.RangeSet;
-
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Set;
+import javax.annotation.Nullable;
 
 public class DeletedTable implements Table {
 

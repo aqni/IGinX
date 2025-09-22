@@ -21,9 +21,8 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api;
 
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.Range;
-
-import javax.annotation.Nullable;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 public interface TableMeta {
   Map<String, DataType> getSchema();
