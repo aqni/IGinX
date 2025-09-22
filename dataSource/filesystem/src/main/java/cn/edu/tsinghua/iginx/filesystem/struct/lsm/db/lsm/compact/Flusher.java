@@ -25,17 +25,16 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table.TableStorage;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
+import javax.annotation.Nonnegative;
+import javax.annotation.concurrent.NotThreadSafe;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nonnegative;
-import javax.annotation.concurrent.NotThreadSafe;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.*;
 
 @NotThreadSafe
 public class Flusher implements NoexceptAutoCloseable {
@@ -162,25 +161,7 @@ public class Flusher implements NoexceptAutoCloseable {
     LOGGER.debug("start to flush memtable {}", memtableId);
 
     try (MemoryTable snapshot = memTableQueue.snapshot(memtableId, allocator)) {
-      List<Future<List<String>>> futureFlushed = new ArrayList<>();
-
-      Field[] fields = snapshot.getFields().toArray(new Field[0]);
-      for (int columnNumber = 0; columnNumber < fields.length; columnNumber++) {
-        Field field = fields[columnNumber];
-        String suffix = String.valueOf(columnNumber);
-
-        shared.getFlusherPermits().acquire();
-        Future<List<String>> future =
-            worker.submit(
-                () -> {
-                  try {
-                    return tableStorage.flush(memtableId, suffix, snapshot.subTable(field));
-                  } finally {
-                    shared.getFlusherPermits().release();
-                  }
-                });
-        futureFlushed.add(future);
-      }
+      List<Future<List<String>>> futureFlushed = submitToFlushAllField(memtableId, snapshot);
 
       onSubmit.countDown();
 
@@ -200,5 +181,85 @@ public class Flusher implements NoexceptAutoCloseable {
         });
 
     LOGGER.debug("memtable {} is eliminated", memtableId);
+  }
+
+  private List<Future<List<String>>> submitToFlushEachField(long memtableId, MemoryTable snapshot)
+      throws InterruptedException {
+    List<Future<List<String>>> futureFlushed = new ArrayList<>();
+
+    Field[] fields = snapshot.getFields().toArray(new Field[0]);
+    for (int columnNumber = 0; columnNumber < fields.length; columnNumber++) {
+      Field field = fields[columnNumber];
+      String suffix = String.valueOf(columnNumber);
+
+      shared.getFlusherPermits().acquire();
+      Future<List<String>> future =
+          worker.submit(
+              () -> {
+                try {
+                  return tableStorage.flush(
+                      memtableId, suffix, snapshot.subTable(Collections.singletonList(field)));
+                } finally {
+                  shared.getFlusherPermits().release();
+                }
+              });
+      futureFlushed.add(future);
+    }
+    return futureFlushed;
+  }
+
+  private List<Future<List<String>>> submitToFlushAllField(long memtableId, MemoryTable snapshot)
+      throws InterruptedException {
+    shared.getFlusherPermits().acquire();
+    Future<List<String>> future =
+        worker.submit(
+            () -> {
+              try {
+                return tableStorage.flush(memtableId, "all", snapshot);
+              } finally {
+                shared.getFlusherPermits().release();
+              }
+            });
+    return Collections.singletonList(future);
+  }
+
+  private List<Future<List<String>>> submitToFlushGroupedField(
+      long memtableId, MemoryTable snapshot) throws InterruptedException {
+    Map<String, List<Field>> groupedFields = new HashMap<>();
+    for (Field field : snapshot.getFields()) {
+      String name = field.getName();
+      String namePrefix = name.contains(".") ? name.substring(0, name.lastIndexOf(".")) : null;
+      groupedFields.computeIfAbsent(namePrefix, k -> new ArrayList<>()).add(field);
+    }
+
+    List<String> singlePrefixes =
+        groupedFields.entrySet().stream()
+            .filter(entry -> entry.getValue().size() <= 1)
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toList());
+
+    for (String singlePrefix : singlePrefixes) {
+      groupedFields
+          .computeIfAbsent(null, k -> new ArrayList<>())
+          .addAll(groupedFields.remove(singlePrefix));
+    }
+
+    List<Future<List<String>>> futureFlushed = new ArrayList<>();
+    for (String prefix : groupedFields.keySet()) {
+      List<Field> fields = groupedFields.get(prefix);
+
+      shared.getFlusherPermits().acquire();
+      Future<List<String>> future =
+          worker.submit(
+              () -> {
+                try {
+                  return tableStorage.flush(memtableId, prefix, snapshot.subTable(fields));
+                } finally {
+                  shared.getFlusherPermits().release();
+                }
+              });
+      futureFlushed.add(future);
+    }
+    return futureFlushed;
   }
 }

@@ -31,14 +31,13 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
+import java.util.*;
+import java.util.stream.Collectors;
+import javax.annotation.Nullable;
+import javax.annotation.WillCloseWhenClosed;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nullable;
-import javax.annotation.WillCloseWhenClosed;
-import java.util.*;
-import java.util.stream.Collectors;
 
 public class MemoryTable implements Table, NoexceptAutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(MemoryTable.class);
@@ -138,9 +137,11 @@ public class MemoryTable implements Table, NoexceptAutoCloseable {
     columns.clear();
   }
 
-  public MemoryTable subTable(Field field) {
+  public MemoryTable subTable(List<Field> fields) {
     LinkedHashMap<Field, MemColumn.Snapshot> subColumns = new LinkedHashMap<>();
-    subColumns.put(field, columns.get(field));
+    for (Field field : fields) {
+      subColumns.put(field, columns.get(field));
+    }
     return new MemoryTable(subColumns) {
       @Override
       public void close() {
