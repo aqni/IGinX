@@ -20,8 +20,8 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.TableMeta;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.MemColumn;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.*;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.utils.TagKVUtils;
@@ -44,7 +44,7 @@ public class MemoryTable implements Table, NoexceptAutoCloseable {
 
   private final LinkedHashMap<Field, MemColumn.Snapshot> columns;
   private final Map<String, Field> fieldMap = new HashMap<>();
-  private final SingleCache<TableMeta> meta =
+  private final SingleCache<StorageManager.TableMeta> meta =
       new SingleCache<>(() -> new MemoryTableMeta(getSchema(), getRanges(), getCounts()));
 
   public MemoryTable(@WillCloseWhenClosed LinkedHashMap<Field, MemColumn.Snapshot> columns) {
@@ -101,7 +101,7 @@ public class MemoryTable implements Table, NoexceptAutoCloseable {
   }
 
   @Override
-  public TableMeta getMeta() {
+  public StorageManager.TableMeta getMeta() {
     return meta.get();
   }
 
@@ -150,7 +150,7 @@ public class MemoryTable implements Table, NoexceptAutoCloseable {
     };
   }
 
-  public static class MemoryTableMeta implements TableMeta {
+  public static class MemoryTableMeta implements StorageManager.TableMeta {
 
     private final Map<String, DataType> schema;
     private final Map<String, Range<Long>> ranges;

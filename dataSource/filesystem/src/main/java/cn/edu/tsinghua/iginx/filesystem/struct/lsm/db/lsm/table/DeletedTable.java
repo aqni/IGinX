@@ -20,7 +20,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.TableMeta;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.AreaFilterScanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
@@ -41,7 +41,7 @@ public class DeletedTable implements Table {
   }
 
   @Override
-  public TableMeta getMeta() throws IOException {
+  public StorageManager.TableMeta getMeta() throws IOException {
     return new DeletedTableMeta(table.getMeta(), deleted);
   }
 

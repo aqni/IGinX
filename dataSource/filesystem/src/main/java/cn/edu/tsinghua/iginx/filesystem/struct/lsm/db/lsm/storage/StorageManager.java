@@ -17,16 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
+import cn.edu.tsinghua.iginx.thrift.DataType;
+import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Set;
+import javax.annotation.Nullable;
 
-public interface ReadWriter {
+public interface StorageManager {
 
   String getName();
 
@@ -45,4 +49,26 @@ public interface ReadWriter {
   Iterable<String> reload() throws IOException;
 
   void clear() throws IOException;
+
+  interface TableMeta {
+    Map<String, DataType> getSchema();
+
+    Range<Long> getRange(String field);
+
+    default Range<Long> getRange(Iterable<String> fields) {
+      Range<Long> range = null;
+      for (String field : fields) {
+        Range<Long> fieldRange = getRange(field);
+        if (range == null) {
+          range = getRange(field);
+        } else {
+          range = range.span(fieldRange);
+        }
+      }
+      return range;
+    }
+
+    @Nullable
+    Long getValueCount(String field);
+  }
 }

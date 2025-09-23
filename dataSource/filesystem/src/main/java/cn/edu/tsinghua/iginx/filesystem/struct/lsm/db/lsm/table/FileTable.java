@@ -20,8 +20,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.ReadWriter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.TableMeta;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import com.google.common.collect.RangeSet;
 import java.io.IOException;
@@ -35,16 +34,16 @@ public class FileTable implements Table {
   private static final Logger LOGGER = LoggerFactory.getLogger(FileTable.class);
   private final String tableName;
 
-  private final ReadWriter readWriter;
+  private final StorageManager storageManager;
 
-  public FileTable(String tableName, ReadWriter readWriter) {
+  public FileTable(String tableName, StorageManager storageManager) {
     this.tableName = tableName;
-    this.readWriter = readWriter;
+    this.storageManager = storageManager;
   }
 
   @Override
-  public TableMeta getMeta() throws IOException {
-    return readWriter.readMeta(tableName);
+  public StorageManager.TableMeta getMeta() throws IOException {
+    return storageManager.readMeta(tableName);
   }
 
   @Override
@@ -52,14 +51,14 @@ public class FileTable implements Table {
       Set<String> fields, RangeSet<Long> ranges, @Nullable Filter superSetPredicate)
       throws IOException {
     LOGGER.debug("read {} where {} & {} from {}", fields, ranges, superSetPredicate, tableName);
-    return readWriter.scanData(tableName, fields, ranges, superSetPredicate);
+    return storageManager.scanData(tableName, fields, ranges, superSetPredicate);
   }
 
   @Override
   public String toString() {
     return new StringJoiner(", ", FileTable.class.getSimpleName() + "[", "]")
         .add("tableName='" + tableName + "'")
-        .add("readWriter=" + readWriter)
+        .add("readWriter=" + storageManager)
         .toString();
   }
 }

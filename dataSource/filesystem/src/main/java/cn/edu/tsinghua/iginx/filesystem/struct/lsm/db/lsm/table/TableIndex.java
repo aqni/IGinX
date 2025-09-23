@@ -19,7 +19,7 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.TableMeta;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.NotIntegrityException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageRuntimeException;
@@ -48,7 +48,7 @@ public class TableIndex {
     try {
       for (String tableName : tableStorage.reload()) {
         LOGGER.debug("rebuilt table index for table: {}", tableName);
-        TableMeta meta = tableStorage.getMeta(tableName);
+        StorageManager.TableMeta meta = tableStorage.getMeta(tableName);
         declareFields(meta.getSchema());
         addTable(tableName, meta);
       }
@@ -189,7 +189,7 @@ public class TableIndex {
     return result;
   }
 
-  public void addTable(String name, TableMeta meta) {
+  public void addTable(String name, StorageManager.TableMeta meta) {
     lock.readLock().lock();
     try {
       Map<String, DataType> types = meta.getSchema();

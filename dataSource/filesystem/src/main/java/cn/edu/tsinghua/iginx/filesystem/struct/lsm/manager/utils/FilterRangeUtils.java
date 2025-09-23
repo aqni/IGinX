@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.data;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.utils;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.*;
 import com.google.common.collect.*;
@@ -25,7 +25,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-class FilterRangeUtils {
+public class FilterRangeUtils {
   private FilterRangeUtils() {}
 
   public static RangeSet<Long> rangeSetOf(Filter filter) {

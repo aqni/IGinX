@@ -20,9 +20,8 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.ReadWriter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.TableMeta;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.DataBuffer;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.ConcatScanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.EmtpyHeadRowScanner;
@@ -47,13 +46,13 @@ public class TableStorage implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(TableStorage.class);
 
   private final TableIndex tableIndex;
-  private final ReadWriter readWriter;
+  private final StorageManager storageManager;
   private long sqnBase;
 
-  public TableStorage(Shared shared, ReadWriter readWriter) throws IOException {
-    this.readWriter = readWriter;
+  public TableStorage(Shared shared, StorageManager storageManager) throws IOException {
+    this.storageManager = storageManager;
 
-    Iterable<String> tableNames = readWriter.reload();
+    Iterable<String> tableNames = storageManager.reload();
     String last =
         StreamSupport.stream(tableNames.spliterator(), false)
             .max(Comparator.naturalOrder())
@@ -82,10 +81,10 @@ public class TableStorage implements AutoCloseable {
       return Collections.emptyList();
     }
     String name = getTableName(sqn, suffix);
-    TableMeta meta = table.getMeta();
+    StorageManager.TableMeta meta = table.getMeta();
     try (Scanner<Long, Scanner<String, Object>> scanner =
         table.scan(meta.getSchema().keySet(), ImmutableRangeSet.of(Range.all()))) {
-      readWriter.flush(name, meta, scanner);
+      storageManager.flush(name, meta, scanner);
     } catch (IOException | StorageException e) {
       LOGGER.error("flush table {} failed", name, e);
     }
@@ -96,13 +95,13 @@ public class TableStorage implements AutoCloseable {
     AreaSet<Long, String> innerTombstone = ArrowFields.toInnerAreas(tombstone);
     try {
       if (innerTombstone.isAll()) {
-        readWriter.delete(table);
+        storageManager.delete(table);
         return;
       }
       if (!innerTombstone.isEmpty()) {
-        readWriter.delete(table, innerTombstone);
+        storageManager.delete(table, innerTombstone);
       }
-      TableMeta meta = readWriter.readMeta(table);
+      StorageManager.TableMeta meta = storageManager.readMeta(table);
       tableIndex.addTable(table, meta);
     } catch (IOException e) {
       LOGGER.error("commit table {} failed", table, e);
@@ -113,26 +112,26 @@ public class TableStorage implements AutoCloseable {
     sqnBase = 0;
     tableIndex.clear();
     try {
-      readWriter.clear();
+      storageManager.clear();
     } catch (IOException e) {
       LOGGER.error("clear failed", e);
     }
   }
 
-  public TableMeta getMeta(String tableName) throws IOException {
-    return new FileTable(tableName, readWriter).getMeta();
+  public StorageManager.TableMeta getMeta(String tableName) throws IOException {
+    return new FileTable(tableName, storageManager).getMeta();
   }
 
   public void delete(AreaSet<Long, String> areas) throws IOException {
     Set<String> tables = tableIndex.find(areas);
     tableIndex.delete(areas);
     for (String tableName : tables) {
-      readWriter.delete(tableName, areas);
+      storageManager.delete(tableName, areas);
     }
   }
 
   public Iterable<String> reload() throws IOException {
-    return readWriter.reload();
+    return storageManager.reload();
   }
 
   @Override
@@ -169,7 +168,7 @@ public class TableStorage implements AutoCloseable {
 
   private Scanner<Long, Scanner<String, Object>> scan(
       String tableName, Set<String> fields, RangeSet<Long> ranges) throws IOException {
-    return new FileTable(tableName, readWriter).scan(fields, ranges);
+    return new FileTable(tableName, storageManager).scan(fields, ranges);
   }
 
   public Map<String, Long> count(Set<String> innerFields) throws StorageException, IOException {
@@ -191,7 +190,7 @@ public class TableStorage implements AutoCloseable {
       if (tables.isEmpty()) {
         continue;
       } else if (tables.size() == 1) {
-        TableMeta meta = readWriter.readMeta(tables.get(0));
+        StorageManager.TableMeta meta = storageManager.readMeta(tables.get(0));
         Long regionCount = meta.getValueCount(field);
         if (regionCount != null) {
           totalCount += regionCount;
@@ -227,7 +226,7 @@ public class TableStorage implements AutoCloseable {
 
     HashMap<String, Range<Long>> tableRanges = new HashMap<>();
     for (String tableName : sortedTableNames) {
-      TableMeta meta = readWriter.readMeta(tableName);
+      StorageManager.TableMeta meta = storageManager.readMeta(tableName);
       Range<Long> range = meta.getRange(field);
       tableRanges.put(tableName, range);
     }
@@ -269,7 +268,7 @@ public class TableStorage implements AutoCloseable {
       throws IOException, StorageException {
     List<FileTable> tables = new ArrayList<>();
     for (String tableName : tableNames) {
-      tables.add(new FileTable(tableName, readWriter));
+      tables.add(new FileTable(tableName, storageManager));
     }
     List<Scanner<Long, Scanner<String, Object>>> overlaps = getOverlapScannerList(fields, tables);
 
@@ -285,7 +284,7 @@ public class TableStorage implements AutoCloseable {
     RangeSet<Long> tableRanges = TreeRangeSet.create();
     List<Scanner<Long, Scanner<String, Object>>> noOverlaps = new ArrayList<>();
     for (FileTable table : tables) {
-      TableMeta meta = table.getMeta();
+      StorageManager.TableMeta meta = table.getMeta();
       Range<Long> range = normalize(meta.getRange(fields));
       if (range.isEmpty()) {
         continue;

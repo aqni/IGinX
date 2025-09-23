@@ -21,11 +21,11 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Database;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.ReadWriter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.DataBuffer;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.MemTableQueue;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.Chunk;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.compact.Flusher;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table.TableStorage;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.WriteBatches;
@@ -68,7 +68,7 @@ public class OneTierDB implements Database {
   private final MemTableQueue memTableQueue;
   private final Flusher flusher;
 
-  public OneTierDB(String name, Shared shared, ReadWriter readerWriter) throws IOException {
+  public OneTierDB(String name, Shared shared, StorageManager readerWriter) throws IOException {
     this.name = name;
     this.shared = shared;
     this.allocator = shared.getAllocator().newChildAllocator(name, 0, Long.MAX_VALUE);

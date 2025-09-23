@@ -19,7 +19,7 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.TableMeta;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.Range;
@@ -31,12 +31,12 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import javax.annotation.Nullable;
 
-public class DeletedTableMeta implements TableMeta {
+public class DeletedTableMeta implements StorageManager.TableMeta {
   private final Map<String, DataType> schema;
   private final Map<String, Range<Long>> ranges;
   private final Map<String, Long> counts;
 
-  public DeletedTableMeta(TableMeta tableMeta, AreaSet<Long, String> tombstone) {
+  public DeletedTableMeta(StorageManager.TableMeta tableMeta, AreaSet<Long, String> tombstone) {
     this.schema = new HashMap<>(tableMeta.getSchema());
     schema.keySet().removeAll(tombstone.getFields());
 

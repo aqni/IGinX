@@ -17,29 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.data;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage;
 
-import cn.edu.tsinghua.iginx.engine.shared.operator.filter.AndFilter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.format.parquet.IParquetReader;
 import cn.edu.tsinghua.iginx.filesystem.format.parquet.IParquetWriter;
 import cn.edu.tsinghua.iginx.filesystem.format.parquet.IRecord;
 import cn.edu.tsinghua.iginx.filesystem.struct.legacy.parquet.manager.dummy.Storer;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.ReadWriter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.TableMeta;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table.DeletedTableMeta;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.AreaFilterScanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.IteratorScanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.CachePool;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Constants;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.Range;
-import com.google.common.collect.RangeSet;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.*;
@@ -51,40 +43,42 @@ import shaded.iginx.org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import shaded.iginx.org.apache.parquet.schema.MessageType;
 import shaded.iginx.org.apache.parquet.schema.Type;
 
-public class ParquetReadWriter implements ReadWriter {
+public class ParquetFileStorageManager
+    extends FileStorageManager<ParquetFileStorageManager.ParquetTableMeta> {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(ParquetReadWriter.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(ParquetFileStorageManager.class);
 
-  private final Shared shared;
-
-  private final Path dir;
-
-  private final TombstoneStorage tombstoneStorage;
-
-  public ParquetReadWriter(Shared shared, Path dir) {
-    this.shared = shared;
-    this.dir = dir;
-    this.tombstoneStorage = new TombstoneStorage(shared, dir.resolve(Constants.DIR_NAME_TOMBSTONE));
-    cleanTempFiles();
-  }
-
-  private void cleanTempFiles() {
-    try (DirectoryStream<Path> stream =
-        Files.newDirectoryStream(dir, path -> path.endsWith(Constants.SUFFIX_FILE_TEMP))) {
-      for (Path path : stream) {
-        LOGGER.info("remove temp file {}", path);
-        Files.deleteIfExists(path);
-      }
-    } catch (NoSuchFileException ignored) {
-      LOGGER.debug("no dir named {}", dir);
-    } catch (IOException e) {
-      LOGGER.error("failed to clean temp files", e);
-    }
+  public ParquetFileStorageManager(Shared shared, Path dir) {
+    super(shared, dir, "parquet");
   }
 
   @Override
   public String getName() {
-    return dir.toString();
+    return super.getName() + "(parquet)";
+  }
+
+  @Override
+  protected ParquetTableMeta flush(
+      TableMeta meta, Scanner<Long, Scanner<String, Object>> scanner, Path path)
+      throws IOException {
+    MessageType parquetSchema = getMessageType(meta.getSchema());
+    int maxBufferSize = shared.getStorageProperties().getParquetOutputBufferMaxSize();
+    IParquetWriter.Builder builder = IParquetWriter.builder(path, parquetSchema, maxBufferSize);
+    builder.withRowGroupSize(shared.getStorageProperties().getParquetRowGroupSize());
+    builder.withPageSize((int) shared.getStorageProperties().getParquetPageSize());
+    builder.withCompressionCodec(shared.getStorageProperties().getParquetCompression());
+
+    try (IParquetWriter writer = builder.build()) {
+      while (scanner.iterate()) {
+        IRecord record = getRecord(parquetSchema, scanner.key(), scanner.value());
+        writer.write(record);
+      }
+      ParquetMetadata parquetMeta = writer.flush();
+      ParquetTableMeta tableMeta = ParquetTableMeta.of(parquetMeta);
+      return tableMeta;
+    } catch (Exception e) {
+      throw new IOException("failed to write " + path, e);
+    }
   }
 
   public static IRecord getRecord(MessageType schema, Long key, Scanner<String, Object> value)
@@ -101,42 +95,6 @@ public class ParquetReadWriter implements ReadWriter {
     return record;
   }
 
-  @Override
-  public void flush(
-      String tableName, TableMeta meta, Scanner<Long, Scanner<String, Object>> scanner)
-      throws IOException {
-    Path path = getPath(tableName);
-    Path tempPath = dir.resolve(tableName + Constants.SUFFIX_FILE_TEMP);
-    Files.createDirectories(path.getParent());
-
-    LOGGER.debug("flushing into {}", tempPath);
-
-    MessageType parquetSchema = getMessageType(meta.getSchema());
-    int maxBufferSize = shared.getStorageProperties().getParquetOutputBufferMaxSize();
-    IParquetWriter.Builder builder = IParquetWriter.builder(tempPath, parquetSchema, maxBufferSize);
-    builder.withRowGroupSize(shared.getStorageProperties().getParquetRowGroupSize());
-    builder.withPageSize((int) shared.getStorageProperties().getParquetPageSize());
-    builder.withCompressionCodec(shared.getStorageProperties().getParquetCompression());
-
-    try (IParquetWriter writer = builder.build()) {
-      while (scanner.iterate()) {
-        IRecord record = getRecord(parquetSchema, scanner.key(), scanner.value());
-        writer.write(record);
-      }
-      ParquetMetadata parquetMeta = writer.flush();
-      ParquetTableMeta tableMeta = ParquetTableMeta.of(parquetMeta);
-      setParquetTableMeta(path.toString(), tableMeta);
-    } catch (Exception e) {
-      throw new IOException("failed to write " + path, e);
-    }
-
-    LOGGER.debug("rename temp file to {}", path);
-    if (Files.exists(path)) {
-      LOGGER.warn("file {} already exists, will be replaced", path);
-    }
-    Files.move(tempPath, path, StandardCopyOption.REPLACE_EXISTING);
-  }
-
   private static MessageType getMessageType(Map<String, DataType> schema) {
     List<Type> fields = new ArrayList<>();
     fields.add(
@@ -151,32 +109,7 @@ public class ParquetReadWriter implements ReadWriter {
   }
 
   @Override
-  public TableMeta readMeta(String tableName) {
-    Path path = getPath(tableName);
-    ParquetTableMeta tableMeta = getParquetTableMeta(path.toString());
-    AreaSet<Long, String> tombstone = tombstoneStorage.get(tableName);
-    if (tombstone == null || tombstone.isEmpty()) {
-      return tableMeta;
-    }
-    return new DeletedTableMeta(tableMeta, tombstone);
-  }
-
-  private void setParquetTableMeta(String fileName, ParquetTableMeta tableMeta) {
-    shared.getCachePool().asMap().put(fileName, tableMeta);
-  }
-
-  private ParquetTableMeta getParquetTableMeta(String fileName) {
-    CachePool.Cacheable cacheable =
-        shared.getCachePool().asMap().computeIfAbsent(fileName, this::doReadMeta);
-    if (!(cacheable instanceof TableMeta)) {
-      throw new StorageRuntimeException("invalid cacheable type: " + cacheable.getClass());
-    }
-    return (ParquetTableMeta) cacheable;
-  }
-
-  private ParquetTableMeta doReadMeta(String fileName) {
-    Path path = Paths.get(fileName);
-
+  protected ParquetTableMeta readMeta(Path path) throws IOException {
     try (IParquetReader reader = IParquetReader.builder(path).build()) {
       ParquetMetadata meta = reader.getMeta();
       return ParquetTableMeta.of(meta);
@@ -186,104 +119,16 @@ public class ParquetReadWriter implements ReadWriter {
   }
 
   @Override
-  public Scanner<Long, Scanner<String, Object>> scanData(
-      String name, Set<String> fields, RangeSet<Long> ranges, Filter predicate) throws IOException {
-    Path path = getPath(name);
-
-    Filter rangeFilter = FilterRangeUtils.filterOf(ranges);
-
-    Filter unionFilter;
-    if (predicate == null) {
-      unionFilter = rangeFilter;
-    } else {
-      unionFilter = new AndFilter(Arrays.asList(rangeFilter, predicate));
-    }
-
+  protected Scanner<Long, Scanner<String, Object>> scanFile(
+      Path path, ParquetTableMeta meta, Set<String> fields, Filter filter) throws IOException {
     IParquetReader.Builder builder = IParquetReader.builder(path);
     builder.project(fields);
-    builder.filter(unionFilter);
+    builder.filter(filter);
 
-    ParquetTableMeta parquetTableMeta = getParquetTableMeta(path.toString());
-    IParquetReader reader = builder.build(parquetTableMeta.getMeta());
+    IParquetReader reader = builder.build(meta.getMeta());
 
     Scanner<Long, Scanner<String, Object>> scanner = new ParquetScanner(reader);
-
-    AreaSet<Long, String> tombstone = tombstoneStorage.get(name);
-    if (tombstone == null || tombstone.isEmpty()) {
-      return scanner;
-    }
-    return new AreaFilterScanner<>(scanner, tombstone);
-  }
-
-  @Override
-  public void delete(String name, AreaSet<Long, String> areas) throws IOException {
-    tombstoneStorage.delete(Collections.singleton(name), oldAreas -> oldAreas.addAll(areas));
-  }
-
-  @Override
-  public void delete(String name) {
-    Path path = getPath(name);
-    try {
-      Files.deleteIfExists(path);
-      shared.getCachePool().asMap().remove(path.toString());
-      tombstoneStorage.removeTable(name);
-    } catch (IOException e) {
-      throw new StorageRuntimeException(e);
-    }
-  }
-
-  @Override
-  public Iterable<String> reload() throws IOException {
-    List<String> names = new ArrayList<>();
-    try (DirectoryStream<Path> stream =
-        Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
-      for (Path path : stream) {
-        shared.getCachePool().asMap().remove(path.toString());
-        String fileName = path.getFileName().toString();
-        String tableName = getTableName(fileName);
-        names.add(tableName);
-      }
-    } catch (NoSuchFileException ignored) {
-      LOGGER.debug("dir {} not existed.", dir);
-    }
-    tombstoneStorage.reload();
-    return names;
-  }
-
-  private Path getPath(String name) {
-    Path path = dir.resolve(name + Constants.SUFFIX_FILE_PARQUET);
-    return path;
-  }
-
-  private static String getTableName(String fileName) {
-    return fileName.substring(0, fileName.length() - Constants.SUFFIX_FILE_PARQUET.length());
-  }
-
-  @Override
-  public void clear() throws IOException {
-    LOGGER.info("clearing data of {}", dir);
-    try {
-      try (DirectoryStream<Path> stream =
-          Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_PARQUET)) {
-        for (Path path : stream) {
-          Files.deleteIfExists(path);
-          String fileName = path.toString();
-          shared.getCachePool().asMap().remove(fileName);
-        }
-      }
-      try (DirectoryStream<Path> stream =
-          Files.newDirectoryStream(dir, "*" + Constants.SUFFIX_FILE_TEMP)) {
-        for (Path path : stream) {
-          Files.deleteIfExists(path);
-        }
-      }
-      tombstoneStorage.clear();
-      Files.deleteIfExists(dir);
-    } catch (NoSuchFileException e) {
-      LOGGER.trace("Not a directory to clear: {}", dir);
-    } catch (DirectoryNotEmptyException e) {
-      LOGGER.warn("directory not empty to clear: {}", dir);
-    }
+    return scanner;
   }
 
   private static class ParquetScanner implements Scanner<Long, Scanner<String, Object>> {
@@ -349,7 +194,7 @@ public class ParquetReadWriter implements ReadWriter {
     }
   }
 
-  private static class ParquetTableMeta implements TableMeta, CachePool.Cacheable {
+  protected static class ParquetTableMeta implements FileStorageManager.CacheableTableMeta {
     private final Map<String, DataType> schemaDst;
     private final Map<String, Range<Long>> rangeMap;
     private final Map<String, Long> countMap;

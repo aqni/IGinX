@@ -20,7 +20,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.TableMeta;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.LazyRowScanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
@@ -31,7 +31,7 @@ import javax.annotation.Nullable;
 
 public interface Table {
 
-  TableMeta getMeta() throws IOException;
+  StorageManager.TableMeta getMeta() throws IOException;
 
   Scanner<Long, Scanner<String, Object>> scan(
       Set<String> fields, RangeSet<Long> range, @Nullable Filter superSetPredicate)

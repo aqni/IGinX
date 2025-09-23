@@ -30,10 +30,12 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Database;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.OneTierDB;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.api.ReadWriter;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.ParquetFileStorageManager;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.Manager;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.utils.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.utils.TagKVUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Constants;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
@@ -58,8 +60,8 @@ public class DataManager implements Manager {
   public DataManager(Shared shared, Path dir) throws IOException {
     this.shared = shared;
     Path dataDir = dir.resolve(Constants.DIR_NAME_TABLE);
-    ReadWriter readWriter = new ParquetReadWriter(shared, dataDir);
-    this.db = new OneTierDB(dir.toString(), shared, readWriter);
+    StorageManager storageManager = new ParquetFileStorageManager(shared, dataDir);
+    this.db = new OneTierDB(dir.toString(), shared, storageManager);
   }
 
   @Override
