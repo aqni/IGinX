@@ -61,6 +61,7 @@ public class DataManager implements Manager {
     this.shared = shared;
     Path dataDir = dir.resolve(Constants.DIR_NAME_TABLE);
     StorageManager storageManager = new ParquetFileStorageManager(shared, dataDir);
+    //    StorageManager storageManager = new TsFileStorageManager(shared, dataDir);
     this.db = new OneTierDB(dir.toString(), shared, storageManager);
   }
 

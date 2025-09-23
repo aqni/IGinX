@@ -58,7 +58,7 @@ abstract class FileStorageManager<META extends FileStorageManager.CacheableTable
     this.shared = shared;
     this.dir = dir;
     this.tombstoneStorage = new TombstoneStorage(shared, dir.resolve(Constants.DIR_NAME_TOMBSTONE));
-    this.fileSuffixName = fileSuffixName;
+    this.fileSuffixName = "." + fileSuffixName;
     cleanTempFiles();
   }
 
