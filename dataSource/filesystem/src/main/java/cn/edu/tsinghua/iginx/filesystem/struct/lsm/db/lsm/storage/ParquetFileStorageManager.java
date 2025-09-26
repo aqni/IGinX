@@ -68,17 +68,32 @@ public class ParquetFileStorageManager
     builder.withPageSize((int) shared.getStorageProperties().getParquetPageSize());
     builder.withCompressionCodec(shared.getStorageProperties().getParquetCompression());
 
-    try (IParquetWriter writer = builder.build()) {
+    List<IRecord> allRecords = new ArrayList<>();
+    try{
       while (scanner.iterate()) {
         IRecord record = getRecord(parquetSchema, scanner.key(), scanner.value());
-        writer.write(record);
+        allRecords.add(record);
       }
-      ParquetMetadata parquetMeta = writer.flush();
-      ParquetTableMeta tableMeta = ParquetTableMeta.of(parquetMeta);
-      return tableMeta;
     } catch (Exception e) {
       throw new IOException("failed to write " + path, e);
     }
+
+    ParquetTableMeta tableMeta;
+
+    long startTime = System.currentTimeMillis();
+    try (IParquetWriter writer = builder.build()) {
+      for (IRecord record : allRecords) {
+        writer.write(record);
+      }
+      ParquetMetadata parquetMeta = writer.flush();
+      tableMeta = ParquetTableMeta.of(parquetMeta);
+    } catch (Exception e) {
+      throw new IOException("failed to write " + path, e);
+    }
+    long endTime = System.currentTimeMillis();
+    LOGGER.info("write parquet file {} takes {} ms", path, (endTime - startTime));
+
+    return tableMeta;
   }
 
   public static IRecord getRecord(MessageType schema, Long key, Scanner<String, Object> value)

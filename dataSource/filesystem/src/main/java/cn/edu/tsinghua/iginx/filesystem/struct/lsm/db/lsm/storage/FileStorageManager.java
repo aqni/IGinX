@@ -94,7 +94,10 @@ abstract class FileStorageManager<META extends FileStorageManager.CacheableTable
 
     LOGGER.debug("flushing into {}", tempPath);
 
+    long startTime = System.currentTimeMillis();
     META cachedMeta = flush(meta, scanner, tempPath);
+    long endTime = System.currentTimeMillis();
+    LOGGER.info("flush {} into {} costs {} ms", tableName, tempPath, endTime - startTime);
     setParquetTableMeta(path.toString(), cachedMeta);
 
     LOGGER.debug("rename temp file to {}", path);

@@ -29,8 +29,12 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 import javax.annotation.Nullable;
+
+import org.apache.tsfile.common.conf.TSFileDescriptor;
 import org.apache.tsfile.enums.TSDataType;
 import org.apache.tsfile.exception.write.WriteProcessException;
+import org.apache.tsfile.file.metadata.enums.CompressionType;
+import org.apache.tsfile.file.metadata.enums.TSEncoding;
 import org.apache.tsfile.write.TsFileWriter;
 import org.apache.tsfile.write.record.TSRecord;
 import org.apache.tsfile.write.schema.IMeasurementSchema;
@@ -59,10 +63,9 @@ public class TsFileStorageManager extends FileStorageManager<TsFileStorageManage
       throws IOException {
     Map<String, DataType> schema = meta.getSchema();
     Map<String, IMeasurementSchema> tsFileSchema = getTsFileSchema(schema);
-    try (TsFileWriter tsFileWriter = new TsFileWriter(path.toFile())) {
-      for (IMeasurementSchema measurementSchema : tsFileSchema.values()) {
-        tsFileWriter.registerTimeseries(DEVICE, measurementSchema);
-      }
+
+    List<TSRecord> records = new ArrayList<>();
+    try {
       while (scanner.iterate()) {
         long key = scanner.key();
         Map<String, Object> row = new HashMap<>();
@@ -72,11 +75,27 @@ public class TsFileStorageManager extends FileStorageManager<TsFileStorageManage
           row.put(field, value);
         }
         TSRecord tsRecord = getTsRecord(key, row, tsFileSchema);
-        tsFileWriter.writeRecord(tsRecord);
+        records.add(tsRecord);
       }
-    } catch (StorageException | WriteProcessException e) {
+    } catch (StorageException e) {
       throw new IOException(e);
     }
+
+
+    long startTime = System.currentTimeMillis();
+    try (TsFileWriter tsFileWriter = new TsFileWriter(path.toFile())) {
+      for (IMeasurementSchema measurementSchema : tsFileSchema.values()) {
+        tsFileWriter.registerTimeseries(DEVICE, measurementSchema);
+      }
+      for(TSRecord tsRecord : records) {
+        tsFileWriter.writeRecord(tsRecord);
+      }
+    } catch (WriteProcessException e) {
+      throw new IOException(e);
+    }
+    long endTime = System.currentTimeMillis();
+    LOGGER.info("write tsfile {} takes {} ms", path, (endTime - startTime));
+
     return new TsFileTableMeta(meta);
   }
 

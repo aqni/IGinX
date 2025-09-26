@@ -30,8 +30,10 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Database;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.OneTierDB;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.ArrowFileStorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.ParquetFileStorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.TsFileStorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.Manager;
@@ -60,8 +62,9 @@ public class DataManager implements Manager {
   public DataManager(Shared shared, Path dir) throws IOException {
     this.shared = shared;
     Path dataDir = dir.resolve(Constants.DIR_NAME_TABLE);
-    StorageManager storageManager = new ParquetFileStorageManager(shared, dataDir);
-    //    StorageManager storageManager = new TsFileStorageManager(shared, dataDir);
+//        StorageManager storageManager = new ParquetFileStorageManager(shared, dataDir); // tpch
+        StorageManager storageManager = new TsFileStorageManager(shared, dataDir); // tsbs
+//    StorageManager storageManager = new ArrowFileStorageManager(shared, dataDir); // tpch
     this.db = new OneTierDB(dir.toString(), shared, storageManager);
   }
 
