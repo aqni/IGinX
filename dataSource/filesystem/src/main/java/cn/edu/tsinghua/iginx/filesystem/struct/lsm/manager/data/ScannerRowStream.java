@@ -32,7 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-class ScannerRowStream implements RowStream {
+public class ScannerRowStream implements RowStream {
 
   private final Map<String, Integer> indexes;
 
