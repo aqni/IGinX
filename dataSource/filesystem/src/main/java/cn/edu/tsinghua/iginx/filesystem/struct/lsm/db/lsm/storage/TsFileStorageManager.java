@@ -29,12 +29,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 import javax.annotation.Nullable;
-
-import org.apache.tsfile.common.conf.TSFileDescriptor;
 import org.apache.tsfile.enums.TSDataType;
 import org.apache.tsfile.exception.write.WriteProcessException;
-import org.apache.tsfile.file.metadata.enums.CompressionType;
-import org.apache.tsfile.file.metadata.enums.TSEncoding;
 import org.apache.tsfile.write.TsFileWriter;
 import org.apache.tsfile.write.record.TSRecord;
 import org.apache.tsfile.write.schema.IMeasurementSchema;
@@ -45,8 +41,6 @@ import org.slf4j.LoggerFactory;
 public class TsFileStorageManager extends FileStorageManager<TsFileStorageManager.TsFileTableMeta> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(TsFileStorageManager.class);
-
-  private static final String DEVICE = "root";
 
   public TsFileStorageManager(Shared shared, Path dir) {
     super(shared, dir, "tsfile");
@@ -63,6 +57,7 @@ public class TsFileStorageManager extends FileStorageManager<TsFileStorageManage
       throws IOException {
     Map<String, DataType> schema = meta.getSchema();
     Map<String, IMeasurementSchema> tsFileSchema = getTsFileSchema(schema);
+    Map<String, String> deviceIds = getTsFileDeviceIds(schema.keySet());
 
     List<TSRecord> records = new ArrayList<>();
     try {
@@ -74,20 +69,21 @@ public class TsFileStorageManager extends FileStorageManager<TsFileStorageManage
           Object value = scanner.value().value();
           row.put(field, value);
         }
-        TSRecord tsRecord = getTsRecord(key, row, tsFileSchema);
-        records.add(tsRecord);
+        Collection<TSRecord> tsRecords = getTsRecords(key, row, tsFileSchema, deviceIds);
+        records.addAll(tsRecords);
       }
     } catch (StorageException e) {
       throw new IOException(e);
     }
 
-
     long startTime = System.currentTimeMillis();
     try (TsFileWriter tsFileWriter = new TsFileWriter(path.toFile())) {
-      for (IMeasurementSchema measurementSchema : tsFileSchema.values()) {
-        tsFileWriter.registerTimeseries(DEVICE, measurementSchema);
+      for (String field : schema.keySet()) {
+        String deviceId = deviceIds.get(field);
+        IMeasurementSchema measurementSchema = tsFileSchema.get(field);
+        tsFileWriter.registerTimeseries(deviceId, measurementSchema);
       }
-      for(TSRecord tsRecord : records) {
+      for (TSRecord tsRecord : records) {
         tsFileWriter.writeRecord(tsRecord);
       }
     } catch (WriteProcessException e) {
@@ -99,15 +95,21 @@ public class TsFileStorageManager extends FileStorageManager<TsFileStorageManage
     return new TsFileTableMeta(meta);
   }
 
-  private static TSRecord getTsRecord(
-      long key, Map<String, Object> row, Map<String, IMeasurementSchema> schema) {
-    TSRecord tsRecord = new TSRecord(DEVICE, key);
+  private static Collection<TSRecord> getTsRecords(
+      long key,
+      Map<String, Object> row,
+      Map<String, IMeasurementSchema> schema,
+      Map<String, String> deviceIds) {
+    Map<String, TSRecord> deviceRecords = new HashMap<>();
     for (Map.Entry<String, Object> entry : row.entrySet()) {
-      String measurementId = entry.getKey();
+      String field = entry.getKey();
       Object value = entry.getValue();
       if (value != null) {
-        IMeasurementSchema measurementSchema = schema.get(measurementId);
+        IMeasurementSchema measurementSchema = schema.get(field);
         TSDataType dataType = measurementSchema.getType();
+        String measurementId = measurementSchema.getMeasurementName();
+        String deviceId = deviceIds.get(field);
+        TSRecord tsRecord = deviceRecords.computeIfAbsent(deviceId, d -> new TSRecord(d, key));
         switch (dataType) {
           case BOOLEAN:
             tsRecord.addPoint(measurementId, (boolean) value);
@@ -132,15 +134,25 @@ public class TsFileStorageManager extends FileStorageManager<TsFileStorageManage
         }
       }
     }
-    return tsRecord;
+    return deviceRecords.values();
+  }
+
+  private Map<String, String> getTsFileDeviceIds(Set<String> schema) {
+    Map<String, String> deviceIds = new HashMap<>();
+    for (String field : schema) {
+      String deviceId = field.substring(0, field.lastIndexOf("."));
+      deviceIds.put(field, deviceId);
+    }
+    return deviceIds;
   }
 
   private static Map<String, IMeasurementSchema> getTsFileSchema(Map<String, DataType> schema) {
     Map<String, IMeasurementSchema> tsFileSchema = new HashMap<>();
     for (Map.Entry<String, DataType> entry : schema.entrySet()) {
-      String measurementId = entry.getKey();
+      String field = entry.getKey();
+      String measurementId = field.substring(field.lastIndexOf(".") + 1);
       DataType dataType = entry.getValue();
-      tsFileSchema.put(measurementId, getMeasurementSchema(measurementId, dataType));
+      tsFileSchema.put(field, getMeasurementSchema(measurementId, dataType));
     }
     return tsFileSchema;
   }
