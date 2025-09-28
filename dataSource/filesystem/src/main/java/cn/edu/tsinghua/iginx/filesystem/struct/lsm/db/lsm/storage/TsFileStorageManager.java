@@ -76,13 +76,21 @@ public class TsFileStorageManager extends FileStorageManager<TsFileStorageManage
       throw new IOException(e);
     }
 
+    Map<String, List<IMeasurementSchema>> groupedSchema = new HashMap<>();
+    for (String field : schema.keySet()) {
+      String deviceId = deviceIds.get(field);
+      IMeasurementSchema measurementSchema = tsFileSchema.get(field);
+      groupedSchema.computeIfAbsent(deviceId, k -> new ArrayList<>()).add(measurementSchema);
+    }
+
     long startTime = System.currentTimeMillis();
     try (TsFileWriter tsFileWriter = new TsFileWriter(path.toFile())) {
-      for (String field : schema.keySet()) {
-        String deviceId = deviceIds.get(field);
-        IMeasurementSchema measurementSchema = tsFileSchema.get(field);
-        tsFileWriter.registerTimeseries(deviceId, measurementSchema);
+      for (Map.Entry<String, List<IMeasurementSchema>> entry : groupedSchema.entrySet()) {
+        String deviceId = entry.getKey();
+        List<IMeasurementSchema> schemaList = entry.getValue();
+        tsFileWriter.registerAlignedTimeseries(deviceId, schemaList);
       }
+
       for (TSRecord tsRecord : records) {
         tsFileWriter.writeRecord(tsRecord);
       }
