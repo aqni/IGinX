@@ -69,7 +69,7 @@ public class ParquetFileStorageManager
     builder.withCompressionCodec(shared.getStorageProperties().getParquetCompression());
 
     List<IRecord> allRecords = new ArrayList<>();
-    try{
+    try {
       while (scanner.iterate()) {
         IRecord record = getRecord(parquetSchema, scanner.key(), scanner.value());
         allRecords.add(record);

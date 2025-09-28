@@ -26,7 +26,6 @@ import cn.edu.tsinghua.iginx.engine.physical.memory.execute.executor.util.Batch;
 import cn.edu.tsinghua.iginx.engine.physical.memory.execute.naive.NaiveOperatorMemoryExecutor;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.BatchStream;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.BatchStreams;
-import cn.edu.tsinghua.iginx.engine.shared.data.read.Row;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
@@ -34,30 +33,6 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.data.ScannerRowStream
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.Range;
-import net.jpountz.lz4.LZ4Compressor;
-import net.jpountz.lz4.LZ4Factory;
-import net.jpountz.lz4.LZ4FrameOutputStream;
-import org.apache.arrow.compression.CommonsCompressionFactory;
-import org.apache.arrow.compression.Lz4CompressionCodec;
-import org.apache.arrow.compression.ZstdCompressionCodec;
-import org.apache.arrow.memory.ArrowBuf;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.util.Preconditions;
-import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.compression.AbstractCompressionCodec;
-import org.apache.arrow.vector.compression.CompressionCodec;
-import org.apache.arrow.vector.compression.CompressionUtil;
-import org.apache.arrow.vector.ipc.ArrowFileWriter;
-import org.apache.arrow.vector.ipc.message.IpcOption;
-import org.apache.commons.compress.compressors.lz4.FramedLZ4CompressorInputStream;
-import org.apache.commons.compress.compressors.lz4.FramedLZ4CompressorOutputStream;
-import org.apache.commons.io.IOUtils;
-import org.apache.zookeeper.server.ByteBufferInputStream;
-import org.apache.zookeeper.server.ByteBufferOutputStream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nullable;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
@@ -67,8 +42,24 @@ import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import javax.annotation.Nullable;
+import net.jpountz.lz4.LZ4Compressor;
+import net.jpountz.lz4.LZ4Factory;
+import org.apache.arrow.compression.CommonsCompressionFactory;
+import org.apache.arrow.memory.ArrowBuf;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.util.Preconditions;
+import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.compression.AbstractCompressionCodec;
+import org.apache.arrow.vector.compression.CompressionCodec;
+import org.apache.arrow.vector.compression.CompressionUtil;
+import org.apache.arrow.vector.ipc.ArrowFileWriter;
+import org.apache.arrow.vector.ipc.message.IpcOption;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class ArrowFileStorageManager extends FileStorageManager<ArrowFileStorageManager.ArrowFileTableMeta> {
+public class ArrowFileStorageManager
+    extends FileStorageManager<ArrowFileStorageManager.ArrowFileTableMeta> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ArrowFileStorageManager.class);
 
@@ -87,22 +78,23 @@ public class ArrowFileStorageManager extends FileStorageManager<ArrowFileStorage
   protected ArrowFileTableMeta flush(
       TableMeta meta, Scanner<Long, Scanner<String, Object>> scanner, Path path)
       throws IOException {
-    try(RowStream rowStream = new ScannerRowStream(meta.getSchema(), scanner)){
+    try (RowStream rowStream = new ScannerRowStream(meta.getSchema(), scanner)) {
       Table table = NaiveOperatorMemoryExecutor.transformToTable(rowStream);
       long startTime = System.currentTimeMillis();
-      try(BatchStream batchStream = BatchStreams.wrap(shared.getAllocator(), table, batchSize);
-          VectorSchemaRoot root = VectorSchemaRoot.create(batchStream.getSchema().raw(), shared.getAllocator());
-          WritableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-          ArrowFileWriter writer = new ArrowFileWriter(
-              root,
-              null,
-              channel,
-              null,
-              IpcOption.DEFAULT,
-              new FastestCompressionFactory(),
-              CompressionUtil.CodecType.LZ4_FRAME
-              )
-          ) {
+      try (BatchStream batchStream = BatchStreams.wrap(shared.getAllocator(), table, batchSize);
+          VectorSchemaRoot root =
+              VectorSchemaRoot.create(batchStream.getSchema().raw(), shared.getAllocator());
+          WritableByteChannel channel =
+              Files.newByteChannel(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+          ArrowFileWriter writer =
+              new ArrowFileWriter(
+                  root,
+                  null,
+                  channel,
+                  null,
+                  IpcOption.DEFAULT,
+                  new FastestCompressionFactory(),
+                  CompressionUtil.CodecType.LZ4_FRAME)) {
         writer.start();
         while (batchStream.hasNext()) {
           try (Batch batch = batchStream.getNext()) {
@@ -119,7 +111,6 @@ public class ArrowFileStorageManager extends FileStorageManager<ArrowFileStorage
     }
     return new ArrowFileTableMeta(meta);
   }
-
 
   @Override
   protected ArrowFileTableMeta readMeta(Path path) throws IOException {
@@ -180,12 +171,15 @@ public class ArrowFileStorageManager extends FileStorageManager<ArrowFileStorage
   public static class FastestLz4CompressionCodec extends AbstractCompressionCodec {
 
     protected ArrowBuf doCompress(BufferAllocator allocator, ArrowBuf uncompressedBuffer) {
-      Preconditions.checkArgument(uncompressedBuffer.writerIndex() <= 2147483647L, "The uncompressed buffer size exceeds the integer limit %s.", Integer.MAX_VALUE);
+      Preconditions.checkArgument(
+          uncompressedBuffer.writerIndex() <= 2147483647L,
+          "The uncompressed buffer size exceeds the integer limit %s.",
+          Integer.MAX_VALUE);
 
       LZ4Compressor compressor = LZ4Factory.fastestInstance().fastCompressor();
 
       int uncompressedLength = (int) uncompressedBuffer.writerIndex();
-      int maxCompressedLength = compressor.maxCompressedLength(uncompressedLength)+ 100;
+      int maxCompressedLength = compressor.maxCompressedLength(uncompressedLength) + 100;
       ArrowBuf compressedBuffer = allocator.buffer(8L + maxCompressedLength);
 
       ByteBuffer nioUncompressedBuffer = uncompressedBuffer.nioBuffer(0, uncompressedLength);
@@ -193,11 +187,13 @@ public class ArrowFileStorageManager extends FileStorageManager<ArrowFileStorage
 
       // TODO: make it compatible with LZ4FrameOutputStream
       compressor.compress(nioUncompressedBuffer, nioCompressedBuffer);
-//      try(LZ4FrameOutputStream lz4FrameOutputStream = new LZ4FrameOutputStream(new ByteBufferOutputStream(nioCompressedBuffer))) {
-//        IOUtils.copy(new ByteBufferInputStream(nioUncompressedBuffer), lz4FrameOutputStream);
-//      } catch (IOException e) {
-//        throw new RuntimeException(e);
-//      }
+      //      try(LZ4FrameOutputStream lz4FrameOutputStream = new LZ4FrameOutputStream(new
+      // ByteBufferOutputStream(nioCompressedBuffer))) {
+      //        IOUtils.copy(new ByteBufferInputStream(nioUncompressedBuffer),
+      // lz4FrameOutputStream);
+      //      } catch (IOException e) {
+      //        throw new RuntimeException(e);
+      //      }
 
       int compressedLength = nioCompressedBuffer.position();
       compressedBuffer.writerIndex(8L + compressedLength);
