@@ -42,6 +42,9 @@ set IGINX_JAVA_OPTS=%IGINX_JAVA_OPTS% -Dfile.encoding=UTF-8
 @REM # Memory
 @REM ######################################
 
+@REM Use String Deduplication
+set IGINX_JAVA_OPTS=%IGINX_JAVA_OPTS% -XX:+UseG1GC -XX:+UseStringDeduplication
+
 @REM Followings memory options have auto-detected values by default
 
 @REM Set the maximum heap size (uncomment and adjust the value as needed)

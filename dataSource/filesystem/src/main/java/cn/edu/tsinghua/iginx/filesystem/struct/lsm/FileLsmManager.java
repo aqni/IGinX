@@ -44,6 +44,10 @@ import cn.edu.tsinghua.iginx.thrift.AggregateType;
 import cn.edu.tsinghua.iginx.utils.StringUtils;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
@@ -53,9 +57,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class FileLsmManager implements FileManager {
 
@@ -125,24 +126,20 @@ public class FileLsmManager implements FileManager {
       }
 
       if (aggregate != null) {
-        if (!Filters.isTrue(filter)) {
-          throw new UnsupportedOperationException("Filter is not supported for aggregation");
-        }
-        return delegate.aggregation(patterns, tagFilter, null);
-      } else {
-        if (Filters.isFalse(target.getFilter())) {
-          List<Column> columns = delegate.getColumns(patterns, tagFilter);
-          List<Field> fields = columns.stream().map(Fields::of).collect(Collectors.toList());
-          Header header = new Header(Field.KEY, fields);
-          return new Table(header, Collections.emptyList());
-        }
-        RowStream rowStream = delegate.project(patterns, tagFilter, filter);
-        rowStream = new ClearEmptyRowStreamWrapper(rowStream);
-        if (!Filters.isTrue(filter)) {
-          rowStream = new FilterRowStreamWrapper(rowStream, filter);
-        }
-        return rowStream;
+        throw new UnsupportedOperationException("aggregation is not supported");
       }
+      if (Filters.isFalse(target.getFilter())) {
+        List<Column> columns = delegate.getColumns(patterns, tagFilter);
+        List<Field> fields = columns.stream().map(Fields::of).collect(Collectors.toList());
+        Header header = new Header(Field.KEY, fields);
+        return new Table(header, Collections.emptyList());
+      }
+      RowStream rowStream = delegate.project(patterns, tagFilter, filter);
+      rowStream = new ClearEmptyRowStreamWrapper(rowStream);
+      if (!Filters.isTrue(filter)) {
+        rowStream = new FilterRowStreamWrapper(rowStream, filter);
+      }
+      return rowStream;
     } catch (PhysicalException e) {
       throw new IOException(e);
     }

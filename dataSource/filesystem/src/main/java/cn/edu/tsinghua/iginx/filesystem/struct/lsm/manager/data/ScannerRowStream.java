@@ -26,6 +26,8 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.Header;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Row;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowTypes;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -43,15 +45,13 @@ public class ScannerRowStream implements RowStream {
   private Row nextRow;
 
   public ScannerRowStream(
-      Map<String, DataType> projected, Scanner<Long, Scanner<String, Object>> scanner) {
+      Map<String, org.apache.arrow.vector.types.pojo.Field> projected, Scanner<Long, Scanner<String, Object>> scanner) {
     this.indexes = new HashMap<>();
     List<Field> fieldList = new ArrayList<>(projected.size());
-    for (Map.Entry<String, DataType> entry : projected.entrySet()) {
-      indexes.put(entry.getKey(), indexes.size());
-      Map.Entry<String, Map<String, String>> pathWithTags =
-          DataViewWrapper.parseFieldName(entry.getKey());
-      fieldList.add(new Field(pathWithTags.getKey(), entry.getValue(), pathWithTags.getValue()));
-    }
+    projected.forEach((columnKey,arrowField)->{
+      indexes.put(columnKey, indexes.size());
+      fieldList.add(ArrowFields.toIginxField(arrowField));
+    });
     this.header = new Header(Field.KEY, fieldList);
     this.scanner = scanner;
     this.nextRow = null;

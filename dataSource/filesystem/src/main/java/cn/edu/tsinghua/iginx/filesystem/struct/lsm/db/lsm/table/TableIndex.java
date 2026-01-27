@@ -19,23 +19,27 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
+import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.index.ColumnIndex;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.NotIntegrityException;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeRangeSet;
-import java.io.IOException;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.*;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class TableIndex {
 
@@ -43,18 +47,10 @@ public class TableIndex {
   private final ReadWriteLock lock = new ReentrantReadWriteLock(true);
 
   private final Map<String, FieldIndex> indexes = new HashMap<>();
+  private final ColumnIndex columnIndex;
 
-  public TableIndex(TableStorage tableStorage) {
-    try {
-      for (String tableName : tableStorage.reload()) {
-        LOGGER.debug("rebuilt table index for table: {}", tableName);
-        StorageManager.TableMeta meta = tableStorage.getMeta(tableName);
-        declareFields(meta.getSchema());
-        addTable(tableName, meta);
-      }
-    } catch (IOException | TypeConflictedException e) {
-      throw new StorageRuntimeException(e);
-    }
+  public TableIndex(ColumnIndex columnIndex) {
+    this.columnIndex = Objects.requireNonNull(columnIndex);
   }
 
   public Set<String> find(AreaSet<Long, String> areas) {
@@ -107,54 +103,49 @@ public class TableIndex {
   }
 
   public void declareFields(Map<String, DataType> schema) throws TypeConflictedException {
-    boolean hasNewField = checkOldFields(schema);
-    if (hasNewField) {
-      declareNewFields(schema);
-    }
-  }
-
-  private boolean checkOldFields(Map<String, DataType> schema) throws TypeConflictedException {
+    List<Field> fields = ArrowFields.fromIginxSchema(schema);
     boolean hasNewField = false;
     lock.readLock().lock();
     try {
-      for (Map.Entry<String, DataType> entry : schema.entrySet()) {
-        FieldIndex fieldIndex = indexes.get(entry.getKey());
-        if (fieldIndex == null) {
+      for (Field field : fields) {
+        if (!columnIndex.contain(field)) {
           hasNewField = true;
-        } else if (!fieldIndex.getType().equals(entry.getValue())) {
-          throw new TypeConflictedException(
-              entry.getKey().toString(),
-              entry.getValue().toString(),
-              fieldIndex.getType().toString());
+          break;
         }
       }
     } finally {
       lock.readLock().unlock();
     }
-    return hasNewField;
+    if (hasNewField) {
+      Map<String, DataType> newSchema = new HashMap<>();
+      lock.writeLock().lock();
+      try {
+        List<Long> ids = new ArrayList<>();
+        for (Field field : fields) {
+          long id = columnIndex.put(field);
+          ids.add(id);
+        }
+        for (int i = 0; i < fields.size(); i++) {
+          String fieldName = ArrowFields.toFullName(fields.get(i));
+          if (!indexes.containsKey(fieldName)) {
+            newSchema.put(fieldName, schema.get(fieldName));
+          }
+        }
+        for (Map.Entry<String, DataType> entry : newSchema.entrySet()) {
+          indexes.put(entry.getKey(), new FieldIndex(entry.getValue()));
+        }
+      } finally {
+        lock.writeLock().unlock();
+      }
+    }
   }
 
-  private void declareNewFields(Map<String, DataType> schema) throws TypeConflictedException {
-    Map<String, DataType> newSchema = new HashMap<>();
-    lock.writeLock().lock();
+  public List<Field> findFields(List<String> patterns, @Nullable TagFilter tagFilter) {
+    lock.readLock().lock();
     try {
-      for (Map.Entry<String, DataType> entry : schema.entrySet()) {
-        FieldIndex fieldIndex = indexes.get(entry.getKey());
-        if (fieldIndex == null) {
-          newSchema.put(entry.getKey(), entry.getValue());
-        } else if (!fieldIndex.getType().equals(entry.getValue())) {
-          throw new TypeConflictedException(
-              entry.getKey().toString(),
-              entry.getValue().toString(),
-              fieldIndex.getType().toString());
-        }
-      }
-      LOGGER.debug("declare new fields: {}", newSchema);
-      for (Map.Entry<String, DataType> entry : newSchema.entrySet()) {
-        indexes.put(entry.getKey(), new FieldIndex(entry.getValue()));
-      }
+      return new ArrayList<>(columnIndex.find(patterns, tagFilter).values());
     } finally {
-      lock.writeLock().unlock();
+      lock.readLock().unlock();
     }
   }
 

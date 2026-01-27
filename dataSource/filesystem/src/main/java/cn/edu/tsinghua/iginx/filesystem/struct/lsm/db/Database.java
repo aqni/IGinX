@@ -19,24 +19,26 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 
+import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.RangeSet;
+import org.apache.arrow.vector.types.pojo.Field;
+
+import javax.annotation.Nullable;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.arrow.vector.types.pojo.Field;
 
 public interface Database extends AutoCloseable {
 
-  Scanner<Long, Scanner<String, Object>> query(
-      Set<Field> fields, RangeSet<Long> ranges, Filter filter) throws StorageException, IOException;
-
-  Map<String, Long> count(Set<Field> strings)
-      throws InterruptedException, IOException, StorageException;
+  RowStream query(
+      List<String> pattern, @Nullable TagFilter tagFilter, Filter filter) throws StorageException, IOException;
 
   Set<Field> schema() throws StorageException;
 

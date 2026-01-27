@@ -30,14 +30,11 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Database;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.OneTierDB;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.ArrowFileStorageManager;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.ParquetFileStorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.TsFileStorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.Manager;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.utils.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.utils.TagKVUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Constants;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
@@ -45,12 +42,13 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.RangeSet;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.*;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.*;
 
 public class DataManager implements Manager {
   private static final Logger LOGGER = LoggerFactory.getLogger(DataManager.class);
@@ -63,42 +61,18 @@ public class DataManager implements Manager {
     this.shared = shared;
     Path dataDir = dir.resolve(Constants.DIR_NAME_TABLE);
 //        StorageManager storageManager = new ParquetFileStorageManager(shared, dataDir); // tpch
-        StorageManager storageManager = new TsFileStorageManager(shared, dataDir); // tsbs
+    StorageManager storageManager = new TsFileStorageManager(shared, dataDir); // tsbs
 //    StorageManager storageManager = new ArrowFileStorageManager(shared, dataDir); // tpch
     this.db = new OneTierDB(dir.toString(), shared, storageManager);
   }
 
   @Override
-  public RowStream project(List<String> paths, TagFilter tagFilter, Filter filter)
+  public RowStream project(List<String> patterns, TagFilter tagFilter, Filter filter)
       throws PhysicalException {
-    Map<String, DataType> schema = ArrowFields.toIginxSchema(db.schema());
-    Map<String, DataType> schemaMatchTags = ProjectUtils.project(schema, tagFilter);
-
-    Map<String, DataType> projectedSchema = ProjectUtils.project(schemaMatchTags, paths);
-    Filter projectedFilter = ProjectUtils.project(filter, schemaMatchTags);
-    RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(projectedFilter);
-
     try {
-      Scanner<Long, Scanner<String, Object>> scanner =
-          db.query(ArrowFields.of(projectedSchema), rangeSet, projectedFilter);
-      return new ScannerRowStream(projectedSchema, scanner);
+      return db.query(patterns, tagFilter, filter);
     } catch (IOException e) {
-      throw new StorageException(e);
-    }
-  }
-
-  public RowStream aggregation(List<String> patterns, TagFilter tagFilter, List<FunctionCall> calls)
-      throws PhysicalException {
-    Map<String, DataType> schema = ArrowFields.toIginxSchema(db.schema());
-    Map<String, DataType> schemaMatchTags = ProjectUtils.project(schema, tagFilter);
-    Map<String, DataType> projectedSchema = ProjectUtils.project(schemaMatchTags, patterns);
-
-    try {
-      // TODO: just support count now
-      Map<String, Long> counts = db.count(ArrowFields.of(projectedSchema));
-      return new AggregatedRowStream(counts, "count");
-    } catch (InterruptedException | IOException e) {
-      throw new StorageException(e);
+      throw new PhysicalException(e);
     }
   }
 

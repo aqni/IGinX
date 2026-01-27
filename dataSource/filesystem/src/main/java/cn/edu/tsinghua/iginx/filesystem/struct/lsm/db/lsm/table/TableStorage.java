@@ -20,6 +20,9 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.index.ColumnIndex;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.index.FlatColumnIndex;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.DataBuffer;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
@@ -30,6 +33,7 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.*;
@@ -39,6 +43,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.StreamSupport;
 import org.apache.arrow.vector.types.pojo.Field;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +54,8 @@ public class TableStorage implements AutoCloseable {
   private final StorageManager storageManager;
   private long sqnBase;
 
-  public TableStorage(Shared shared, StorageManager storageManager) throws IOException {
+  public TableStorage(Shared shared, TableIndex index, StorageManager storageManager) throws IOException {
+    this.tableIndex = index;
     this.storageManager = storageManager;
 
     Iterable<String> tableNames = storageManager.reload();
@@ -58,8 +64,19 @@ public class TableStorage implements AutoCloseable {
             .max(Comparator.naturalOrder())
             .orElse("0-0");
     this.sqnBase = getSeq(last) + 1;
-    this.tableIndex = new TableIndex(this);
+
+    try {
+      for (String tableName : tableNames) {
+        LOGGER.debug("rebuilt table index for table: {}", tableName);
+        StorageManager.TableMeta meta = getMeta(tableName);
+        tableIndex.declareFields(meta.getSchema());
+        tableIndex.addTable(tableName, meta);
+      }
+    } catch (IOException | TypeConflictedException e) {
+      throw new StorageRuntimeException(e);
+    }
   }
+
 
   static long getSeq(String tableName) {
     Pattern pattern = Pattern.compile("^(\\d+)-.*$");
@@ -130,20 +147,8 @@ public class TableStorage implements AutoCloseable {
     }
   }
 
-  public Iterable<String> reload() throws IOException {
-    return storageManager.reload();
-  }
-
   @Override
   public void close() {}
-
-  public Map<String, DataType> schema() {
-    return tableIndex.getType();
-  }
-
-  public void declareFields(Map<String, DataType> schema) throws TypeConflictedException {
-    tableIndex.declareFields(schema);
-  }
 
   public DataBuffer<Long, String, Object> query(
       Set<String> fields, RangeSet<Long> ranges, Filter filter)
@@ -169,143 +174,5 @@ public class TableStorage implements AutoCloseable {
   private Scanner<Long, Scanner<String, Object>> scan(
       String tableName, Set<String> fields, RangeSet<Long> ranges) throws IOException {
     return new FileTable(tableName, storageManager).scan(fields, ranges);
-  }
-
-  public Map<String, Long> count(Set<String> innerFields) throws StorageException, IOException {
-    Map<String, Long> counts = new HashMap<>();
-
-    for (String field : innerFields) {
-      long count = count(field);
-      counts.put(field, count);
-    }
-
-    return counts;
-  }
-
-  public long count(String field) throws StorageException, IOException {
-    RangeMap<Long, List<String>> regionTableLists = getTablesGroupByRegion(field);
-
-    long totalCount = 0;
-    for (List<String> tables : regionTableLists.asMapOfRanges().values()) {
-      if (tables.isEmpty()) {
-        continue;
-      } else if (tables.size() == 1) {
-        StorageManager.TableMeta meta = storageManager.readMeta(tables.get(0));
-        Long regionCount = meta.getValueCount(field);
-        if (regionCount != null) {
-          totalCount += regionCount;
-          continue;
-        }
-      }
-      totalCount += getOverlapCount(field, tables);
-    }
-    return totalCount;
-  }
-
-  private static Range<Long> normalize(Range<Long> range) {
-    if (range.isEmpty()) {
-      return range;
-    }
-    long lower = range.lowerEndpoint();
-    long upper = range.upperEndpoint();
-    if (range.lowerBoundType() == BoundType.OPEN) {
-      lower++;
-    }
-    if (range.upperBoundType() == BoundType.OPEN) {
-      upper--;
-    }
-    return Range.closed(lower, upper);
-  }
-
-  private RangeMap<Long, List<String>> getTablesGroupByRegion(String field) throws IOException {
-    AreaSet<Long, String> areas = new AreaSet<>();
-    areas.add(Collections.singleton(field), ImmutableRangeSet.of(Range.all()));
-    Set<String> tables = tableIndex.find(areas);
-    List<String> sortedTableNames = new ArrayList<>(tables);
-    sortedTableNames.sort(Comparator.naturalOrder());
-
-    HashMap<String, Range<Long>> tableRanges = new HashMap<>();
-    for (String tableName : sortedTableNames) {
-      StorageManager.TableMeta meta = storageManager.readMeta(tableName);
-      Range<Long> range = meta.getRange(field);
-      tableRanges.put(tableName, range);
-    }
-
-    RangeSet<Long> regions = TreeRangeSet.create(tableRanges.values());
-    RangeMap<Long, List<String>> regionTableLists = TreeRangeMap.create();
-    for (Range<Long> region : regions.asRanges()) {
-      regionTableLists.put(region, new ArrayList<>());
-    }
-
-    for (String tableName : sortedTableNames) {
-      Range<Long> range = normalize(tableRanges.get(tableName));
-      List<String> regionTableList = regionTableLists.get(range.lowerEndpoint());
-      assert regionTableList != null;
-      regionTableList.add(tableName);
-    }
-
-    return regionTableLists;
-  }
-
-  private long getOverlapCount(String field, List<String> sortedTableNames)
-      throws IOException, StorageException {
-    Set<String> fields = Collections.singleton(field);
-
-    long count = 0;
-    try (Scanner<Long, Scanner<String, Object>> scanner = scan(sortedTableNames, fields)) {
-      while (scanner.iterate()) {
-        Scanner<String, Object> row = scanner.value();
-        while (row.iterate()) {
-          assert row.value() != null;
-          count++;
-        }
-      }
-    }
-    return count;
-  }
-
-  private Scanner<Long, Scanner<String, Object>> scan(List<String> tableNames, Set<String> fields)
-      throws IOException, StorageException {
-    List<FileTable> tables = new ArrayList<>();
-    for (String tableName : tableNames) {
-      tables.add(new FileTable(tableName, storageManager));
-    }
-    List<Scanner<Long, Scanner<String, Object>>> overlaps = getOverlapScannerList(fields, tables);
-
-    Collections.reverse(overlaps);
-    return new RowUnionScanner<>(overlaps);
-  }
-
-  private static List<Scanner<Long, Scanner<String, Object>>> getOverlapScannerList(
-      Set<String> fields, List<FileTable> tables) throws IOException {
-    RangeSet<Long> ranges = ImmutableRangeSet.of(Range.all());
-    List<Scanner<Long, Scanner<String, Object>>> overlaps = new ArrayList<>();
-
-    RangeSet<Long> tableRanges = TreeRangeSet.create();
-    List<Scanner<Long, Scanner<String, Object>>> noOverlaps = new ArrayList<>();
-    for (FileTable table : tables) {
-      StorageManager.TableMeta meta = table.getMeta();
-      Range<Long> range = normalize(meta.getRange(fields));
-      if (range.isEmpty()) {
-        continue;
-      }
-      if (tableRanges.intersects(range)) {
-        overlaps.add(new ConcatScanner<>(noOverlaps.iterator()));
-        noOverlaps = new ArrayList<>();
-        tableRanges = TreeRangeSet.create();
-      }
-      long head = range.lowerEndpoint();
-      Scanner<Long, Scanner<String, Object>> lazy = table.lazyScan(fields, ranges);
-      Scanner<Long, Scanner<String, Object>> emptyHead = new EmtpyHeadRowScanner<>(head);
-      Scanner<Long, Scanner<String, Object>> concat =
-          new ConcatScanner<>(Iterators.forArray(emptyHead, lazy));
-      noOverlaps.add(concat);
-      tableRanges.add(range);
-    }
-    if (!noOverlaps.isEmpty()) {
-      overlaps.add(new ConcatScanner<>(noOverlaps.iterator()));
-    }
-
-    return overlaps;
   }
 }

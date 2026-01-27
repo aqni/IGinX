@@ -42,6 +42,10 @@ IGINX_JAVA_OPTS+=(-Dfile.encoding=UTF-8)
 # Memory
 ######################################
 
+# Use String Deduplication
+IGINX_JAVA_OPTS+=(-XX:+UseG1GC)
+IGINX_JAVA_OPTS+=(-XX:+UseStringDeduplication)
+
 # Followings memory options have auto-detected values by default
 
 # Set the maximum heap size (uncomment and adjust the value as needed)
