@@ -23,8 +23,6 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Database;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.index.ColumnIndex;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.index.FlatColumnIndex;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.DataBuffer;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.MemTableQueue;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.Chunk;
@@ -80,8 +78,7 @@ public class OneTierDB implements Database {
     this.name = name;
     this.shared = shared;
     this.allocator = shared.getAllocator().newChildAllocator(name, 0, Long.MAX_VALUE);
-    ColumnIndex columnIndex = new FlatColumnIndex();
-    this.tableIndex = new TableIndex(columnIndex);
+    this.tableIndex = new TableIndex(shared);
     this.tableStorage = new TableStorage(shared, tableIndex, readerWriter);
     this.memTableQueue = new MemTableQueue(shared, allocator);
     this.flusher = new Flusher(name, shared, allocator, memTableQueue, tableStorage);
@@ -93,7 +90,7 @@ public class OneTierDB implements Database {
                          Filter filter) throws StorageException, IOException {
     deleteLock.readLock().lock();
     try {
-      List<Field> fields = tableIndex.findFields(patterns, tagFilter);
+      List<Field> fields = new ArrayList<>(tableIndex.findFields(patterns, tagFilter).values());
       List<String> columnKeys =
           fields.stream()
               .map(field -> TagKVUtils.toFullName(ArrowFields.toColumnKey(field)))
@@ -118,7 +115,7 @@ public class OneTierDB implements Database {
           readBuffer.putRows(scanner);
         }
         Scanner<Long, Scanner<String, Object>> scanner = readBuffer.scanRows(columnKeySet, Range.all());
-        return new ScannerRowStream(schema, scanner);
+        return new ScannerRowStream(scanner, schema);
       } catch (Exception e) {
         throw new StorageException(e);
       }
@@ -187,6 +184,25 @@ public class OneTierDB implements Database {
     try {
       LOGGER.debug("start to delete {} in {}", range, name);
       memTableQueue.delete(range);
+      tableStorage.delete(innerAreas);
+    } catch (IOException e) {
+      throw new StorageRuntimeException(e);
+    } finally {
+      deleteLock.writeLock().unlock();
+    }
+  }
+
+  @Override
+  public void delete(List<String> patterns, @Nullable TagFilter tagFilter) throws StorageException {
+    deleteLock.writeLock().lock();
+    try {
+      Map<Long, Field> matchedField = tableIndex.findFields(patterns, tagFilter);
+      tableIndex.delete(matchedField);
+
+      AreaSet<Long, Field> areas = new AreaSet<>();
+      areas.add(new HashSet<>(matchedField.values()));
+      AreaSet<Long, String> innerAreas = ArrowFields.toInnerAreas(areas);
+      memTableQueue.delete(areas);
       tableStorage.delete(innerAreas);
     } catch (IOException e) {
       throw new StorageRuntimeException(e);

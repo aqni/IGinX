@@ -25,6 +25,7 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.utils.TagKVUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Constants;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import org.apache.arrow.util.Preconditions;
+import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.DictionaryEncoding;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
@@ -59,6 +60,11 @@ public class ArrowFields {
 
   public static Field of(ColumnKey columnKey, DataType type) {
     return of(true, columnKey, type);
+  }
+
+  public static Field of(String name, Map<String, String> tags, Types.MinorType minorType) {
+    FieldType fieldType = new FieldType(true, minorType.getType(), null, tags);
+    return new Field(name, fieldType, null);
   }
 
   public static ColumnKey toColumnKey(Field field) {
@@ -145,4 +151,5 @@ public class ArrowFields {
   public static cn.edu.tsinghua.iginx.engine.shared.data.read.Field toIginxField(Field arrowField) {
     return new cn.edu.tsinghua.iginx.engine.shared.data.read.Field(arrowField.getName(), ArrowTypes.toIginxType(arrowField.getType()), arrowField.getMetadata());
   }
+
 }

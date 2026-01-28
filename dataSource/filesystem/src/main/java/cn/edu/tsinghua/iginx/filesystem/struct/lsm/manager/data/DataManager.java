@@ -25,7 +25,6 @@ import cn.edu.tsinghua.iginx.engine.physical.storage.domain.ColumnKey;
 import cn.edu.tsinghua.iginx.engine.shared.KeyRange;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
-import cn.edu.tsinghua.iginx.engine.shared.function.FunctionCall;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Database;
@@ -46,6 +45,7 @@ import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
@@ -95,7 +95,7 @@ public class DataManager implements Manager {
   }
 
   @Override
-  public void delete(List<String> paths, List<KeyRange> keyRanges, TagFilter tagFilter)
+  public void delete(List<String> patterns, List<KeyRange> keyRanges, @Nullable TagFilter tagFilter)
       throws PhysicalException {
 
     RangeSet<Long> rangeSet = com.google.common.collect.TreeRangeSet.create();
@@ -109,7 +109,7 @@ public class DataManager implements Manager {
 
     AreaSet<Long, String> areas = new AreaSet<>();
     Map<String, DataType> schema = Collections.emptyMap();
-    if (paths.stream().anyMatch("*"::equals) && tagFilter == null) {
+    if (patterns.stream().anyMatch("*"::equals) && tagFilter == null) {
       if (rangeSet.isEmpty()) {
         db.clear();
       } else {
@@ -118,9 +118,10 @@ public class DataManager implements Manager {
     } else {
       schema = ArrowFields.toIginxSchema(db.schema());
       Map<String, DataType> schemaMatchedTags = ProjectUtils.project(schema, tagFilter);
-      Set<String> fields = ProjectUtils.project(schemaMatchedTags, paths).keySet();
+      Set<String> fields = ProjectUtils.project(schemaMatchedTags, patterns).keySet();
       if (rangeSet.isEmpty()) {
-        areas.add(fields);
+        db.delete(patterns, tagFilter);
+        return;
       } else {
         areas.add(fields, rangeSet);
       }

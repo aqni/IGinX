@@ -25,6 +25,7 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.RangeSet;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -49,6 +50,8 @@ public interface Database extends AutoCloseable {
       throws StorageException, InterruptedException;
 
   void delete(AreaSet<Long, Field> areas) throws StorageException;
+
+  void delete(List<String> patterns, @Nullable TagFilter tagFilter) throws StorageException;
 
   void clear() throws StorageException;
 }

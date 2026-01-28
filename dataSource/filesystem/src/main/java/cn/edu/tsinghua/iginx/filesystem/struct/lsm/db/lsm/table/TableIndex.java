@@ -21,8 +21,10 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.index.ColumnIndex;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.index.FlatColumnIndex;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.NotIntegrityException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
@@ -49,8 +51,8 @@ public class TableIndex {
   private final Map<String, FieldIndex> indexes = new HashMap<>();
   private final ColumnIndex columnIndex;
 
-  public TableIndex(ColumnIndex columnIndex) {
-    this.columnIndex = Objects.requireNonNull(columnIndex);
+  public TableIndex(Shared shared) {
+    this.columnIndex = new FlatColumnIndex();
   }
 
   public Set<String> find(AreaSet<Long, String> areas) {
@@ -108,7 +110,7 @@ public class TableIndex {
     lock.readLock().lock();
     try {
       for (Field field : fields) {
-        if (!columnIndex.contain(field)) {
+        if (columnIndex.lookup(field) == null) {
           hasNewField = true;
           break;
         }
@@ -140,10 +142,10 @@ public class TableIndex {
     }
   }
 
-  public List<Field> findFields(List<String> patterns, @Nullable TagFilter tagFilter) {
+  public Map<Long, Field> findFields(List<String> patterns, @Nullable TagFilter tagFilter) {
     lock.readLock().lock();
     try {
-      return new ArrayList<>(columnIndex.find(patterns, tagFilter).values());
+      return columnIndex.find(patterns, tagFilter);
     } finally {
       lock.readLock().unlock();
     }
@@ -208,21 +210,25 @@ public class TableIndex {
     }
   }
 
-  public void removeTable(String name) {
-    lock.readLock().lock();
+  public void delete(Map<Long, Field> fields) throws TypeConflictedException {
+    lock.writeLock().lock();
     try {
-      for (FieldIndex fieldIndex : indexes.values()) {
-        fieldIndex.removeTable(name);
+      for (Field field : fields.values()) {
+        columnIndex.delete(field);
+        String fullFieldName = ArrowFields.toFullName(field);
+        indexes.remove(fullFieldName);
       }
     } finally {
-      lock.readLock().unlock();
+      lock.writeLock().unlock();
     }
   }
 
   public void delete(AreaSet<Long, String> areas) {
     lock.writeLock().lock();
     try {
-      indexes.keySet().removeAll(areas.getFields());
+      if (!areas.getFields().isEmpty()) {
+        throw new IllegalStateException("cannot delete whole fields from table index");
+      }
       for (FieldIndex fieldIndex : indexes.values()) {
         fieldIndex.delete(areas.getKeys());
       }
@@ -240,6 +246,7 @@ public class TableIndex {
   public void clear() {
     lock.writeLock().lock();
     try {
+      columnIndex.clear();
       indexes.clear();
     } finally {
       lock.writeLock().unlock();

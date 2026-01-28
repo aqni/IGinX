@@ -12,9 +12,14 @@ public interface ColumnIndex {
 
   long put(Field field) throws TypeConflictedException;
 
-  boolean contain(Field field) throws TypeConflictedException;
+  @Nullable
+  Long lookup(Field field) throws TypeConflictedException;
 
   Map<Long, Field> find(List<String> patterns, @Nullable TagFilter filter);
 
-  void delete(Field field);
+  @org.checkerframework.checker.nullness.qual.Nullable Long delete(Field field) throws TypeConflictedException;
+
+  void clear();
+
+  int count();
 }

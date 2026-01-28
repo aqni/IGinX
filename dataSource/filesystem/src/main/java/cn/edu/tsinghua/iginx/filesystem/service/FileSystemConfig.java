@@ -24,7 +24,6 @@ import cn.edu.tsinghua.iginx.filesystem.service.rpc.client.ClientConfig;
 import cn.edu.tsinghua.iginx.filesystem.service.storage.StorageConfig;
 import cn.edu.tsinghua.iginx.filesystem.struct.legacy.filesystem.LegacyFilesystem;
 import cn.edu.tsinghua.iginx.filesystem.struct.legacy.parquet.LegacyParquet;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.FileLsm;
 import com.typesafe.config.Config;
 import com.typesafe.config.Optional;
 import java.util.ArrayList;
@@ -42,7 +41,7 @@ public class FileSystemConfig extends AbstractConfig {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(FileSystemConfig.class);
 
-  public static final String DEFAULT_DATA_STRUCT = FileLsm.NAME;
+  public static final String DEFAULT_DATA_STRUCT = LegacyParquet.NAME;
   public static final String DEFAULT_DUMMY_STRUCT = LegacyFilesystem.NAME;
 
   boolean serve;
