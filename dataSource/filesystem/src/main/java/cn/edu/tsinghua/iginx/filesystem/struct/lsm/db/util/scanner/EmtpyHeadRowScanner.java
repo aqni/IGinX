@@ -17,27 +17,37 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner;
 
-import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
-import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
-import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
-import com.google.common.collect.RangeSet;
-import java.util.List;
-import javax.annotation.Nullable;
-import org.apache.arrow.vector.types.pojo.Field;
 
-public interface Database extends AutoCloseable {
+public class EmtpyHeadRowScanner<K extends Comparable<K>, F, V>
+    implements Scanner<K, Scanner<F, V>> {
 
-  RowStream query(List<String> pattern, @Nullable TagFilter tagFilter, Filter filter)
-      throws StorageException;
+  private final K key;
+  private boolean hasNext = true;
 
-  List<Field> schema(List<String> patterns, @Nullable TagFilter tagFilter) throws StorageException;
+  public EmtpyHeadRowScanner(K key) {
+    this.key = key;
+  }
 
-  void insert(DataView data) throws StorageException;
+  @Override
+  public K key() {
+    return key;
+  }
 
-  void delete(List<String> patterns, @Nullable TagFilter tagFilter, RangeSet<Long> ranges)
-      throws StorageException;
+  @Override
+  public Scanner<F, V> value() {
+    return EmptyScanner.getInstance();
+  }
+
+  @Override
+  public boolean iterate() throws StorageException {
+    boolean lastHasNext = hasNext;
+    hasNext = false;
+    return lastHasNext;
+  }
+
+  @Override
+  public void close() throws StorageException {}
 }

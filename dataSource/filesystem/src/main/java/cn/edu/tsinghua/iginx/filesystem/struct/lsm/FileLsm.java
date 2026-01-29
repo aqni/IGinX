@@ -21,7 +21,6 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.FileManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.FileStructure;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.data.DataManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.StorageProperties;
 import com.google.auto.service.AutoService;
@@ -133,7 +132,7 @@ public class FileLsm implements FileStructure {
 
   @Override
   public FileManager newReader(Path path, Closeable shared) throws IOException {
-    return new FileLsmManager(p -> new DataManager((Shared) shared, p), path, true);
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -143,6 +142,6 @@ public class FileLsm implements FileStructure {
 
   @Override
   public FileManager newWriter(Path path, Closeable shared) throws IOException {
-    return new FileLsmManager(p -> new DataManager((Shared) shared, p), path, false);
+    return new FileLsmManager((Shared) shared, path);
   }
 }

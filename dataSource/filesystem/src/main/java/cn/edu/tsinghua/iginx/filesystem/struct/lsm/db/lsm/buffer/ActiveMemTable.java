@@ -23,7 +23,7 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.Chunk;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.conflict.ConflictResolver;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table.MemoryTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Awaitable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;

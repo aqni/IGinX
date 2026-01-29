@@ -17,27 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner;
 
-import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
-import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
-import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
-import com.google.common.collect.RangeSet;
-import java.util.List;
-import javax.annotation.Nullable;
-import org.apache.arrow.vector.types.pojo.Field;
 
-public interface Database extends AutoCloseable {
+public interface Scanner<K, V> extends AutoCloseable {
 
-  RowStream query(List<String> pattern, @Nullable TagFilter tagFilter, Filter filter)
-      throws StorageException;
+  K key();
 
-  List<Field> schema(List<String> patterns, @Nullable TagFilter tagFilter) throws StorageException;
+  V value();
 
-  void insert(DataView data) throws StorageException;
+  boolean iterate() throws StorageException;
 
-  void delete(List<String> patterns, @Nullable TagFilter tagFilter, RangeSet<Long> ranges)
-      throws StorageException;
+  @Override
+  void close() throws StorageException;
 }

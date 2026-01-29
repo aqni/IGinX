@@ -21,10 +21,10 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.MemColumn;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.*;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.manager.utils.TagKVUtils;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.TagKVUtils;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.*;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.SingleCache;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;

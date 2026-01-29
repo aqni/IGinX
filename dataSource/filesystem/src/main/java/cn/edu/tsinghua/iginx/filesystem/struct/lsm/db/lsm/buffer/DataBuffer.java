@@ -20,9 +20,9 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.ColumnUnionRowScanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.IteratorScanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.ColumnUnionRowScanner;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.IteratorScanner;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
 import com.google.common.collect.BoundType;
 import com.google.common.collect.Range;

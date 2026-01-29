@@ -20,9 +20,8 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.index.ColumnIndex;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.index.FlatColumnIndex;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.schema.FieldIndex;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
@@ -33,26 +32,24 @@ import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeRangeSet;
+import java.util.*;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.*;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Consumer;
 
 public class TableIndex {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(TableIndex.class);
   private final ReadWriteLock lock = new ReentrantReadWriteLock(true);
 
-  private final Map<String, FieldIndex> indexes = new HashMap<>();
-  private final ColumnIndex columnIndex;
+  private final Map<String, ColumnIndex> indexes = new HashMap<>();
+  private final FieldIndex fieldIndex;
 
-  public TableIndex(Shared shared) {
-    this.columnIndex = new FlatColumnIndex();
+  public TableIndex(Shared shared, FieldIndex fieldIndex) {
+    this.fieldIndex = fieldIndex;
   }
 
   public Set<String> find(AreaSet<Long, String> areas) {
@@ -61,25 +58,25 @@ public class TableIndex {
     try {
       RangeSet<Long> rangeSet = areas.getKeys();
       if (!rangeSet.isEmpty()) {
-        for (FieldIndex fieldIndex : indexes.values()) {
-          Set<String> tables = fieldIndex.find(rangeSet);
+        for (ColumnIndex columnIndex : indexes.values()) {
+          Set<String> tables = columnIndex.find(rangeSet);
           result.addAll(tables);
         }
       }
       for (String field : areas.getFields()) {
-        FieldIndex fieldIndex = indexes.get(field);
-        if (fieldIndex == null) {
+        ColumnIndex columnIndex = indexes.get(field);
+        if (columnIndex == null) {
           continue;
         }
-        Set<String> tables = fieldIndex.find();
+        Set<String> tables = columnIndex.find();
         result.addAll(tables);
       }
       for (Map.Entry<String, RangeSet<Long>> entry : areas.getSegments().entrySet()) {
-        FieldIndex fieldIndex = indexes.get(entry.getKey());
-        if (fieldIndex == null) {
+        ColumnIndex columnIndex = indexes.get(entry.getKey());
+        if (columnIndex == null) {
           continue;
         }
-        Set<String> tables = fieldIndex.find(entry.getValue());
+        Set<String> tables = columnIndex.find(entry.getValue());
         result.addAll(tables);
       }
     } finally {
@@ -92,7 +89,7 @@ public class TableIndex {
     Map<String, Range<Long>> result = new HashMap<>();
     lock.readLock().lock();
     try {
-      for (Map.Entry<String, FieldIndex> entry : indexes.entrySet()) {
+      for (Map.Entry<String, ColumnIndex> entry : indexes.entrySet()) {
         RangeSet<Long> rangeSet = entry.getValue().ranges();
         if (!rangeSet.isEmpty()) {
           result.put(entry.getKey(), rangeSet.span());
@@ -110,7 +107,7 @@ public class TableIndex {
     lock.readLock().lock();
     try {
       for (Field field : fields) {
-        if (columnIndex.lookup(field) == null) {
+        if (!fieldIndex.contain(field)) {
           hasNewField = true;
           break;
         }
@@ -119,22 +116,17 @@ public class TableIndex {
       lock.readLock().unlock();
     }
     if (hasNewField) {
-      Map<String, DataType> newSchema = new HashMap<>();
       lock.writeLock().lock();
       try {
-        List<Long> ids = new ArrayList<>();
         for (Field field : fields) {
-          long id = columnIndex.put(field);
-          ids.add(id);
+          fieldIndex.add(field);
         }
-        for (int i = 0; i < fields.size(); i++) {
-          String fieldName = ArrowFields.toFullName(fields.get(i));
+        for (Field field : fields) {
+          String fieldName = ArrowFields.toFullName(field);
+          DataType type = schema.get(fieldName);
           if (!indexes.containsKey(fieldName)) {
-            newSchema.put(fieldName, schema.get(fieldName));
+            indexes.put(fieldName, new ColumnIndex());
           }
-        }
-        for (Map.Entry<String, DataType> entry : newSchema.entrySet()) {
-          indexes.put(entry.getKey(), new FieldIndex(entry.getValue()));
         }
       } finally {
         lock.writeLock().unlock();
@@ -142,44 +134,13 @@ public class TableIndex {
     }
   }
 
-  public Map<Long, Field> findFields(List<String> patterns, @Nullable TagFilter tagFilter) {
+  public List<Field> findFields(List<String> patterns, @Nullable TagFilter tagFilter) {
     lock.readLock().lock();
     try {
-      return columnIndex.find(patterns, tagFilter);
+      return fieldIndex.find(patterns, tagFilter);
     } finally {
       lock.readLock().unlock();
     }
-  }
-
-  public Map<String, DataType> getType(Set<String> fields, Consumer<String> processMissingField) {
-    Map<String, DataType> result = new HashMap<>();
-    lock.readLock().lock();
-    try {
-      for (String field : fields) {
-        FieldIndex fieldIndex = indexes.get(field);
-        if (fieldIndex == null) {
-          processMissingField.accept(field);
-        } else {
-          result.put(field, fieldIndex.getType());
-        }
-      }
-    } finally {
-      lock.readLock().unlock();
-    }
-    return result;
-  }
-
-  public Map<String, DataType> getType() {
-    Map<String, DataType> result = new HashMap<>();
-    lock.readLock().lock();
-    try {
-      for (Map.Entry<String, FieldIndex> entry : indexes.entrySet()) {
-        result.put(entry.getKey(), entry.getValue().getType());
-      }
-    } finally {
-      lock.readLock().unlock();
-    }
-    return result;
   }
 
   public void addTable(String name, StorageManager.TableMeta meta) {
@@ -187,34 +148,23 @@ public class TableIndex {
     try {
       Map<String, DataType> types = meta.getSchema();
       for (String field : types.keySet()) {
-        FieldIndex fieldIndex = indexes.get(field);
-        if (fieldIndex == null) {
+        ColumnIndex columnIndex = indexes.get(field);
+        if (columnIndex == null) {
           throw new NotIntegrityException("field " + field + " is not found in schema");
         }
-        DataType oldType = fieldIndex.getType();
-        DataType newType = types.get(field);
-        if (!oldType.equals(newType)) {
-          throw new NotIntegrityException(
-              "field "
-                  + field
-                  + " type is not match, old type: "
-                  + oldType
-                  + ", new type: "
-                  + newType);
-        }
         Range<Long> range = meta.getRange(field);
-        fieldIndex.addTable(name, Objects.requireNonNull(range));
+        columnIndex.addTable(name, Objects.requireNonNull(range));
       }
     } finally {
       lock.readLock().unlock();
     }
   }
 
-  public void delete(Map<Long, Field> fields) throws TypeConflictedException {
+  public void delete(List<Field> fields) throws TypeConflictedException {
     lock.writeLock().lock();
     try {
-      for (Field field : fields.values()) {
-        columnIndex.delete(field);
+      for (Field field : fields) {
+        fieldIndex.delete(field);
         String fullFieldName = ArrowFields.toFullName(field);
         indexes.remove(fullFieldName);
       }
@@ -229,13 +179,13 @@ public class TableIndex {
       if (!areas.getFields().isEmpty()) {
         throw new IllegalStateException("cannot delete whole fields from table index");
       }
-      for (FieldIndex fieldIndex : indexes.values()) {
-        fieldIndex.delete(areas.getKeys());
+      for (ColumnIndex columnIndex : indexes.values()) {
+        columnIndex.delete(areas.getKeys());
       }
       for (Map.Entry<String, RangeSet<Long>> entry : areas.getSegments().entrySet()) {
-        FieldIndex fieldIndex = indexes.get(entry.getKey());
-        if (fieldIndex != null) {
-          fieldIndex.delete(entry.getValue());
+        ColumnIndex columnIndex = indexes.get(entry.getKey());
+        if (columnIndex != null) {
+          columnIndex.delete(entry.getValue());
         }
       }
     } finally {
@@ -246,25 +196,15 @@ public class TableIndex {
   public void clear() {
     lock.writeLock().lock();
     try {
-      columnIndex.clear();
       indexes.clear();
     } finally {
       lock.writeLock().unlock();
     }
   }
 
-  public static class FieldIndex {
+  public static class ColumnIndex {
     private final ReadWriteLock lock = new ReentrantReadWriteLock(true);
-    private final DataType type;
     private final Map<String, Range<Long>> tableRange = new HashMap<>();
-
-    public FieldIndex(DataType type) {
-      this.type = type;
-    }
-
-    public DataType getType() {
-      return type;
-    }
 
     public void addTable(String name, Range<Long> range) {
       lock.writeLock().lock();

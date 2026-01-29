@@ -17,27 +17,42 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner;
 
-import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
-import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
-import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
-import com.google.common.collect.RangeSet;
-import java.util.List;
-import javax.annotation.Nullable;
-import org.apache.arrow.vector.types.pojo.Field;
 
-public interface Database extends AutoCloseable {
+public class LazyRowScanner<K extends Comparable<K>, F, V> implements Scanner<K, Scanner<F, V>> {
 
-  RowStream query(List<String> pattern, @Nullable TagFilter tagFilter, Filter filter)
-      throws StorageException;
+  private final RowScannerFactory<K, F, V> factory;
 
-  List<Field> schema(List<String> patterns, @Nullable TagFilter tagFilter) throws StorageException;
+  public LazyRowScanner(RowScannerFactory<K, F, V> factory) {
+    this.factory = factory;
+  }
 
-  void insert(DataView data) throws StorageException;
+  private Scanner<K, Scanner<F, V>> scanner;
 
-  void delete(List<String> patterns, @Nullable TagFilter tagFilter, RangeSet<Long> ranges)
-      throws StorageException;
+  @Override
+  public K key() {
+    return scanner.key();
+  }
+
+  @Override
+  public Scanner<F, V> value() {
+    return scanner.value();
+  }
+
+  @Override
+  public boolean iterate() throws StorageException {
+    if (scanner == null) {
+      scanner = factory.create();
+    }
+    return scanner.iterate();
+  }
+
+  @Override
+  public void close() throws StorageException {
+    if (scanner != null) {
+      scanner.close();
+    }
+  }
 }

@@ -17,27 +17,23 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.schema;
 
-import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
-import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
-import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
-import com.google.common.collect.RangeSet;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
 import java.util.List;
 import javax.annotation.Nullable;
 import org.apache.arrow.vector.types.pojo.Field;
 
-public interface Database extends AutoCloseable {
+public interface FieldIndex {
 
-  RowStream query(List<String> pattern, @Nullable TagFilter tagFilter, Filter filter)
-      throws StorageException;
+  void add(Field field) throws TypeConflictedException;
 
-  List<Field> schema(List<String> patterns, @Nullable TagFilter tagFilter) throws StorageException;
+  boolean contain(Field field) throws TypeConflictedException;
 
-  void insert(DataView data) throws StorageException;
+  List<Field> find(List<String> patterns, @Nullable TagFilter filter);
 
-  void delete(List<String> patterns, @Nullable TagFilter tagFilter, RangeSet<Long> ranges)
-      throws StorageException;
+  void delete(Field field) throws TypeConflictedException;
+
+  void clear();
 }

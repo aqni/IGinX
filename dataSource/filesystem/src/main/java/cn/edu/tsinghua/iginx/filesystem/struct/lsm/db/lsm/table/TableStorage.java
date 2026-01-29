@@ -20,22 +20,15 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.index.ColumnIndex;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.index.FlatColumnIndex;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.DataBuffer;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.storage.StorageManager;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.ConcatScanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.EmtpyHeadRowScanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.RowUnionScanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.Scanner;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
-import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.*;
 import java.io.IOException;
 import java.util.*;
@@ -43,7 +36,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.StreamSupport;
 import org.apache.arrow.vector.types.pojo.Field;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +46,8 @@ public class TableStorage implements AutoCloseable {
   private final StorageManager storageManager;
   private long sqnBase;
 
-  public TableStorage(Shared shared, TableIndex index, StorageManager storageManager) throws IOException {
+  public TableStorage(Shared shared, TableIndex index, StorageManager storageManager)
+      throws IOException {
     this.tableIndex = index;
     this.storageManager = storageManager;
 
@@ -76,7 +69,6 @@ public class TableStorage implements AutoCloseable {
       throw new StorageRuntimeException(e);
     }
   }
-
 
   static long getSeq(String tableName) {
     Pattern pattern = Pattern.compile("^(\\d+)-.*$");
@@ -127,7 +119,6 @@ public class TableStorage implements AutoCloseable {
 
   public void clear() {
     sqnBase = 0;
-    tableIndex.clear();
     try {
       storageManager.clear();
     } catch (IOException e) {
@@ -141,7 +132,6 @@ public class TableStorage implements AutoCloseable {
 
   public void delete(AreaSet<Long, String> areas) throws IOException {
     Set<String> tables = tableIndex.find(areas);
-    tableIndex.delete(areas);
     for (String tableName : tables) {
       storageManager.delete(tableName, areas);
     }

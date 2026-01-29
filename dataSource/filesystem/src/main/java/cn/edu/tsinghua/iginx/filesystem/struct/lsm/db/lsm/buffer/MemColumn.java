@@ -21,8 +21,8 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.Chunk;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.IndexedChunk;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.iterator.DedupIterator;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.iterator.StableMergeIterator;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.DedupIterator;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.StableMergeIterator;
 import com.google.common.collect.*;
 import java.util.ArrayList;
 import java.util.Iterator;
