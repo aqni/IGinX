@@ -26,14 +26,10 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
 import cn.edu.tsinghua.iginx.filesystem.common.Patterns;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.DataBuffer;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.MemTableQueue;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.Chunk;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.compact.Flusher;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table.TableIndex;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table.TableStorage;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.schema.FieldIndex;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.schema.HashFieldIndex;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.DataBuffer;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.chunk.Chunk;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.Catalog;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.*;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.BatchPlaneScanner;
@@ -69,8 +65,7 @@ public class OneTierDB implements Database {
   private final String name;
   private final Shared shared;
   private final BufferAllocator allocator;
-  private final FieldIndex fieldIndex;
-  private final TableIndex tableIndex;
+  private final Catalog catalog;
   private final TableStorage tableStorage;
   private final MemTableQueue memTableQueue;
   private final Flusher flusher;
@@ -79,9 +74,8 @@ public class OneTierDB implements Database {
     this.name = name;
     this.shared = shared;
     this.allocator = shared.getAllocator().newChildAllocator(name, 0, Long.MAX_VALUE);
-    this.fieldIndex = new HashFieldIndex();
-    this.tableIndex = new TableIndex(shared, fieldIndex);
-    this.tableStorage = new TableStorage(shared, tableIndex, readerWriter);
+    this.catalog = new Catalog(shared);
+    this.tableStorage = new TableStorage(shared, catalog, readerWriter);
     this.memTableQueue = new MemTableQueue(shared, allocator);
     this.flusher = new Flusher(name, shared, allocator, memTableQueue, tableStorage);
   }
@@ -91,7 +85,7 @@ public class OneTierDB implements Database {
       throws StorageException {
     deleteLock.readLock().lock();
     try {
-      List<Field> fields = fieldIndex.find(patterns, tagFilter);
+      List<Field> fields = catalog.find(patterns, tagFilter);
       List<String> columnKeys =
           fields.stream()
               .map(field -> TagKVUtils.toFullName(ArrowFields.toColumnKey(field)))
@@ -141,7 +135,7 @@ public class OneTierDB implements Database {
       throws StorageException {
     deleteLock.readLock().lock();
     try {
-      return fieldIndex.find(patterns, tagFilter);
+      return catalog.find(patterns, tagFilter);
     } finally {
       deleteLock.readLock().unlock();
     }
@@ -187,7 +181,8 @@ public class OneTierDB implements Database {
       throws TypeConflictedException, InterruptedException {
     deleteLock.readLock().lock();
     try (NoexceptAutoCloseable guarder = NoexceptAutoCloseables.all(chunks)) {
-      tableIndex.declareFields(schema);
+      List<Field> fields = ArrowFields.fromIginxSchema(schema);
+      catalog.verifyAndInsertFields(fields);
       memTableQueue.store(chunks);
       if (shared.getStorageProperties().getWriteBufferTimeout().toMillis() <= 0) {
         memTableQueue.flush();
@@ -202,7 +197,7 @@ public class OneTierDB implements Database {
       throws StorageException {
     deleteLock.writeLock().lock();
     try {
-      List<Field> fields = tableIndex.findFields(patterns, tagFilter);
+      List<Field> fields = catalog.findFields(patterns, tagFilter);
       if (ranges.encloses(Range.all())) {
         if (Patterns.isAll(patterns) && tagFilter == null) {
           clear();
@@ -225,7 +220,7 @@ public class OneTierDB implements Database {
     try {
       LOGGER.debug("start to delete {} in {}", areaSet, name);
       memTableQueue.delete(areaSet);
-      tableIndex.delete(innerAreas);
+      catalog.delete(innerAreas);
       tableStorage.delete(innerAreas);
     } catch (IOException e) {
       throw new StorageRuntimeException(e);
@@ -237,7 +232,7 @@ public class OneTierDB implements Database {
   private void deleteFields(List<Field> fields) throws StorageException {
     deleteLock.writeLock().lock();
     try {
-      tableIndex.delete(fields);
+      catalog.delete(fields);
       AreaSet<Long, Field> areas = new AreaSet<>();
       areas.add(new HashSet<>(fields));
       AreaSet<Long, String> innerAreas = ArrowFields.toInnerAreas(areas);
@@ -255,8 +250,7 @@ public class OneTierDB implements Database {
     try {
       LOGGER.debug("start to clear {}", name);
       flusher.stop();
-      fieldIndex.clear();
-      tableIndex.clear();
+      catalog.clear();
       memTableQueue.clear();
       tableStorage.clear();
       if (allocator.getAllocatedMemory() > 0) {

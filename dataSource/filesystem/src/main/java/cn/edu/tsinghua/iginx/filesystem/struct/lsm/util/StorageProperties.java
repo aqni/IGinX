@@ -19,9 +19,9 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.IndexedChunk;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.chunk.IndexedChunkType;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.buffer.conflict.ConflictResolverType;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.chunk.IndexedChunk;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.chunk.IndexedChunkType;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.conflict.ConflictResolverType;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;

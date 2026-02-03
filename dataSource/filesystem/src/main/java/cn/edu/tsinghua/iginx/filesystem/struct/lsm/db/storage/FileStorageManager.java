@@ -21,7 +21,7 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.AndFilter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.lsm.table.DeletedTableMeta;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.DeletedTableMeta;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.AreaFilterScanner;
