@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.field;
 
 import cn.edu.tsinghua.iginx.engine.physical.storage.utils.TagKVUtils;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
@@ -29,22 +29,23 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-public class FlatFieldIndex implements FieldIndex {
+public class FlatIndex implements FieldIndex {
 
-  private final Object2ObjectMap<CompactFieldFullName, Types.MinorType> fieldToTypeMap =
+  private final Object2ObjectMap<FieldFullName, Types.MinorType> fieldToTypeMap =
       new Object2ObjectOpenHashMap<>();
 
   @Override
   public List<Boolean> contain(List<Field> fields) throws TypeConflictedException {
     List<Boolean> results = new ArrayList<>(fields.size());
     for (Field field : fields) {
-      CompactFieldFullName key = new CompactFieldFullName(field.getName(), field.getMetadata());
+      FieldFullName key = new FieldFullName(field.getName(), field.getMetadata());
       Types.MinorType existingType = fieldToTypeMap.get(key);
       if (existingType == null) {
         results.add(false);
@@ -87,7 +88,7 @@ public class FlatFieldIndex implements FieldIndex {
   @Override
   public void insert(List<Field> fields) throws TypeConflictedException {
     for (Field field : fields) {
-      CompactFieldFullName key = new CompactFieldFullName(field.getName(), field.getMetadata());
+      FieldFullName key = new FieldFullName(field.getName(), field.getMetadata());
       Types.MinorType newType = Types.getMinorTypeForArrowType(field.getType());
       Types.MinorType existingType = fieldToTypeMap.get(key);
       if (existingType != null) {
@@ -97,7 +98,6 @@ public class FlatFieldIndex implements FieldIndex {
               Types.getMinorTypeForArrowType(field.getType()).toString(),
               existingType.toString());
         }
-        continue;
       }
       fieldToTypeMap.put(key, newType);
     }
@@ -106,17 +106,16 @@ public class FlatFieldIndex implements FieldIndex {
   @Override
   public void delete(List<Field> fields) throws TypeConflictedException {
     for (Field field : fields) {
-      CompactFieldFullName key = new CompactFieldFullName(field.getName(), field.getMetadata());
+      FieldFullName key = new FieldFullName(field.getName(), field.getMetadata());
       Types.MinorType existingType = fieldToTypeMap.get(key);
-      if (existingType == null) {
-        continue;
-      }
-      Types.MinorType expectedType = Types.getMinorTypeForArrowType(field.getType());
-      if (existingType != expectedType) {
-        throw new TypeConflictedException(
-            key.toString(),
-            Types.getMinorTypeForArrowType(field.getType()).toString(),
-            existingType.toString());
+      if (existingType != null) {
+        Types.MinorType expectedType = Types.getMinorTypeForArrowType(field.getType());
+        if (existingType != expectedType) {
+          throw new TypeConflictedException(
+              key.toString(),
+              Types.getMinorTypeForArrowType(field.getType()).toString(),
+              existingType.toString());
+        }
       }
       fieldToTypeMap.remove(key);
     }
@@ -125,5 +124,40 @@ public class FlatFieldIndex implements FieldIndex {
   @Override
   public void clear() {
     fieldToTypeMap.clear();
+  }
+
+  private static class FieldFullName {
+    private final String name;
+    private final Map<String, String> tags;
+
+    public FieldFullName(String name, Map<String, String> tags) {
+      this.name = name;
+      this.tags = tags;
+    }
+
+    public String getName() {
+      return name;
+    }
+
+    public Map<String, String> getTags() {
+      return tags;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o == null || getClass() != o.getClass()) return false;
+      FieldFullName that = (FieldFullName) o;
+      return Objects.equals(name, that.name) && Objects.equals(tags, that.tags);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(name, tags);
+    }
+
+    @Override
+    public String toString() {
+      return getName() + getTags();
+    }
   }
 }

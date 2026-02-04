@@ -22,6 +22,7 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.chunk.IndexedChunk;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.chunk.IndexedChunkType;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.conflict.ConflictResolverType;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.field.FieldIndexType;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
@@ -31,6 +32,7 @@ import org.apache.arrow.vector.BaseValueVector;
 /** The properties of storage engine */
 public class StorageProperties {
   private final boolean flushOnClose;
+  private final FieldIndexType catalogFieldIndexType;
   private final long writeBufferSize;
   private final int writeBufferChunkValuesMax;
   private final int writeBufferChunkValuesMin;
@@ -53,6 +55,7 @@ public class StorageProperties {
 
   private StorageProperties(
       boolean flushOnClose,
+      FieldIndexType catalogFieldIndexType,
       long writeBufferSize,
       int writeBufferPermits,
       int writeBufferChunkValuesMax,
@@ -73,6 +76,7 @@ public class StorageProperties {
       int zstdWorkers,
       int parquetLz4BufferSize) {
     this.flushOnClose = flushOnClose;
+    this.catalogFieldIndexType = catalogFieldIndexType;
     this.writeBufferSize = writeBufferSize;
     this.writeBufferChunkValuesMax = writeBufferChunkValuesMax;
     this.writeBufferChunkValuesMin = writeBufferChunkValuesMin;
@@ -101,6 +105,15 @@ public class StorageProperties {
    */
   public boolean toFlushOnClose() {
     return flushOnClose;
+  }
+
+  /**
+   * Get the catalog field index type
+   *
+   * @return the catalog field index type
+   */
+  public FieldIndexType getCatalogFieldIndexType() {
+    return catalogFieldIndexType;
   }
 
   /**
@@ -307,6 +320,7 @@ public class StorageProperties {
   /** A builder of StorageProperties */
   public static class Builder {
     public static final String FLUSH_ON_CLOSE = "close.flush";
+    public static final String CATALOG_FIELD_INDEX = "catalog.field.index";
     public static final String WRITE_BUFFER_SIZE = "write.buffer.size";
     public static final String WRITE_BUFFER_PERMITS = "write.buffer.permits";
     public static final String WRITE_BUFFER_CHUNK_VALUES_MAX = "write.buffer.chunk.values.max";
@@ -328,6 +342,7 @@ public class StorageProperties {
     public static final String PARQUET_LZ4_BUFFER_SIZE = "parquet.lz4.buffer.size";
 
     private boolean flushOnClose = true;
+    private FieldIndexType catalogFieldIndexType = FieldIndexType.TAG_TREE;
     private long writeBufferSize = 100 * 1024 * 1024; // BYTE
     private int writeBufferPermits = 2;
     private int writeBufferChunkValuesMax = BaseValueVector.INITIAL_VALUE_ALLOCATION;
@@ -358,6 +373,17 @@ public class StorageProperties {
      */
     public Builder setFlushOnClose(boolean flushOnClose) {
       this.flushOnClose = flushOnClose;
+      return this;
+    }
+
+    /**
+     * Set the catalog field index type
+     *
+     * @param catalogFieldIndexType the catalog field index type
+     * @return this builder
+     */
+    public Builder setCatalogFieldIndexType(String catalogFieldIndexType) {
+      this.catalogFieldIndexType = FieldIndexType.valueOf(catalogFieldIndexType);
       return this;
     }
 
@@ -596,6 +622,8 @@ public class StorageProperties {
      */
     public Builder parse(Map<String, String> properties) {
       ParseUtils.getOptionalBoolean(properties, FLUSH_ON_CLOSE).ifPresent(this::setFlushOnClose);
+      ParseUtils.getOptionalString(properties, CATALOG_FIELD_INDEX)
+          .ifPresent(this::setCatalogFieldIndexType);
       ParseUtils.getOptionalLong(properties, WRITE_BUFFER_SIZE).ifPresent(this::setWriteBufferSize);
       ParseUtils.getOptionalInteger(properties, WRITE_BUFFER_PERMITS)
           .ifPresent(this::setWriteBufferPermits);
@@ -638,6 +666,7 @@ public class StorageProperties {
     public StorageProperties build() {
       return new StorageProperties(
           flushOnClose,
+          catalogFieldIndexType,
           writeBufferSize,
           writeBufferPermits,
           writeBufferChunkValuesMax,

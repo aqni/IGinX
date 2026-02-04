@@ -20,6 +20,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.field.FieldIndex;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
@@ -49,7 +50,7 @@ public class Catalog {
   private final FieldIndex fieldIndex;
 
   public Catalog(Shared shared) {
-    this.fieldIndex = new FlatFieldIndex();
+    this.fieldIndex = shared.getStorageProperties().getCatalogFieldIndexType().create();
   }
 
   public List<Field> find(List<String> patterns, TagFilter tagFilter) {
