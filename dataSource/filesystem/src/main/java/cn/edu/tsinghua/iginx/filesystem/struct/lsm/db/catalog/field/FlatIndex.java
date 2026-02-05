@@ -104,7 +104,7 @@ public class FlatIndex implements FieldIndex {
   }
 
   @Override
-  public void delete(List<Field> fields) throws TypeConflictedException {
+  public void remove(List<Field> fields) throws TypeConflictedException {
     for (Field field : fields) {
       FieldFullName key = new FieldFullName(field.getName(), field.getMetadata());
       Types.MinorType existingType = fieldToTypeMap.get(key);

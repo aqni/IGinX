@@ -33,7 +33,7 @@ public interface FieldIndex {
 
   void insert(List<Field> fields) throws TypeConflictedException;
 
-  void delete(List<Field> fields) throws TypeConflictedException;
+  void remove(List<Field> fields) throws TypeConflictedException;
 
   void clear();
 }

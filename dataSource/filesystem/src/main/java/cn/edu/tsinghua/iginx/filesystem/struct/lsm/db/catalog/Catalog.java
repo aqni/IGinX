@@ -189,7 +189,7 @@ public class Catalog {
   public void delete(List<Field> fields) throws TypeConflictedException {
     deleteLock.writeLock().lock();
     try {
-      fieldIndex.delete(fields);
+      fieldIndex.remove(fields);
       for (Field field : fields) {
         String fullFieldName = ArrowFields.toFullName(field);
         indexes.remove(fullFieldName);
