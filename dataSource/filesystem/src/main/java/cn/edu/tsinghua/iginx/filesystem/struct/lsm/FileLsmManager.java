@@ -34,7 +34,7 @@ import cn.edu.tsinghua.iginx.filesystem.struct.DataTarget;
 import cn.edu.tsinghua.iginx.filesystem.struct.FileManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Database;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.OneTierDB;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.ArrowFileStorageManager;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.ParquetFileStorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
@@ -62,9 +62,9 @@ public class FileLsmManager implements FileManager {
   public FileLsmManager(Shared shared, Path path) throws IOException {
     this.shared = shared;
     this.path = path;
-    //        StorageManager storageManager = new ParquetFileStorageManager(shared, path); // tpch
+    StorageManager storageManager = new ParquetFileStorageManager(shared, path); // tpch
     //    StorageManager storageManager = new TsFileStorageManager(shared, path); // tsbs
-    StorageManager storageManager = new ArrowFileStorageManager(shared, path); // tpch
+    //    StorageManager storageManager = new ArrowFileStorageManager(shared, path); // tpch
     this.db = new OneTierDB(path.toString(), shared, storageManager);
   }
 
