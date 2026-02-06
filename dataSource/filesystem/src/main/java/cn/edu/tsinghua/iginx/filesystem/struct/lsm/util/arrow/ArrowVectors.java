@@ -21,7 +21,6 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow;
 
 import cn.edu.tsinghua.iginx.engine.physical.storage.domain.ColumnKey;
 import cn.edu.tsinghua.iginx.thrift.DataType;
-import java.util.function.IntPredicate;
 import org.apache.arrow.algorithm.sort.DefaultVectorComparators;
 import org.apache.arrow.algorithm.sort.IndexSorter;
 import org.apache.arrow.algorithm.sort.StableVectorComparator;
@@ -34,6 +33,8 @@ import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.util.TransferPair;
 import org.apache.arrow.vector.util.VectorBatchAppender;
+
+import java.util.function.IntPredicate;
 
 public class ArrowVectors {
 
@@ -113,7 +114,9 @@ public class ArrowVectors {
 
   @SuppressWarnings("unchecked")
   public static <V extends ValueVector> V like(V vector, BufferAllocator allocator) {
-    return (V) vector.getTransferPair(allocator).getTo();
+    V r = (V) vector.getTransferPair(allocator).getTo();
+    r.setInitialCapacity(vector.getValueCount());
+    return r;
   }
 
   public static boolean isStrictlyOrdered(ValueVector vector) {
