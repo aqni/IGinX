@@ -19,29 +19,27 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.chunk.Chunk;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.MemoryTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.AreaFilterScanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Awaitable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import com.google.common.collect.RangeSet;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.util.AutoCloseables;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnegative;
+import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
-import javax.annotation.Nonnegative;
-import javax.annotation.concurrent.ThreadSafe;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.util.AutoCloseables;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @ThreadSafe
 public class MemTableQueue implements NoexceptAutoCloseable {
@@ -112,16 +110,6 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     }
   }
 
-  public void delete(AreaSet<Long, Field> areas) {
-    queueLock.readLock().lock();
-    try {
-      active.delete(areas);
-      archives.values().forEach(archived -> archived.delete(areas));
-    } finally {
-      queueLock.readLock().unlock();
-    }
-  }
-
   private void await() throws InterruptedException {
     pollLock.lock();
     try {
@@ -166,7 +154,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     }
   }
 
-  public void eliminate(long id, Consumer<AreaSet<Long, Field>> commiter)
+  public void eliminate(long id, Consumer<Boolean> commiter)
       throws InterruptedException {
     active.eliminate(id);
 
@@ -174,7 +162,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     try {
       if (archives.containsKey(id)) {
         try (ArchivedMemTable memTable = archives.remove(id)) {
-          commiter.accept(memTable.getDeleted());
+          commiter.accept(false);
         }
         return;
       }
@@ -182,7 +170,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
       queueLock.writeLock().unlock();
     }
 
-    commiter.accept(AreaSet.all());
+    commiter.accept(true);
   }
 
   public MemoryTable snapshot(long id, BufferAllocator allocator) {
@@ -207,13 +195,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
       for (ArchivedMemTable archivedMemTable : archives.values()) {
         try (MemoryTable table = archivedMemTable.snapshot(fields, ranges, allocator)) {
           Scanner<Long, Scanner<String, Object>> scanner = table.scan(innerFields, ranges);
-          AreaSet<Long, Field> deleted = archivedMemTable.getDeleted();
-          if (deleted.isEmpty()) {
-            scanners.add(scanner);
-          } else {
-            AreaSet<Long, String> innerDelete = ArrowFields.toInnerAreas(deleted);
-            scanners.add(new AreaFilterScanner<>(scanner, innerDelete));
-          }
+          scanners.add(scanner);
         }
       }
       active.scan(fields, ranges, allocator, scanners::add);

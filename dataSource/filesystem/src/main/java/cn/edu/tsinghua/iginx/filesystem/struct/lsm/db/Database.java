@@ -36,8 +36,8 @@ public interface Database extends AutoCloseable {
 
   List<Field> schema(List<String> patterns, @Nullable TagFilter tagFilter) throws StorageException;
 
-  void insert(DataView data) throws StorageException;
+  void insert(DataView data) throws StorageException, InterruptedException;
 
   void delete(List<String> patterns, @Nullable TagFilter tagFilter, RangeSet<Long> ranges)
-      throws StorageException;
+      throws StorageException, InterruptedException;
 }

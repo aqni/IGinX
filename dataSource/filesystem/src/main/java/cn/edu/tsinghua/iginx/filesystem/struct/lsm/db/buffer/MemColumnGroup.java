@@ -19,43 +19,30 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.chunk.Chunk;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.chunk.IndexedChunk;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.DedupIterator;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.StableMergeIterator;
 import com.google.common.collect.*;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.util.Preconditions;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.WillCloseWhenClosed;
 import javax.annotation.concurrent.ThreadSafe;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.util.Preconditions;
+import java.util.*;
 
 @ThreadSafe
-public class MemColumn implements AutoCloseable {
+public class MemColumnGroup implements AutoCloseable {
 
   private final int maxChunkValueCount;
-  private final int minChunkValueCount;
   private final List<ChunkSnapshotHolder> compactedChunkSnapshots = new ArrayList<>();
   private final ChunkHolder active;
 
-  public MemColumn(
-      IndexedChunk.Factory factory,
-      BufferAllocator allocator,
-      int maxChunkValueCount,
-      int minChunkValueCount) {
+  public MemColumnGroup(BufferAllocator allocator, int maxChunkValueCount) {
     Preconditions.checkNotNull(allocator);
-    Preconditions.checkNotNull(factory);
     Preconditions.checkArgument(maxChunkValueCount > 0);
-    Preconditions.checkArgument(minChunkValueCount > 0);
-
-    this.active = new ChunkHolder(factory, allocator);
+    this.active = new ChunkHolder(allocator);
     this.maxChunkValueCount = maxChunkValueCount;
-    this.minChunkValueCount = minChunkValueCount;
   }
 
   // TODO: make use of ValueFilter
@@ -91,54 +78,21 @@ public class MemColumn implements AutoCloseable {
   }
 
   public synchronized void store(Chunk.Snapshot snapshot) {
-    int length = snapshot.getValueCount();
-    if (length < minChunkValueCount) {
-      copyStore(snapshot, 0, length);
-    } else {
-      splitStore(snapshot, 0, length);
-    }
-  }
-
-  public synchronized void splitStore(Chunk.Snapshot snapshot, int offset, int length) {
-    int activeValueCount = active.getValueCount();
-    int padding = minChunkValueCount - active.getValueCount();
-    if (activeValueCount > 0) {
-      if (padding > 0) {
-        if (padding >= length) {
-          active.store(snapshot, offset, length);
-          return;
-        }
-        active.store(snapshot, offset, padding);
-        offset += padding;
-        length -= padding;
+    int start = 0;
+    int end = snapshot.getValueCount();
+    while (start < end) {
+      int length = Math.min(end - start, maxChunkValueCount - active.getValueCount());
+      if (length == maxChunkValueCount) {
+        compactedChunkSnapshots.add(active.sorted(snapshot, start, end));
+      } else {
+        active.store(snapshot, start, length);
       }
-      compact();
-    }
-
-    if (length >= minChunkValueCount) {
-      compactedChunkSnapshots.add(active.sorted(snapshot, offset, length));
-    } else {
-      active.store(snapshot, offset, length);
-    }
-  }
-
-  public synchronized void copyStore(Chunk.Snapshot snapshot, int offset, int length) {
-    for (int written = offset; written != length; ) {
-      int free = maxChunkValueCount - active.getValueCount();
-      if (free == 0) {
-        compact();
-      }
-      int toWrite = Math.min(free, length - written);
-      active.store(snapshot, written, toWrite);
-      written += toWrite;
+      start += length;
     }
   }
 
   public synchronized void delete(RangeSet<Long> ranges) {
-    active.delete(ranges);
-    for (ChunkSnapshotHolder snapshot : compactedChunkSnapshots) {
-      snapshot.delete(ranges);
-    }
+    deleted.addAll(ranges);
   }
 
   @Override
@@ -146,11 +100,6 @@ public class MemColumn implements AutoCloseable {
     compactedChunkSnapshots.forEach(ChunkSnapshotHolder::close);
     compactedChunkSnapshots.clear();
     active.close();
-  }
-
-  public synchronized void compact() {
-    active.refresh(compactedChunkSnapshots);
-    active.reset();
   }
 
   public static class Snapshot implements AutoCloseable, Iterable<Map.Entry<Long, Object>> {
@@ -222,50 +171,37 @@ public class MemColumn implements AutoCloseable {
       implements AutoCloseable, Iterable<Map.Entry<Long, Object>> {
 
     private final Chunk.Snapshot snapshot;
-    private RangeSet<Long> mask;
+    private final RangeSet<Long> deleted;
 
     public ChunkSnapshotHolder(@WillCloseWhenClosed Chunk.Snapshot snapshot) {
-      this(snapshot, null);
+      this(snapshot, TreeRangeSet.create());
     }
 
-    private ChunkSnapshotHolder(@WillCloseWhenClosed Chunk.Snapshot snapshot, RangeSet<Long> mask) {
-      Preconditions.checkArgument(snapshot.getValueCount() > 0);
+    private ChunkSnapshotHolder(@WillCloseWhenClosed Chunk.Snapshot snapshot, RangeSet<Long> deleted) {
       this.snapshot = snapshot;
-      if (mask != null) {
-        this.mask = TreeRangeSet.create(mask);
-      } else {
-        this.mask = null;
-      }
-    }
-
-    public boolean isEmpty() {
-      return mask != null && mask.isEmpty();
+      this.deleted = TreeRangeSet.create(deleted);
     }
 
     public void delete(RangeSet<Long> ranges) {
-      if (mask == null) {
+      if (deleted == null) {
         Range<Long> fullRange = getKeyRange(snapshot);
         if (!ranges.intersects(fullRange)) {
           return;
         }
-        mask = TreeRangeSet.create();
-        mask.add(fullRange);
+        deleted = TreeRangeSet.create();
+        deleted.add(fullRange);
       }
-      mask.removeAll(ranges);
+      deleted.removeAll(ranges);
     }
 
     public Range<Long> getKeyRange() {
-      if (mask == null) {
+      if (deleted == null) {
         return getKeyRange(snapshot);
       }
-      if (mask.isEmpty()) {
+      if (deleted.isEmpty()) {
         return Range.closedOpen(0L, 0L);
       }
-      return mask.span();
-    }
-
-    private static Range<Long> getKeyRange(Chunk.Snapshot snapshot) {
-      return Range.closed(snapshot.getKey(0), snapshot.getKey(snapshot.getValueCount() - 1));
+      return deleted.span();
     }
 
     @Override
@@ -274,33 +210,31 @@ public class MemColumn implements AutoCloseable {
     }
 
     public ChunkSnapshotHolder slice(BufferAllocator allocator) {
-      return new ChunkSnapshotHolder(snapshot.slice(allocator), mask);
+      return new ChunkSnapshotHolder(snapshot.slice(allocator), deleted);
     }
 
     public ChunkSnapshotHolder slice() {
-      return new ChunkSnapshotHolder(snapshot.slice(), mask);
+      return new ChunkSnapshotHolder(snapshot.slice(), deleted);
     }
 
     @Override
     @Nonnull
     public Iterator<Map.Entry<Long, Object>> iterator() {
       Iterator<Map.Entry<Long, Object>> iterator = snapshot.iterator();
-      if (mask == null) {
+      if (deleted == null) {
         return iterator;
       }
-      return Iterators.filter(iterator, entry -> mask.contains(entry.getKey()));
+      return Iterators.filter(iterator, entry -> deleted.contains(entry.getKey()));
     }
   }
 
   private static class ChunkHolder implements AutoCloseable {
-    private final IndexedChunk.Factory factory;
     private final BufferAllocator allocator;
-    private IndexedChunk activeChunk = null;
+    private Chunk activeChunk = null;
     private boolean isDirty = false;
     private boolean hasOld = false;
 
-    ChunkHolder(IndexedChunk.Factory factory, BufferAllocator allocator) {
-      this.factory = factory;
+    ChunkHolder(BufferAllocator allocator) {
       this.allocator = allocator;
     }
 
@@ -371,3 +305,36 @@ public class MemColumn implements AutoCloseable {
     }
   }
 }
+
+//@Immutable
+//protected static class IndexedSnapshot extends AppendableChunk.Snapshot {
+//
+//  protected final IntVector indexes;
+//
+//  public IndexedSnapshot(@WillCloseWhenClosed AppendableChunk.Snapshot snapshot, @WillCloseWhenClosed IntVector indexes) {
+//    super(snapshot.keyVector, snapshot.valueVectors);
+//    this.indexes = indexes;
+//    Preconditions.checkArgument(snapshot.keyVector.getMinorType() == Types.MinorType.BIGINT);
+//    Preconditions.checkArgument(!indexes.getField().isNullable());
+//  }
+//
+//  @Override
+//  public void close() {
+//    super.close();
+//    indexes.close();
+//  }
+//
+//  protected IntVector indexOf(AppendableChunk.Snapshot snapshot, BufferAllocator allocator) {
+//    if (deletedRangeSet.get(0).isEmpty()) {
+//      if (ArrowVectors.isStrictlyOrdered(snapshot.keyVector)) {
+//        return null;
+//      }
+//    }
+//
+//    IntVector indexes = ArrowVectors.stableSortIndexes(snapshot.keyVector, allocator);
+//    ArrowVectors.dedupSortedIndexes(snapshot.keyVector, indexes);
+//    if (!deletedRangeSet.get(0).isEmpty()) {
+//      ArrowVectors.filter(indexes, i -> !isDeleted(snapshot, i));
+//    }
+//    return indexes;
+//  }

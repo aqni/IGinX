@@ -20,7 +20,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemColumn;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemColumnGroup;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.TagKVUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.*;
@@ -42,12 +42,12 @@ import org.slf4j.LoggerFactory;
 public class MemoryTable implements Table, NoexceptAutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(MemoryTable.class);
 
-  private final LinkedHashMap<Field, MemColumn.Snapshot> columns;
+  private final LinkedHashMap<Field, MemColumnGroup.Snapshot> columns;
   private final Map<String, Field> fieldMap = new HashMap<>();
   private final SingleCache<StorageManager.TableMeta> meta =
       new SingleCache<>(() -> new MemoryTableMeta(getSchema(), getRanges(), getCounts()));
 
-  public MemoryTable(@WillCloseWhenClosed LinkedHashMap<Field, MemColumn.Snapshot> columns) {
+  public MemoryTable(@WillCloseWhenClosed LinkedHashMap<Field, MemColumnGroup.Snapshot> columns) {
     this.columns = new LinkedHashMap<>(columns);
     for (Field field : columns.keySet()) {
       fieldMap.put(getFieldString(field), field);
@@ -85,7 +85,7 @@ public class MemoryTable implements Table, NoexceptAutoCloseable {
   }
 
   private Range<Long> getRange(Field field) {
-    MemColumn.Snapshot snapshot = columns.get(field);
+    MemColumnGroup.Snapshot snapshot = columns.get(field);
     RangeSet<Long> ranges = snapshot.getRanges();
     if (ranges.isEmpty()) {
       return Range.closed(0L, 0L);
@@ -117,28 +117,28 @@ public class MemoryTable implements Table, NoexceptAutoCloseable {
         continue;
       }
       Field arrowField = fieldMap.get(field);
-      MemColumn.Snapshot snapshot = this.columns.get(arrowField);
+      MemColumnGroup.Snapshot snapshot = this.columns.get(arrowField);
       columns.put(field, scan(snapshot, ranges));
     }
     return new ColumnUnionRowScanner<>(columns);
   }
 
-  private Scanner<Long, Object> scan(MemColumn.Snapshot snapshot, RangeSet<Long> ranges) {
+  private Scanner<Long, Object> scan(MemColumnGroup.Snapshot snapshot, RangeSet<Long> ranges) {
     if (ranges.isEmpty()) {
       return new EmptyScanner<>();
     }
-    MemColumn.Snapshot sliced = snapshot.slice(ranges);
+    MemColumnGroup.Snapshot sliced = snapshot.slice(ranges);
     return new ListenCloseScanner<>(new IteratorScanner<>(sliced.iterator()), sliced::close);
   }
 
   @Override
   public void close() {
-    columns.values().forEach(MemColumn.Snapshot::close);
+    columns.values().forEach(MemColumnGroup.Snapshot::close);
     columns.clear();
   }
 
   public MemoryTable subTable(List<Field> fields) {
-    LinkedHashMap<Field, MemColumn.Snapshot> subColumns = new LinkedHashMap<>();
+    LinkedHashMap<Field, MemColumnGroup.Snapshot> subColumns = new LinkedHashMap<>();
     for (Field field : fields) {
       subColumns.put(field, columns.get(field));
     }

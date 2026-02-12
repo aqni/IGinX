@@ -19,8 +19,6 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.chunk.IndexedChunk;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.chunk.IndexedChunkType;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.conflict.ConflictResolverType;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.field.FieldIndexType;
 import java.time.Duration;
@@ -35,11 +33,8 @@ public class StorageProperties {
   private final FieldIndexType catalogFieldIndexType;
   private final long writeBufferSize;
   private final int writeBufferChunkValuesMax;
-  private final int writeBufferChunkValuesMin;
   private final ConflictResolverType writeBufferConflictResolverType;
-  private final IndexedChunkType writeBufferChunkType;
   private final Duration writeBufferTimeout;
-  private final long writeBatchSize;
   private final int compactPermits;
   private final int writeBufferPermits;
   private final long cacheCapacity;
@@ -59,11 +54,8 @@ public class StorageProperties {
       long writeBufferSize,
       int writeBufferPermits,
       int writeBufferChunkValuesMax,
-      int writeBufferChunkValuesMin,
       ConflictResolverType writeBufferConflictResolverType,
-      IndexedChunkType writeBufferChunkType,
       Duration writeBufferTimeout,
-      long writeBatchSize,
       int compactPermits,
       long cacheCapacity,
       Duration cacheTimeout,
@@ -79,11 +71,8 @@ public class StorageProperties {
     this.catalogFieldIndexType = catalogFieldIndexType;
     this.writeBufferSize = writeBufferSize;
     this.writeBufferChunkValuesMax = writeBufferChunkValuesMax;
-    this.writeBufferChunkValuesMin = writeBufferChunkValuesMin;
     this.writeBufferConflictResolverType = writeBufferConflictResolverType;
-    this.writeBufferChunkType = writeBufferChunkType;
     this.writeBufferTimeout = writeBufferTimeout;
-    this.writeBatchSize = writeBatchSize;
     this.compactPermits = compactPermits;
     this.writeBufferPermits = writeBufferPermits;
     this.cacheCapacity = cacheCapacity;
@@ -145,15 +134,6 @@ public class StorageProperties {
   }
 
   /**
-   * Get the min number of write buffer chunk values
-   *
-   * @return the min number of write buffer chunk values
-   */
-  public int getWriteBufferChunkValuesMin() {
-    return writeBufferChunkValuesMin;
-  }
-
-  /**
    * Get the write buffer conflict resolver type
    *
    * @return the write buffer conflict resolver type
@@ -163,30 +143,12 @@ public class StorageProperties {
   }
 
   /**
-   * Get the write buffer chunk factory
-   *
-   * @return the write buffer chunk factory
-   */
-  public IndexedChunk.Factory getWriteBufferChunkFactory() {
-    return writeBufferChunkType.factory();
-  }
-
-  /**
    * Get the timeout of write buffer to flush
    *
    * @return the timeout of write buffer to flush
    */
   public Duration getWriteBufferTimeout() {
     return writeBufferTimeout;
-  }
-
-  /**
-   * Get the size of write batch in bytes
-   *
-   * @return the size of write batch, bytes
-   */
-  public long getWriteBatchSize() {
-    return writeBatchSize;
   }
 
   /**
@@ -299,10 +261,7 @@ public class StorageProperties {
         .add("writeBufferSize=" + writeBufferSize)
         .add("writeBufferPermits=" + writeBufferPermits)
         .add("writeBufferChunkValuesMax=" + writeBufferChunkValuesMax)
-        .add("writeBufferChunkValuesMin=" + writeBufferChunkValuesMin)
-        .add("writeBufferChunkType=" + writeBufferChunkType)
         .add("writeBufferTimeout=" + writeBufferTimeout)
-        .add("writeBatchSize=" + writeBatchSize)
         .add("compactPermits=" + compactPermits)
         .add("cacheCapacity=" + cacheCapacity)
         .add("cacheTimeout=" + cacheTimeout)
@@ -326,9 +285,7 @@ public class StorageProperties {
     public static final String WRITE_BUFFER_CHUNK_VALUES_MAX = "write.buffer.chunk.values.max";
     public static final String WRITE_BUFFER_CHUNK_VALUES_MIN = "write.buffer.chunk.values.min";
     public static final String WRITE_BUFFER_CONFLICT_RESOLVER = "write.buffer.conflictResolver";
-    public static final String WRITE_BUFFER_CHUNK_INDEX = "write.buffer.chunk.index";
     public static final String WRITE_BUFFER_TIMEOUT = "write.buffer.timeout";
-    public static final String WRITE_BATCH_SIZE = "write.batch.size";
     public static final String COMPACT_PERMITS = "compact.permits";
     public static final String CACHE_CAPACITY = "cache.capacity";
     public static final String CACHE_TIMEOUT = "cache.timeout";
@@ -346,11 +303,8 @@ public class StorageProperties {
     private long writeBufferSize = 100 * 1024 * 1024; // BYTE
     private int writeBufferPermits = 2;
     private int writeBufferChunkValuesMax = BaseValueVector.INITIAL_VALUE_ALLOCATION;
-    private int writeBufferChunkValuesMin = BaseValueVector.INITIAL_VALUE_ALLOCATION;
     private ConflictResolverType writeBufferConflictResolverType = ConflictResolverType.NONE;
-    private IndexedChunkType writeBufferChunkIndex = IndexedChunkType.NONE;
     private Duration writeBufferTimeout = Duration.ofSeconds(0);
-    private long writeBatchSize = 1024 * 1024; // BYTE
     private long cacheCapacity = 16 * 1024 * 1024; // BYTE
     private Duration cacheTimeout = null;
     private boolean cacheSoftValues = false;
@@ -425,18 +379,6 @@ public class StorageProperties {
     }
 
     /**
-     * Set the min number of write buffer chunk values
-     *
-     * @param writeBufferChunkValuesMin the max number of write buffer chunk values
-     * @return this builder
-     */
-    public Builder setWriteBufferChunkValuesMin(int writeBufferChunkValuesMin) {
-      ParseUtils.checkPositive(writeBufferChunkValuesMin);
-      this.writeBufferChunkValuesMin = writeBufferChunkValuesMin;
-      return this;
-    }
-
-    /**
      * Set the write buffer conflict resolver type
      *
      * @param writeBufferConflictResolverType the write buffer conflict resolver type
@@ -449,17 +391,6 @@ public class StorageProperties {
     }
 
     /**
-     * Set the write buffer chunk index
-     *
-     * @param writeBufferChunkIndexName the write buffer chunk index name
-     * @return this builder
-     */
-    public Builder setWriteBufferChunkIndex(String writeBufferChunkIndexName) {
-      this.writeBufferChunkIndex = IndexedChunkType.valueOf(writeBufferChunkIndexName);
-      return this;
-    }
-
-    /**
      * Set the timeout of write buffer to flush
      *
      * @param writeBufferTimeout the timeout of write buffer to flush
@@ -467,18 +398,6 @@ public class StorageProperties {
      */
     public Builder setWriteBufferTimeout(Duration writeBufferTimeout) {
       this.writeBufferTimeout = writeBufferTimeout;
-      return this;
-    }
-
-    /**
-     * Set the size of write batch in bytes
-     *
-     * @param writeBatchSize the size of write batch, bytes
-     * @return this builder
-     */
-    public Builder setWriteBatchSize(long writeBatchSize) {
-      ParseUtils.checkPositive(writeBatchSize);
-      this.writeBatchSize = writeBatchSize;
       return this;
     }
 
@@ -629,15 +548,10 @@ public class StorageProperties {
           .ifPresent(this::setWriteBufferPermits);
       ParseUtils.getOptionalInteger(properties, WRITE_BUFFER_CHUNK_VALUES_MAX)
           .ifPresent(this::setWriteBufferChunkValuesMax);
-      ParseUtils.getOptionalInteger(properties, WRITE_BUFFER_CHUNK_VALUES_MIN)
-          .ifPresent(this::setWriteBufferChunkValuesMin);
       ParseUtils.getOptionalString(properties, WRITE_BUFFER_CONFLICT_RESOLVER)
           .ifPresent(this::setWriteBufferConflictResolverType);
-      ParseUtils.getOptionalString(properties, WRITE_BUFFER_CHUNK_INDEX)
-          .ifPresent(this::setWriteBufferChunkIndex);
       ParseUtils.getOptionalDuration(properties, WRITE_BUFFER_TIMEOUT)
           .ifPresent(this::setWriteBufferTimeout);
-      ParseUtils.getOptionalLong(properties, WRITE_BATCH_SIZE).ifPresent(this::setWriteBatchSize);
       ParseUtils.getOptionalInteger(properties, COMPACT_PERMITS)
           .ifPresent(this::setCompactorPermits);
       ParseUtils.getOptionalLong(properties, CACHE_CAPACITY).ifPresent(this::setCacheCapacity);
@@ -670,11 +584,8 @@ public class StorageProperties {
           writeBufferSize,
           writeBufferPermits,
           writeBufferChunkValuesMax,
-          writeBufferChunkValuesMin,
           writeBufferConflictResolverType,
-          writeBufferChunkIndex,
           writeBufferTimeout,
-          writeBatchSize,
           compactPermits,
           cacheCapacity,
           cacheTimeout,

@@ -20,7 +20,8 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.conflict;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.chunk.Chunk;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.Chunk;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -60,6 +61,6 @@ public class ThreadPoolResolver implements ConflictResolver {
   }
 
   private ExecutorService getExecutor(Chunk.Snapshot data) {
-    return getExecutor(data.getField());
+    return getExecutor(data.getSchema());
   }
 }

@@ -19,7 +19,6 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.chunk.Chunk;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.conflict.ConflictResolver;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.MemoryTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
@@ -92,10 +91,8 @@ public class ActiveMemTable {
         activeAllocator = allocator.newChildAllocator(name, 0, Long.MAX_VALUE);
         activeTable =
             new MemTable(
-                shared.getStorageProperties().getWriteBufferChunkFactory(),
                 activeAllocator,
-                shared.getStorageProperties().getWriteBufferChunkValuesMax(),
-                shared.getStorageProperties().getWriteBufferChunkValuesMin());
+                shared.getStorageProperties().getWriteBufferChunkValuesMax());
       }
     } finally {
       createLock.unlock();
@@ -199,17 +196,6 @@ public class ActiveMemTable {
       latch.await();
     }
     return latch != null;
-  }
-
-  public void delete(AreaSet<Long, Field> areas) {
-    switchTableLock.readLock().lock();
-    try {
-      if (activeTable != null) {
-        activeTable.delete(areas);
-      }
-    } finally {
-      switchTableLock.readLock().unlock();
-    }
   }
 
   public void reset() {

@@ -77,48 +77,6 @@ public class ArrowVectors {
     return (BigIntVector) nonnull(ColumnKey.KEY, DataType.LONG, allocator);
   }
 
-  public static <V extends ValueVector> V slice(V vector) {
-    return slice(vector, 0, vector.getValueCount());
-  }
-
-  public static <V extends ValueVector> V slice(V vector, BufferAllocator allocator) {
-    return slice(vector, 0, vector.getValueCount(), allocator);
-  }
-
-  public static <V extends ValueVector> V slice(V vector, int start, int valueCount) {
-    return slice(vector, start, valueCount, vector.getAllocator());
-  }
-
-  @SuppressWarnings("unchecked")
-  public static <V extends ValueVector> V slice(
-      V vector, int start, int length, BufferAllocator allocator) {
-    if (length == 0) {
-      // splitAndTransfer 不能处理 length == 0 的情况
-      return like(vector, allocator);
-    }
-    TransferPair transferPair = vector.getTransferPair(allocator);
-    transferPair.splitAndTransfer(start, length);
-    // TODO: splitAndTransferValidityBuffer() 不能正确地对 ValidityBuffer 进行跨 allocator 的 transfer
-    //       所以这里只好先 splitAndTransfer 然后再 transfer，个人猜测这是一个需要汇报给 Arrow 的 bug
-    try (V slice = (V) transferPair.getTo()) {
-      return transfer(slice, allocator);
-    }
-  }
-
-  @SuppressWarnings("unchecked")
-  public static <V extends ValueVector> V transfer(V vector, BufferAllocator allocator) {
-    TransferPair transferPair = vector.getTransferPair(allocator);
-    transferPair.transfer();
-    return (V) transferPair.getTo();
-  }
-
-  @SuppressWarnings("unchecked")
-  public static <V extends ValueVector> V like(V vector, BufferAllocator allocator) {
-    V r = (V) vector.getTransferPair(allocator).getTo();
-    r.setInitialCapacity(vector.getValueCount());
-    return r;
-  }
-
   public static boolean isStrictlyOrdered(ValueVector vector) {
     VectorValueComparator<ValueVector> comparator =
         DefaultVectorComparators.createDefaultComparator(vector);
@@ -179,13 +137,6 @@ public class ArrowVectors {
       unique++;
     }
     indexes.setValueCount(unique);
-  }
-
-  public static void append(ValueVector to, ValueVector from) {
-    if (to.getValueCount() == 0) {
-      to.allocateNew();
-    }
-    VectorBatchAppender.batchAppend(to, from);
   }
 
   public static void collect(IntVector indexes, Iterable<Integer> values) {

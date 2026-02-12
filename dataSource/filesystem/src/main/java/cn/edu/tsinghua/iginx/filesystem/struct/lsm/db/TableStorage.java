@@ -28,21 +28,23 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.MemoryTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.StreamSupport;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class TableStorage implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(TableStorage.class);
@@ -84,35 +86,21 @@ public class TableStorage implements AutoCloseable {
     }
   }
 
-  public String getTableName(long sqn, String suffix) {
-    return String.format("%019d-%s", sqnBase + sqn, suffix);
-  }
-
-  public List<String> flush(long sqn, String suffix, MemoryTable table)
-      throws InterruptedException {
-    if (table.isEmpty()) {
-      return Collections.emptyList();
-    }
-    String name = getTableName(sqn, suffix);
+  public String flush(long sqn, MemoryTable table) throws IOException, StorageException {
+    String name = String.format("%019d", sqnBase + sqn);
     StorageManager.TableMeta meta = table.getMeta();
     try (Scanner<Long, Scanner<String, Object>> scanner =
-        table.scan(meta.getSchema().keySet(), ImmutableRangeSet.of(Range.all()))) {
+             table.scan(meta.getSchema().keySet(), ImmutableRangeSet.of(Range.all()))) {
       storageManager.flush(name, meta, scanner);
-    } catch (IOException | StorageException e) {
-      LOGGER.error("flush table {} failed", name, e);
     }
-    return Collections.singletonList(name);
+    return name;
   }
 
-  public void commit(String table, AreaSet<Long, Field> tombstone) {
-    AreaSet<Long, String> innerTombstone = ArrowFields.toInnerAreas(tombstone);
+  public void commit(String table, boolean toRemove) {
     try {
-      if (innerTombstone.isAll()) {
+      if (toRemove) {
         storageManager.delete(table);
         return;
-      }
-      if (!innerTombstone.isEmpty()) {
-        storageManager.delete(table, innerTombstone);
       }
       StorageManager.TableMeta meta = storageManager.readMeta(table);
       catalog.addTable(table, meta);
@@ -142,7 +130,8 @@ public class TableStorage implements AutoCloseable {
   }
 
   @Override
-  public void close() {}
+  public void close() {
+  }
 
   public DataBuffer<Long, String, Object> query(
       Set<String> fields, RangeSet<Long> ranges, Filter filter)

@@ -35,9 +35,7 @@ import org.apache.arrow.vector.types.pojo.Field;
 public class ArchivedMemTable implements NoexceptAutoCloseable {
   private final MemTable memTable;
   private final Collection<NoexceptAutoCloseable> onClose;
-  private final AreaSet<Long, Field> deleted = new AreaSet<>();
   private final CountDownLatch latch = new CountDownLatch(1);
-  private boolean snapshot = false;
 
   public ArchivedMemTable(
       @WillCloseWhenClosed MemTable memTable,
@@ -47,27 +45,14 @@ public class ArchivedMemTable implements NoexceptAutoCloseable {
   }
 
   public synchronized MemoryTable snapshot(BufferAllocator allocator) {
-    snapshot = true;
     memTable.compact();
     return memTable.snapshot(allocator);
   }
 
   public synchronized MemoryTable snapshot(
       List<Field> fields, RangeSet<Long> ranges, BufferAllocator allocator) {
-    snapshot = true;
     memTable.compact();
     return memTable.snapshot(fields, ranges, allocator);
-  }
-
-  public synchronized AreaSet<Long, Field> getDeleted() {
-    return AreaSet.create(deleted);
-  }
-
-  public synchronized void delete(AreaSet<Long, Field> ranges) {
-    memTable.delete(ranges);
-    if (snapshot) {
-      deleted.addAll(ranges);
-    }
   }
 
   public void waitUntilClosed() throws InterruptedException {
