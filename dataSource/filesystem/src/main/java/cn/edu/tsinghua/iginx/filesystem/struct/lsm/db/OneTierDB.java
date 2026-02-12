@@ -28,6 +28,7 @@ import cn.edu.tsinghua.iginx.filesystem.common.Filters;
 import cn.edu.tsinghua.iginx.filesystem.common.Patterns;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.Chunk;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.DataBuffer;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemColumnGroup;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.Catalog;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
@@ -38,8 +39,7 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseables;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
-import com.google.common.collect.Range;
-import com.google.common.collect.RangeSet;
+import com.google.common.collect.*;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.AutoCloseables;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -119,6 +119,7 @@ public class OneTierDB implements Database {
     } finally {
       deleteLock.readLock().unlock();
     }
+
   }
 
   @Override

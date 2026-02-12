@@ -19,322 +19,212 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.DedupIterator;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.iterator.StableMergeIterator;
-import com.google.common.collect.*;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
+import com.google.common.collect.Range;
+import com.google.common.collect.RangeSet;
+import it.unimi.dsi.fastutil.longs.LongObjectImmutablePair;
+import it.unimi.dsi.fastutil.shorts.ShortArrays;
+import it.unimi.dsi.fastutil.shorts.ShortComparator;
+import it.unimi.dsi.fastutil.shorts.ShortImmutableList;
+import it.unimi.dsi.fastutil.shorts.ShortList;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.Preconditions;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import javax.annotation.WillCloseWhenClosed;
 import javax.annotation.concurrent.ThreadSafe;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 @ThreadSafe
-public class MemColumnGroup implements AutoCloseable {
+public class MemColumnGroup implements NoexceptAutoCloseable {
 
   private final int maxChunkValueCount;
-  private final List<ChunkSnapshotHolder> compactedChunkSnapshots = new ArrayList<>();
-  private final ChunkHolder active;
+  private final BufferAllocator allocator;
+  private final List<SortedChunkSnapshot> snapshots = new ArrayList<>();
+  private Chunk active = null;
+  private SortedChunkSnapshot activeChunkSnapshot = null;
 
   public MemColumnGroup(BufferAllocator allocator, int maxChunkValueCount) {
     Preconditions.checkNotNull(allocator);
     Preconditions.checkArgument(maxChunkValueCount > 0);
-    this.active = new ChunkHolder(allocator);
+    this.allocator = allocator;
     this.maxChunkValueCount = maxChunkValueCount;
   }
 
-  // TODO: make use of ValueFilter
-  public synchronized Snapshot snapshot(RangeSet<Long> ranges, BufferAllocator allocator) {
-    active.refresh(compactedChunkSnapshots);
-    return createSnapshot(ranges, compactedChunkSnapshots, allocator);
-  }
-
   public synchronized Snapshot snapshot(BufferAllocator allocator) {
-    return snapshot(ImmutableRangeSet.of(Range.all()), allocator);
-  }
-
-  private static Snapshot createSnapshot(
-      RangeSet<Long> ranges,
-      List<ChunkSnapshotHolder> snapshotHolders,
-      @Nullable BufferAllocator allocator) {
-    List<ChunkSnapshotHolder> snapshots = new ArrayList<>();
-    for (ChunkSnapshotHolder snapshot : snapshotHolders) {
-      ChunkSnapshotHolder filtered;
-      if (allocator != null) {
-        filtered = snapshot.slice(allocator);
-      } else {
-        filtered = snapshot.slice();
+    List<SortedChunkSnapshot> chunkSnapshots = new ArrayList<>(snapshots);
+    if (active != null) {
+      if (activeChunkSnapshot == null) {
+        try (Chunk.Snapshot activeSnapshot = active.snapshot(allocator)) {
+          activeChunkSnapshot = new SortedChunkSnapshot(activeSnapshot, allocator);
+        }
       }
-      filtered.delete(ranges.complement());
-      if (filtered.isEmpty()) {
-        filtered.close();
-      } else {
-        snapshots.add(filtered);
-      }
+      chunkSnapshots.add(activeChunkSnapshot);
     }
-    return new Snapshot(snapshots);
+    return new Snapshot(chunkSnapshots, allocator);
   }
 
-  public synchronized void store(Chunk.Snapshot snapshot) {
+  public synchronized void append(Chunk.Snapshot snapshot) {
     int start = 0;
     int end = snapshot.getValueCount();
     while (start < end) {
-      int length = Math.min(end - start, maxChunkValueCount - active.getValueCount());
-      if (length == maxChunkValueCount) {
-        compactedChunkSnapshots.add(active.sorted(snapshot, start, end));
-      } else {
-        active.store(snapshot, start, length);
+      int activeValueCount = active == null ? 0 : active.getValueCount();
+      int length = Math.min(end - start, maxChunkValueCount - activeValueCount);
+      try (Chunk.Snapshot slice = snapshot.slice(start, length, allocator)) {
+        if (length == maxChunkValueCount) {
+          snapshots.add(new SortedChunkSnapshot(slice, allocator));
+        } else {
+          if (active == null) {
+            active = new Chunk(slice, allocator);
+          }
+          active.append(slice);
+          if (activeChunkSnapshot != null) {
+            activeChunkSnapshot.close();
+            activeChunkSnapshot = null;
+          }
+          if (active.getValueCount() >= maxChunkValueCount) {
+            try (Chunk.Snapshot activeSnapshot = active.snapshot(allocator)) {
+              snapshots.add(new SortedChunkSnapshot(activeSnapshot, allocator));
+            }
+            active.close();
+            active = null;
+          }
+        }
       }
       start += length;
     }
   }
 
-  public synchronized void delete(RangeSet<Long> ranges) {
-    deleted.addAll(ranges);
-  }
-
   @Override
   public synchronized void close() {
-    compactedChunkSnapshots.forEach(ChunkSnapshotHolder::close);
-    compactedChunkSnapshots.clear();
-    active.close();
+    snapshots.forEach(SortedChunkSnapshot::close);
+    snapshots.clear();
+    if (active != null) {
+      active.close();
+    }
+    if (activeChunkSnapshot != null) {
+      activeChunkSnapshot.close();
+    }
   }
 
-  public static class Snapshot implements AutoCloseable, Iterable<Map.Entry<Long, Object>> {
+  public static class Snapshot implements NoexceptAutoCloseable {
 
-    private final List<ChunkSnapshotHolder> snapshots;
+    private final List<SortedChunkSnapshot> chunks;
 
-    Snapshot(@WillCloseWhenClosed List<ChunkSnapshotHolder> snapshots) {
-      this.snapshots = Preconditions.checkNotNull(snapshots);
+    Snapshot(List<SortedChunkSnapshot> compactedChunkSnapshots, BufferAllocator allocator) {
+      this.chunks = compactedChunkSnapshots.stream().map(s -> s.slice(0, s.getValueCount(), allocator)).collect(Collectors.toList());
     }
 
-    public Snapshot slice(RangeSet<Long> ranges, BufferAllocator allocator) {
-      return createSnapshot(ranges, snapshots, allocator);
+    public Snapshot slice(BufferAllocator allocator) {
+      return new Snapshot(chunks, allocator);
     }
 
-    public Snapshot slice(RangeSet<Long> ranges) {
-      return createSnapshot(ranges, snapshots, null);
+    public Iterator<LongObjectImmutablePair<Object[]>> scan(int[] columnIndexes, RangeSet<Long> ranges) {
+      List<Iterator<LongObjectImmutablePair<BiConsumer<int[], Object[]>>>> iterators = chunks.stream()
+          .map(c -> c.iterator(ranges))
+          .collect(Collectors.toList());
+
+
+
     }
 
     @Override
     public void close() {
-      snapshots.forEach(ChunkSnapshotHolder::close);
-      snapshots.clear();
-    }
-
-    @Override
-    @Nonnull
-    public Iterator<Map.Entry<Long, Object>> iterator() {
-      Iterator<Map.Entry<Long, Object>> mergedIterator =
-          new StableMergeIterator<>(getIterators(), Map.Entry.comparingByKey());
-      return new DedupIterator<>(mergedIterator, Map.Entry::getKey);
-    }
-
-    private List<Iterator<Map.Entry<Long, Object>>> getIterators() {
-      // TODO: 对 Iterator 进行 concat 减少 StableMergeIterator 内 queue 中的项数
-      //       目前使用贪心算法，可能不是最优解
-      List<RangeMap<Long, Integer>> rangeGroups = new ArrayList<>();
-      RangeMap<Long, Integer> currentRanges = TreeRangeMap.create();
-      for (int i = 0; i < snapshots.size(); i++) {
-        ChunkSnapshotHolder snapshot = snapshots.get(i);
-        Range<Long> keyRange = snapshot.getKeyRange();
-        if (currentRanges.subRangeMap(keyRange).asMapOfRanges().isEmpty()) {
-          currentRanges.put(keyRange, i);
-        } else {
-          rangeGroups.add(currentRanges);
-          currentRanges = TreeRangeMap.create();
-          currentRanges.put(keyRange, i);
-        }
-      }
-      rangeGroups.add(currentRanges);
-      List<Iterator<Map.Entry<Long, Object>>> iterators = new ArrayList<>();
-      for (RangeMap<Long, Integer> rangeMap : rangeGroups) {
-        List<Iterator<Map.Entry<Long, Object>>> groupIterators = new ArrayList<>();
-        for (int i : rangeMap.asMapOfRanges().values()) {
-          groupIterators.add(snapshots.get(i).iterator());
-        }
-        iterators.add(Iterators.concat(groupIterators.iterator()));
-      }
-      return iterators;
-    }
-
-    public RangeSet<Long> getRanges() {
-      RangeSet<Long> range = TreeRangeSet.create();
-      snapshots.forEach(snapshot -> range.add(snapshot.getKeyRange()));
-      return range;
+      chunks.forEach(SortedChunkSnapshot::close);
+      chunks.clear();
     }
   }
 
-  private static class ChunkSnapshotHolder
-      implements AutoCloseable, Iterable<Map.Entry<Long, Object>> {
+  private static class SortedChunkSnapshot implements NoexceptAutoCloseable {
 
     private final Chunk.Snapshot snapshot;
-    private final RangeSet<Long> deleted;
+    private final ShortList index;
 
-    public ChunkSnapshotHolder(@WillCloseWhenClosed Chunk.Snapshot snapshot) {
-      this(snapshot, TreeRangeSet.create());
+    private SortedChunkSnapshot(Chunk.Snapshot snapshot, ShortList index, BufferAllocator allocator) {
+      Preconditions.checkArgument(snapshot.getValueCount() > 0);
+      Preconditions.checkArgument(snapshot.getValueCount() <= Short.MAX_VALUE);
+      this.snapshot = snapshot.slice(0, snapshot.getValueCount(), allocator);
+      this.index = index;
     }
 
-    private ChunkSnapshotHolder(@WillCloseWhenClosed Chunk.Snapshot snapshot, RangeSet<Long> deleted) {
-      this.snapshot = snapshot;
-      this.deleted = TreeRangeSet.create(deleted);
+    SortedChunkSnapshot(Chunk.Snapshot snapshot, BufferAllocator allocator) {
+      this(snapshot, indexOf(snapshot), allocator);
     }
 
-    public void delete(RangeSet<Long> ranges) {
-      if (deleted == null) {
-        Range<Long> fullRange = getKeyRange(snapshot);
-        if (!ranges.intersects(fullRange)) {
-          return;
+    private static ShortList indexOf(Chunk.Snapshot snapshot) {
+      int valueCount = snapshot.getValueCount();
+      short[] index = new short[valueCount];
+      for (short i = 0; i < valueCount; i++) {
+        index[i] = i;
+      }
+      ShortArrays.stableSort(index, ShortComparator.comparingLong(snapshot::getKey));
+      return new ShortImmutableList(index);
+    }
+
+    public int getValueCount() {
+      return index.size();
+    }
+
+    public SortedChunkSnapshot slice(int startIndex, int length, BufferAllocator allocator) {
+      return new SortedChunkSnapshot(snapshot, index.subList(startIndex, startIndex + length), allocator);
+    }
+
+    Iterator<LongObjectImmutablePair<BiConsumer<int[], Object[]>>> iterator(RangeSet<Long> ranges) {
+      Range<Long> chunkRange = Range.closed(getKey(0), getKey(getValueCount() - 1));
+      if (!ranges.intersects(chunkRange)) {
+        return Collections.emptyIterator();
+      }
+      return new Iterator<LongObjectImmutablePair<BiConsumer<int[], Object[]>>>() {
+
+        private int nextIndex = 0;
+        private LongObjectImmutablePair<BiConsumer<int[], Object[]>> nextValue;
+
+        {
+          fetchNext();
         }
-        deleted = TreeRangeSet.create();
-        deleted.add(fullRange);
-      }
-      deleted.removeAll(ranges);
+
+        @Override
+        public boolean hasNext() {
+          return nextValue != null;
+        }
+
+        @Override
+        public LongObjectImmutablePair<BiConsumer<int[], Object[]>> next() {
+          LongObjectImmutablePair<BiConsumer<int[], Object[]>> result = nextValue;
+          fetchNext();
+          return result;
+        }
+
+        private void fetchNext() {
+          while (nextIndex < getValueCount()) {
+            int originIndex = getOriginIndex(nextIndex);
+            nextIndex++;
+            long key = snapshot.getKey(originIndex);
+            if (ranges.contains(key)) {
+              BiConsumer<int[], Object[]> value = (columnIndexes, row) -> snapshot.fillRow(originIndex, columnIndexes, row);
+              nextValue = new LongObjectImmutablePair<>(key, value);
+              return;
+            }
+          }
+          nextValue = null;
+        }
+      };
     }
 
-    public Range<Long> getKeyRange() {
-      if (deleted == null) {
-        return getKeyRange(snapshot);
-      }
-      if (deleted.isEmpty()) {
-        return Range.closedOpen(0L, 0L);
-      }
-      return deleted.span();
+    private long getKey(int index) {
+      return snapshot.getKey(getOriginIndex(index));
+    }
+
+    private int getOriginIndex(int index) {
+      return this.index.getShort(index);
     }
 
     @Override
     public void close() {
       snapshot.close();
     }
-
-    public ChunkSnapshotHolder slice(BufferAllocator allocator) {
-      return new ChunkSnapshotHolder(snapshot.slice(allocator), deleted);
-    }
-
-    public ChunkSnapshotHolder slice() {
-      return new ChunkSnapshotHolder(snapshot.slice(), deleted);
-    }
-
-    @Override
-    @Nonnull
-    public Iterator<Map.Entry<Long, Object>> iterator() {
-      Iterator<Map.Entry<Long, Object>> iterator = snapshot.iterator();
-      if (deleted == null) {
-        return iterator;
-      }
-      return Iterators.filter(iterator, entry -> deleted.contains(entry.getKey()));
-    }
-  }
-
-  private static class ChunkHolder implements AutoCloseable {
-    private final BufferAllocator allocator;
-    private Chunk activeChunk = null;
-    private boolean isDirty = false;
-    private boolean hasOld = false;
-
-    ChunkHolder(BufferAllocator allocator) {
-      this.allocator = allocator;
-    }
-
-    public int getValueCount() {
-      return activeChunk == null ? 0 : activeChunk.getValueCount();
-    }
-
-    public ChunkSnapshotHolder sorted(Chunk.Snapshot snapshot, int offset, int length) {
-      Chunk.Snapshot sorted = factory.sorted(snapshot.slice(offset, length, allocator), allocator);
-      return new ChunkSnapshotHolder(sorted);
-    }
-
-    public void store(Chunk.Snapshot data) {
-      if (data.getValueCount() == 0) {
-        return;
-      }
-      if (activeChunk == null) {
-        activeChunk = factory.wrap(data, allocator);
-      }
-      activeChunk.store(data);
-      isDirty = true;
-    }
-
-    public void store(Chunk.Snapshot snapshot, int offset, int length) {
-      try (Chunk.Snapshot slice = snapshot.slice(offset, length, allocator)) {
-        store(slice);
-      }
-    }
-
-    public void delete(RangeSet<Long> ranges) {
-      if (activeChunk != null) {
-        activeChunk.delete(ranges);
-      }
-    }
-
-    public void refresh(List<ChunkSnapshotHolder> compactedChunkSnapshots) {
-      if (!isDirty) {
-        return;
-      }
-      isDirty = false;
-
-      if (hasOld) {
-        int offset = compactedChunkSnapshots.size() - 1;
-        compactedChunkSnapshots.remove(offset).close();
-      }
-
-      Chunk.Snapshot snapshot = activeChunk.snapshot(allocator);
-      if (snapshot.getValueCount() > 0) {
-        compactedChunkSnapshots.add(new ChunkSnapshotHolder(snapshot));
-        hasOld = true;
-      } else {
-        snapshot.close();
-        reset();
-      }
-    }
-
-    public void reset() {
-      if (activeChunk != null) {
-        activeChunk.close();
-        activeChunk = null;
-      }
-      isDirty = false;
-      hasOld = false;
-    }
-
-    public void close() {
-      reset();
-    }
   }
 }
-
-//@Immutable
-//protected static class IndexedSnapshot extends AppendableChunk.Snapshot {
-//
-//  protected final IntVector indexes;
-//
-//  public IndexedSnapshot(@WillCloseWhenClosed AppendableChunk.Snapshot snapshot, @WillCloseWhenClosed IntVector indexes) {
-//    super(snapshot.keyVector, snapshot.valueVectors);
-//    this.indexes = indexes;
-//    Preconditions.checkArgument(snapshot.keyVector.getMinorType() == Types.MinorType.BIGINT);
-//    Preconditions.checkArgument(!indexes.getField().isNullable());
-//  }
-//
-//  @Override
-//  public void close() {
-//    super.close();
-//    indexes.close();
-//  }
-//
-//  protected IntVector indexOf(AppendableChunk.Snapshot snapshot, BufferAllocator allocator) {
-//    if (deletedRangeSet.get(0).isEmpty()) {
-//      if (ArrowVectors.isStrictlyOrdered(snapshot.keyVector)) {
-//        return null;
-//      }
-//    }
-//
-//    IntVector indexes = ArrowVectors.stableSortIndexes(snapshot.keyVector, allocator);
-//    ArrowVectors.dedupSortedIndexes(snapshot.keyVector, indexes);
-//    if (!deletedRangeSet.get(0).isEmpty()) {
-//      ArrowVectors.filter(indexes, i -> !isDeleted(snapshot, i));
-//    }
-//    return indexes;
-//  }

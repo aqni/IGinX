@@ -107,7 +107,7 @@ public class MemTable implements AutoCloseable {
           columns.computeIfAbsent(
               data.getSchema(),
               key -> new MemColumnGroup(allocator, maxChunkValueCount));
-      column.store(data);
+      column.append(data);
     } finally {
       lock.readLock().unlock();
     }

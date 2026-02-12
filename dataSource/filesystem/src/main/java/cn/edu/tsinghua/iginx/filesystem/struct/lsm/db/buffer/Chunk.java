@@ -125,9 +125,9 @@ public class Chunk implements NoexceptAutoCloseable {
       return keyVector.get(index);
     }
 
-    public void fillRow(int index, Object[] row) {
-      for (int col = 0; col < valueVectorArray.length; col++) {
-        Object value = valueVectorArray[col].getObject(index);
+    public void fillRow(int index, int[] columnIndexes, Object[] row) {
+      for (int col = 0; col < columnIndexes.length; col++) {
+        Object value = valueVectorArray[columnIndexes[col]].getObject(index);
         if (value != null) {
           row[col] = value;
         }
