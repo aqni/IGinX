@@ -19,7 +19,6 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.conflict.ConflictResolverType;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.field.FieldIndexType;
 import java.time.Duration;
 import java.util.Map;
@@ -33,7 +32,6 @@ public class StorageProperties {
   private final FieldIndexType catalogFieldIndexType;
   private final long writeBufferSize;
   private final int writeBufferChunkValuesMax;
-  private final ConflictResolverType writeBufferConflictResolverType;
   private final Duration writeBufferTimeout;
   private final int compactPermits;
   private final int writeBufferPermits;
@@ -54,7 +52,6 @@ public class StorageProperties {
       long writeBufferSize,
       int writeBufferPermits,
       int writeBufferChunkValuesMax,
-      ConflictResolverType writeBufferConflictResolverType,
       Duration writeBufferTimeout,
       int compactPermits,
       long cacheCapacity,
@@ -71,7 +68,6 @@ public class StorageProperties {
     this.catalogFieldIndexType = catalogFieldIndexType;
     this.writeBufferSize = writeBufferSize;
     this.writeBufferChunkValuesMax = writeBufferChunkValuesMax;
-    this.writeBufferConflictResolverType = writeBufferConflictResolverType;
     this.writeBufferTimeout = writeBufferTimeout;
     this.compactPermits = compactPermits;
     this.writeBufferPermits = writeBufferPermits;
@@ -131,15 +127,6 @@ public class StorageProperties {
    */
   public int getWriteBufferChunkValuesMax() {
     return writeBufferChunkValuesMax;
-  }
-
-  /**
-   * Get the write buffer conflict resolver type
-   *
-   * @return the write buffer conflict resolver type
-   */
-  public ConflictResolverType getWriteBufferConflictResolverType() {
-    return writeBufferConflictResolverType;
   }
 
   /**
@@ -303,7 +290,6 @@ public class StorageProperties {
     private long writeBufferSize = 100 * 1024 * 1024; // BYTE
     private int writeBufferPermits = 2;
     private int writeBufferChunkValuesMax = BaseValueVector.INITIAL_VALUE_ALLOCATION;
-    private ConflictResolverType writeBufferConflictResolverType = ConflictResolverType.NONE;
     private Duration writeBufferTimeout = Duration.ofSeconds(0);
     private long cacheCapacity = 16 * 1024 * 1024; // BYTE
     private Duration cacheTimeout = null;
@@ -375,18 +361,6 @@ public class StorageProperties {
     public Builder setWriteBufferChunkValuesMax(int writeBufferChunkValuesMax) {
       ParseUtils.checkPositive(writeBufferChunkValuesMax);
       this.writeBufferChunkValuesMax = writeBufferChunkValuesMax;
-      return this;
-    }
-
-    /**
-     * Set the write buffer conflict resolver type
-     *
-     * @param writeBufferConflictResolverType the write buffer conflict resolver type
-     * @return this builder
-     */
-    public Builder setWriteBufferConflictResolverType(String writeBufferConflictResolverType) {
-      this.writeBufferConflictResolverType =
-          ConflictResolverType.valueOf(writeBufferConflictResolverType);
       return this;
     }
 
@@ -548,8 +522,6 @@ public class StorageProperties {
           .ifPresent(this::setWriteBufferPermits);
       ParseUtils.getOptionalInteger(properties, WRITE_BUFFER_CHUNK_VALUES_MAX)
           .ifPresent(this::setWriteBufferChunkValuesMax);
-      ParseUtils.getOptionalString(properties, WRITE_BUFFER_CONFLICT_RESOLVER)
-          .ifPresent(this::setWriteBufferConflictResolverType);
       ParseUtils.getOptionalDuration(properties, WRITE_BUFFER_TIMEOUT)
           .ifPresent(this::setWriteBufferTimeout);
       ParseUtils.getOptionalInteger(properties, COMPACT_PERMITS)
@@ -584,7 +556,6 @@ public class StorageProperties {
           writeBufferSize,
           writeBufferPermits,
           writeBufferChunkValuesMax,
-          writeBufferConflictResolverType,
           writeBufferTimeout,
           compactPermits,
           cacheCapacity,

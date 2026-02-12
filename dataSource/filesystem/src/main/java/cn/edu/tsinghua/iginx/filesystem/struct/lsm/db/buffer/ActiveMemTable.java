@@ -19,9 +19,7 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.conflict.ConflictResolver;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.MemoryTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Awaitable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
@@ -46,7 +44,6 @@ public class ActiveMemTable {
 
   private final Shared shared;
   private final BufferAllocator allocator;
-  private final ConflictResolver resolver;
 
   private long activeId = 0;
   private BufferAllocator activeAllocator = null;
@@ -56,7 +53,6 @@ public class ActiveMemTable {
   ActiveMemTable(Shared shared, BufferAllocator allocator) {
     this.shared = Preconditions.checkNotNull(shared);
     this.allocator = Preconditions.checkNotNull(allocator);
-    this.resolver = shared.getStorageProperties().getWriteBufferConflictResolverType().create();
   }
 
   public boolean isOverloaded() {
@@ -74,7 +70,9 @@ public class ActiveMemTable {
     switchTableLock.readLock().lock();
     try {
       createMemtableIfNotExist();
-      resolver.append(activeTable, data);
+      for (Chunk.Snapshot snapshot : data) {
+        activeTable.store(snapshot);
+      }
     } finally {
       switchTableLock.readLock().unlock();
     }
@@ -202,7 +200,6 @@ public class ActiveMemTable {
     flushLock.writeLock().lock();
     switchTableLock.writeLock().lock();
     try {
-      resolver.reset();
       if (activeTable != null) {
         activeTable.close();
         activeAllocator.close();
