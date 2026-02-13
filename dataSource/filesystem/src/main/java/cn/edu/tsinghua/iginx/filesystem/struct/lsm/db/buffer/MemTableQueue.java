@@ -61,7 +61,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     this.active = new ActiveMemTable(shared, this.allocator);
   }
 
-  public void store(Iterable<Chunk.Snapshot> data) throws InterruptedException {
+  public void store(Iterable<MemBatch.Snapshot> data) throws InterruptedException {
     checkSizeLock.lock();
     try {
       if (active.isOverloaded()) {

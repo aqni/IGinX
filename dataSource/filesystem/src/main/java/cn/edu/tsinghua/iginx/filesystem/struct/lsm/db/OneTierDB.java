@@ -26,9 +26,7 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
 import cn.edu.tsinghua.iginx.filesystem.common.Patterns;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.Chunk;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.DataBuffer;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemColumnGroup;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemBatch;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.Catalog;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
@@ -82,7 +80,7 @@ public class OneTierDB implements Database {
     deleteLock.readLock().lock();
     try {
       List<Field> fields = catalog.find(patterns, tagFilter);
-      List<String> columnKeys = fields.stream().map(field -> TagKVUtils.toFullName(ArrowFields.toColumnKey(field))).collect(Collectors.toList());
+      List<String> columnKeys = fields.stream().map(field -> TagKVUtils.toFullName(ArrowFields.toColumnKey(field))).collect(ImmutableList.toImmutableList());
 
       Map<String, Field> schema = new HashMap<>();
       for (int i = 0; i < fields.size(); i++) {
@@ -134,7 +132,7 @@ public class OneTierDB implements Database {
 
   @Override
   public void insert(DataView data) throws StorageException, InterruptedException {
-    List<Chunk.Snapshot> batches = new ArrayList<>();
+    List<MemBatch.Snapshot> batches = new ArrayList<>();
     try (NoexceptAutoCloseable closer = NoexceptAutoCloseables.all(batches)) {
       DataViewWrapper wrappedData = new DataViewWrapper(data);
       if (wrappedData.isRowData()) {
@@ -149,7 +147,7 @@ public class OneTierDB implements Database {
 
       deleteLock.readLock().lock();
       try {
-        List<Field> fields = batches.stream().map(Chunk.Snapshot::getSchema).map(Schema::getFields).flatMap(List::stream).collect(Collectors.toList());
+        List<Field> fields = batches.stream().map(MemBatch.Snapshot::getSchema).map(Schema::getFields).flatMap(List::stream).collect(ImmutableList.toImmutableList());
         catalog.verifyAndInsertFields(fields);
         memTableQueue.store(batches);
         if (shared.getStorageProperties().getWriteBufferTimeout().toMillis() <= 0) {

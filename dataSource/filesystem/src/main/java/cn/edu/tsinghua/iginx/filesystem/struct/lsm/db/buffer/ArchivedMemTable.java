@@ -32,7 +32,7 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.types.pojo.Field;
 
-public class ArchivedMemTable implements NoexceptAutoCloseable {
+class ArchivedMemTable implements NoexceptAutoCloseable {
   private final MemTable memTable;
   private final Collection<NoexceptAutoCloseable> onClose;
   private final CountDownLatch latch = new CountDownLatch(1);

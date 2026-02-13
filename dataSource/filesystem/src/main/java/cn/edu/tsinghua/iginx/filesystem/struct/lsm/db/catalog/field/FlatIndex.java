@@ -24,6 +24,7 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
 import cn.edu.tsinghua.iginx.utils.StringUtils;
+import com.google.common.collect.ImmutableList;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import java.util.ArrayList;
@@ -31,7 +32,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -64,7 +64,7 @@ public class FlatIndex implements FieldIndex {
   @Override
   public List<Field> find(List<String> patterns, @Nullable TagFilter tagFilter) {
     List<Predicate<String>> matchers =
-        patterns.stream().map(StringUtils::toColumnMatcher).collect(Collectors.toList());
+        patterns.stream().map(StringUtils::toColumnMatcher).collect(ImmutableList.toImmutableList());
 
     List<Field> result = new ArrayList<>();
     fieldToTypeMap.forEach(

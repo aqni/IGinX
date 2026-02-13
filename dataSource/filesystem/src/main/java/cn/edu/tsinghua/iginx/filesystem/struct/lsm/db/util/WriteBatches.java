@@ -20,13 +20,15 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util;
 
 import cn.edu.tsinghua.iginx.engine.physical.storage.domain.ColumnKey;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.Chunk;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemBatch;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowTypes;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowVectors;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
+
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +37,6 @@ import java.util.stream.Collectors;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
-import org.apache.arrow.vector.ValueVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.writer.FieldWriter;
 import org.apache.arrow.vector.types.Types;
@@ -85,10 +86,10 @@ public class WriteBatches {
       count++;
     }
 
-    public Chunk.Snapshot build() {
+    public MemBatch.Snapshot build() {
       keyVector.setValueCount(count);
       valueVector.setValueCount(count);
-      return new Chunk.Snapshot(keyVector, VectorSchemaRoot.of(valueVector));
+      return new MemBatch.Snapshot(keyVector, Collections.singletonList(valueVector));
     }
   }
 
@@ -105,7 +106,7 @@ public class WriteBatches {
     return headers;
   }
 
-  public static <V, F, K extends Comparable<K>, T> List<Chunk.Snapshot> recordOfRows(
+  public static <V, F, K extends Comparable<K>, T> List<MemBatch.Snapshot> recordOfRows(
       Scanner<K, Scanner<F, V>> rows, Map<F, T> schema, BufferAllocator allocator)
       throws StorageException {
     Map<String, ChunkSnapshotBuilder> builders = builders(schema, allocator);
@@ -119,10 +120,10 @@ public class WriteBatches {
         builder.append(key, value);
       }
     }
-    return builders.values().stream().map(ChunkSnapshotBuilder::build).collect(Collectors.toList());
+    return builders.values().stream().map(ChunkSnapshotBuilder::build).collect(ImmutableList.toImmutableList());
   }
 
-  public static <V, F, K extends Comparable<K>, T> List<Chunk.Snapshot> recordOfColumns(
+  public static <V, F, K extends Comparable<K>, T> List<MemBatch.Snapshot> recordOfColumns(
       Scanner<F, Scanner<K, V>> batch, Map<F, T> schema, BufferAllocator allocator)
       throws StorageException {
     Map<String, ChunkSnapshotBuilder> builders = builders(schema, allocator);
@@ -136,6 +137,6 @@ public class WriteBatches {
         builder.append(key, value);
       }
     }
-    return builders.values().stream().map(ChunkSnapshotBuilder::build).collect(Collectors.toList());
+    return builders.values().stream().map(ChunkSnapshotBuilder::build).collect(ImmutableList.toImmutableList());
   }
 }

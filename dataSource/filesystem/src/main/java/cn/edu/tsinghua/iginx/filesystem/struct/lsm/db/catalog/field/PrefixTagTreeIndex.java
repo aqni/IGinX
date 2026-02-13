@@ -24,11 +24,11 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.field.tagkv.Compac
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.field.tagkv.TypedCompactInvertedTagsSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
+import com.google.common.collect.ImmutableList;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import lombok.Value;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -80,14 +80,14 @@ public class PrefixTagTreeIndex implements FieldIndex {
   @Override
   public void insert(List<Field> fields) throws TypeConflictedException {
     List<NodeListField> nodeListFields =
-        fields.stream().map(NodeListField::of).collect(Collectors.toList());
+        fields.stream().map(NodeListField::of).collect(ImmutableList.toImmutableList());
     root.add(nodeListFields, enableChildrenSharedTagsSet);
   }
 
   @Override
   public void remove(List<Field> fields) throws TypeConflictedException {
     List<NodeListField> nodeListFields =
-        fields.stream().map(NodeListField::of).collect(Collectors.toList());
+        fields.stream().map(NodeListField::of).collect(ImmutableList.toImmutableList());
     root.remove(nodeListFields);
   }
 
@@ -254,7 +254,7 @@ public class PrefixTagTreeIndex implements FieldIndex {
             childrenFields.stream()
                 .map(NodeListField::getTags)
                 .distinct()
-                .collect(Collectors.toList());
+                .collect(ImmutableList.toImmutableList());
         if (distinctTags.size() == 1) {
           Map<String, String> tags = distinctTags.get(0);
           Map<String, List<NodeListField>> groupedChildFieldsWithoutTags =
@@ -397,7 +397,7 @@ public class PrefixTagTreeIndex implements FieldIndex {
             childrenFields.stream()
                 .map(NodeListField::getTags)
                 .distinct()
-                .collect(Collectors.toList());
+                .collect(ImmutableList.toImmutableList());
         if (distinctTags.size() == 1) {
           Map<String, String> tags = distinctTags.get(0);
           Map<String, List<NodeListField>> groupedChildFieldsWithoutTags =

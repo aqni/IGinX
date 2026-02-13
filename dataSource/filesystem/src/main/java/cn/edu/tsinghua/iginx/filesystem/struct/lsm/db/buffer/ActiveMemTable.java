@@ -36,7 +36,7 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.types.pojo.Field;
 
-public class ActiveMemTable {
+class ActiveMemTable {
 
   private final ReentrantReadWriteLock switchTableLock = new ReentrantReadWriteLock(true);
   private final ReentrantLock createLock = new ReentrantLock(true);
@@ -66,12 +66,12 @@ public class ActiveMemTable {
     }
   }
 
-  public void store(Iterable<Chunk.Snapshot> data) {
+  public void store(Iterable<MemBatch.Snapshot> data) {
     switchTableLock.readLock().lock();
     try {
       createMemtableIfNotExist();
-      for (Chunk.Snapshot snapshot : data) {
-        activeTable.store(snapshot);
+      for (MemBatch.Snapshot snapshot : data) {
+        activeTable.append(snapshot);
       }
     } finally {
       switchTableLock.readLock().unlock();
