@@ -17,11 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.DataBuffer;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.Catalog;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.FileTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.MemoryTable;

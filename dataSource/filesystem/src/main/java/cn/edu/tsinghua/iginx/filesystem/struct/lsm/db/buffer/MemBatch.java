@@ -21,67 +21,61 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
 import com.google.common.collect.ImmutableList;
+import it.unimi.dsi.fastutil.ints.IntLinkedOpenHashSet;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.ValueVector;
-import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Field;
-import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.arrow.vector.util.TransferPair;
 import org.apache.arrow.vector.util.VectorBatchAppender;
-import org.apache.arrow.vector.util.VectorSchemaRootAppender;
 
 import javax.annotation.WillCloseWhenClosed;
 import javax.annotation.concurrent.Immutable;
 import javax.annotation.concurrent.ThreadSafe;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @ThreadSafe
 public final class MemBatch implements NoexceptAutoCloseable {
 
   private final BigIntVector keyVector;
-  private VectorSchemaRoot fieldVectors;
+  private ImmutableList<FieldVector> fieldVectors;
 
   public MemBatch(List<Field> fields, int initialCapacity, BufferAllocator allocator) {
-    this(new BigIntVector("", allocator), VectorSchemaRoot.create(new Schema(fields), allocator));
-
+    this(new BigIntVector("", allocator), fields.stream().map(f -> f.createVector(allocator)).collect(ImmutableList.toImmutableList()));
     this.keyVector.setInitialCapacity(initialCapacity);
-    for (FieldVector valueVector : fieldVectors.getFieldVectors()) {
+    for (FieldVector valueVector : fieldVectors) {
       valueVector.setInitialCapacity(initialCapacity);
     }
   }
 
-  private MemBatch(@WillCloseWhenClosed BigIntVector keyVector, @WillCloseWhenClosed VectorSchemaRoot fieldVectors) {
+  private MemBatch(@WillCloseWhenClosed BigIntVector keyVector, @WillCloseWhenClosed ImmutableList<FieldVector> fieldVectors) {
     this.keyVector = keyVector;
     this.fieldVectors = fieldVectors;
   }
 
-  public synchronized MemBatch split(List<Field> fields, BufferAllocator allocator) {
+  public synchronized MemBatch split(IntLinkedOpenHashSet fields, BufferAllocator allocator) {
     BigIntVector keyVectorReplicate = copy(keyVector, allocator);
-
-    Set<Field> splitFields = new HashSet<>(fields);
-    List<FieldVector> splittedVector = fields.stream()
-        .map(f -> fieldVectors.getVector(f))
-        .map(v -> transfer(v, allocator))
+    ImmutableList<FieldVector> splitVector = fields.intStream()
+        .mapToObj(fieldVectors::get)
+        .map(v -> {
+          FieldVector sv = transfer(v, allocator);
+          v.close();
+          return sv;
+        })
         .collect(ImmutableList.toImmutableList());
-    List<FieldVector> remainVector = fieldVectors.getFieldVectors()
-        .stream()
-        .filter(v -> !splitFields.contains(v.getField()))
+    this.fieldVectors = IntStream.range(0, fieldVectors.size())
+        .filter(i -> !fields.contains(i))
+        .mapToObj(fieldVectors::get)
         .map(v -> transfer(v, v.getAllocator()))
         .collect(ImmutableList.toImmutableList());
-
-    this.fieldVectors.close();
-    this.fieldVectors = new VectorSchemaRoot(remainVector);
-    return new MemBatch(keyVectorReplicate, new VectorSchemaRoot(splittedVector));
+    return new MemBatch(keyVectorReplicate, splitVector);
   }
 
   public synchronized Snapshot snapshot(BufferAllocator allocator) {
-    return new Snapshot(keyVector, fieldVectors, fieldVectors.getSchema().getFields(), 0, keyVector.getValueCount(), allocator);
+    return new Snapshot(keyVector, fieldVectors, IntStream.range(0, fieldVectors.size()), 0, keyVector.getValueCount(), allocator);
   }
 
   @SuppressWarnings("unchecked")
@@ -102,7 +96,16 @@ public final class MemBatch implements NoexceptAutoCloseable {
 
   public synchronized void append(Snapshot batch) {
     VectorBatchAppender.batchAppend(keyVector, batch.keyVector);
-    VectorSchemaRootAppender.append(fieldVectors, batch.fieldVectors);
+
+    List<FieldVector> targets = this.fieldVectors;
+    List<FieldVector> sources = batch.getFieldVectors();
+    Preconditions.checkArgument(targets.size() == sources.size());
+    for (int i = 0; i < sources.size(); i++) {
+      FieldVector target = targets.get(i);
+      FieldVector source = sources.get(i);
+      Preconditions.checkArgument(target.getField().equals(source.getField()));
+      VectorBatchAppender.batchAppend(target, source);
+    }
   }
 
   public synchronized int getValueCount() {
@@ -112,34 +115,33 @@ public final class MemBatch implements NoexceptAutoCloseable {
   @Override
   public synchronized void close() {
     keyVector.close();
-    fieldVectors.close();
+    fieldVectors.forEach(FieldVector::close);
   }
 
   @Immutable
   public final static class Snapshot implements NoexceptAutoCloseable {
 
     private final BigIntVector keyVector;
-    private final VectorSchemaRoot fieldVectors;
+    private final ImmutableList<FieldVector> fieldVectors;
 
-    public Snapshot(@WillCloseWhenClosed BigIntVector keyVector, @WillCloseWhenClosed List<FieldVector> fieldVectors) {
+    public Snapshot(@WillCloseWhenClosed BigIntVector keyVector, @WillCloseWhenClosed ImmutableList<FieldVector> fieldVectors) {
       for (FieldVector fieldVector : fieldVectors) {
         Preconditions.checkArgument(keyVector.getValueCount() == fieldVector.getValueCount());
       }
       this.keyVector = keyVector;
-      this.fieldVectors = new VectorSchemaRoot(fieldVectors);
+      this.fieldVectors = fieldVectors;
     }
 
     private Snapshot(
         BigIntVector keyVector,
-        VectorSchemaRoot fieldVectors,
-        List<Field> fields,
+        List<FieldVector> fieldVectors,
+        IntStream fields,
         int startIndex,
         int length,
         BufferAllocator allocator) {
       this(
           slice(keyVector, startIndex, length, allocator),
-          fields.stream()
-              .map(fieldVectors::getVector)
+          fields.mapToObj(fieldVectors::get)
               .map(v -> slice(v, startIndex, length, allocator))
               .collect(ImmutableList.toImmutableList()));
     }
@@ -159,30 +161,26 @@ public final class MemBatch implements NoexceptAutoCloseable {
       return keyVector;
     }
 
-    public List<FieldVector> getValueVectors() {
-      return fieldVectors.getFieldVectors();
+    public List<FieldVector> getFieldVectors() {
+      return fieldVectors;
     }
 
-    public List<Field> getFields() {
-      return fieldVectors.getSchema().getFields();
-    }
-
-    public Snapshot slice(List<Field> fields, BufferAllocator allocator) {
+    public Snapshot slice(IntStream fields, BufferAllocator allocator) {
       return slice(fields, 0, getValueCount(), allocator);
     }
 
     public Snapshot slice(int startIndex, int length, BufferAllocator allocator) {
-      return slice(getFields(), startIndex, length, allocator);
+      return slice(IntStream.range(0, getFieldVectors().size()), startIndex, length, allocator);
     }
 
-    public Snapshot slice(List<Field> fields, int startIndex, int length, BufferAllocator allocator) {
+    public Snapshot slice(IntStream fields, int startIndex, int length, BufferAllocator allocator) {
       return new Snapshot(keyVector, fieldVectors, fields, startIndex, length, allocator);
     }
 
     @Override
     public void close() {
       keyVector.close();
-      fieldVectors.close();
+      fieldVectors.forEach(FieldVector::close);
     }
   }
 }

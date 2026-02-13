@@ -28,7 +28,9 @@ import cn.edu.tsinghua.iginx.filesystem.common.Filters;
 import cn.edu.tsinghua.iginx.filesystem.common.Patterns;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemBatch;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.Catalog;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.compact.Flusher;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.Catalog;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.TableStorage;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.*;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
@@ -50,7 +52,6 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.stream.Collectors;
 
 public class OneTierDB implements Database {
   private static final Logger LOGGER = LoggerFactory.getLogger(OneTierDB.class);

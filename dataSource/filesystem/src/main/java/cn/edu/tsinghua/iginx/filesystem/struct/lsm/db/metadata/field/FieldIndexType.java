@@ -17,11 +17,23 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.field;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field;
 
-public class TagTreeIndex extends PrefixTagTreeIndex {
+import java.util.Objects;
+import java.util.function.Supplier;
 
-  public TagTreeIndex() {
-    super(false);
+public enum FieldIndexType {
+  FLAT(FlatIndex::new),
+  TAG_TREE(TagTreeIndex::new),
+  PREFIX_TAG_TREE(PrefixTagTreeIndex::new);
+
+  private final Supplier<FieldIndex> factory;
+
+  FieldIndexType(Supplier<FieldIndex> factory) {
+    this.factory = Objects.requireNonNull(factory);
+  }
+
+  public FieldIndex create() {
+    return factory.get();
   }
 }
