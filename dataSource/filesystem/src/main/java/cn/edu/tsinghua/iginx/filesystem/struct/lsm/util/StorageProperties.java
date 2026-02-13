@@ -19,7 +19,7 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.catalog.field.FieldIndexType;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field.FieldIndexType;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
