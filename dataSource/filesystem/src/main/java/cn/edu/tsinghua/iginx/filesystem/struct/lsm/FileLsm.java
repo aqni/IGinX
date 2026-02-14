@@ -65,25 +65,10 @@ public class FileLsm implements FileStructure {
       builder.setWriteBufferChunkValuesMax(
           config.getInt(StorageProperties.Builder.WRITE_BUFFER_CHUNK_VALUES_MAX));
     }
-    if (config.hasPath(StorageProperties.Builder.WRITE_BUFFER_CHUNK_VALUES_MIN)) {
-      builder.setWriteBufferChunkValuesMin(
-          config.getInt(StorageProperties.Builder.WRITE_BUFFER_CHUNK_VALUES_MIN));
-    }
-    if (config.hasPath(StorageProperties.Builder.WRITE_BUFFER_CONFLICT_RESOLVER)) {
-      builder.setWriteBufferConflictResolverType(
-          config.getString(StorageProperties.Builder.WRITE_BUFFER_CONFLICT_RESOLVER));
-    }
-    if (config.hasPath(StorageProperties.Builder.WRITE_BUFFER_CHUNK_INDEX)) {
-      builder.setWriteBufferChunkIndex(
-          config.getString(StorageProperties.Builder.WRITE_BUFFER_CHUNK_INDEX));
-    }
     if (config.hasPath(StorageProperties.Builder.WRITE_BUFFER_TIMEOUT)) {
       builder.setWriteBufferTimeout(
           Duration.ofMillis(
               config.getDuration(StorageProperties.Builder.WRITE_BUFFER_TIMEOUT).toMillis()));
-    }
-    if (config.hasPath(StorageProperties.Builder.WRITE_BATCH_SIZE)) {
-      builder.setWriteBatchSize(config.getBytes(StorageProperties.Builder.WRITE_BATCH_SIZE));
     }
     if (config.hasPath(StorageProperties.Builder.CACHE_CAPACITY)) {
       builder.setCacheCapacity(config.getBytes(StorageProperties.Builder.CACHE_CAPACITY));

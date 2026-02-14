@@ -17,13 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.DataBuffer;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.Catalog;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.FileTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.MemoryTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
@@ -41,16 +41,12 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.StreamSupport;
 
 public class TableStorage implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(TableStorage.class);
 
   private final Catalog catalog;
   private final StorageManager storageManager;
-  private long sqnBase;
 
   public TableStorage(Shared shared, Catalog index, StorageManager storageManager)
       throws IOException {
@@ -58,12 +54,6 @@ public class TableStorage implements AutoCloseable {
     this.storageManager = storageManager;
 
     Iterable<String> tableNames = storageManager.reload();
-    String last =
-        StreamSupport.stream(tableNames.spliterator(), false)
-            .max(Comparator.naturalOrder())
-            .orElse("0-0");
-    this.sqnBase = getSeq(last) + 1;
-
     try {
       for (String tableName : tableNames) {
         LOGGER.debug("rebuilt table index for table: {}", tableName);
@@ -75,18 +65,7 @@ public class TableStorage implements AutoCloseable {
     }
   }
 
-  static long getSeq(String tableName) {
-    Pattern pattern = Pattern.compile("^(\\d+)-.*$");
-    Matcher matcher = pattern.matcher(tableName);
-    if (matcher.find()) {
-      return Long.parseLong(matcher.group(1));
-    } else {
-      throw new IllegalArgumentException("invalid table name: " + tableName);
-    }
-  }
-
-  public String flush(long sqn, MemoryTable table) throws IOException, StorageException {
-    String name = String.format("%019d", sqnBase + sqn);
+  public String flush(long id, Table table) throws IOException, StorageException {
     StorageManager.TableMeta meta = table.getMeta();
     try (Scanner<Long, Scanner<String, Object>> scanner =
              table.scan(meta.getSchema().keySet(), ImmutableRangeSet.of(Range.all()))) {
@@ -95,10 +74,14 @@ public class TableStorage implements AutoCloseable {
     return name;
   }
 
+  public void delete(long tableId) throws IOException {
+    storageManager.delete(tableId);
+  }
+
   public void commit(String table, boolean toRemove) {
     try {
       if (toRemove) {
-        storageManager.delete(table);
+
         return;
       }
       StorageManager.TableMeta meta = storageManager.readMeta(table);

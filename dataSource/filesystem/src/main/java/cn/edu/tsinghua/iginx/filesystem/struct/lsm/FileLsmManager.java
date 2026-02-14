@@ -32,7 +32,6 @@ import cn.edu.tsinghua.iginx.filesystem.common.Filters;
 import cn.edu.tsinghua.iginx.filesystem.common.Patterns;
 import cn.edu.tsinghua.iginx.filesystem.struct.DataTarget;
 import cn.edu.tsinghua.iginx.filesystem.struct.FileManager;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Database;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.OneTierDB;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.ParquetFileStorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
@@ -42,14 +41,15 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageExcepti
 import cn.edu.tsinghua.iginx.filesystem.thrift.DataBoundary;
 import cn.edu.tsinghua.iginx.thrift.AggregateType;
 import com.google.common.collect.RangeSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class FileLsmManager implements FileManager {
 
@@ -57,7 +57,7 @@ public class FileLsmManager implements FileManager {
 
   private final Shared shared;
   private final Path path;
-  private final Database db;
+  private final OneTierDB db;
 
   public FileLsmManager(Shared shared, Path path) throws IOException {
     this.shared = shared;
@@ -101,7 +101,7 @@ public class FileLsmManager implements FileManager {
       }
 
       return db.query(patterns, tagFilter, filter);
-    } catch (PhysicalException e) {
+    } catch (StorageException e) {
       throw new IOException(e);
     }
   }
@@ -115,7 +115,7 @@ public class FileLsmManager implements FileManager {
         patterns = Collections.singletonList("*");
       }
       db.delete(patterns, target.getTagFilter(), rangeSet);
-    } catch (PhysicalException e) {
+    } catch (StorageException | InterruptedException e) {
       throw new IOException(e);
     }
   }
@@ -124,7 +124,7 @@ public class FileLsmManager implements FileManager {
   public void insert(DataView data) throws IOException {
     try {
       db.insert(data);
-    } catch (StorageException e) {
+    } catch (StorageException | InterruptedException e) {
       throw new IOException(e);
     }
   }
@@ -133,9 +133,7 @@ public class FileLsmManager implements FileManager {
   public void close() throws IOException {
     try {
       db.close();
-    } catch (RuntimeException e) {
-      throw e;
-    } catch (Exception e) {
+    } catch (InterruptedException e) {
       throw new IOException(e);
     }
   }

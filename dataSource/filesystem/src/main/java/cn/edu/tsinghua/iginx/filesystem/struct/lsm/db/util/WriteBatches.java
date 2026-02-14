@@ -34,6 +34,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+
+import com.google.common.collect.ImmutableList;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
@@ -89,7 +91,7 @@ public class WriteBatches {
     public MemBatch.Snapshot build() {
       keyVector.setValueCount(count);
       valueVector.setValueCount(count);
-      return new MemBatch.Snapshot(keyVector, Collections.singletonList(valueVector));
+      return new MemBatch.Snapshot(keyVector, ImmutableList.of(valueVector));
     }
   }
 

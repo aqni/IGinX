@@ -44,7 +44,7 @@ public interface StorageManager {
 
   void delete(String name, AreaSet<Long, String> areas) throws IOException;
 
-  void delete(String name);
+  void delete(long tableId);
 
   Iterable<String> reload() throws IOException;
 

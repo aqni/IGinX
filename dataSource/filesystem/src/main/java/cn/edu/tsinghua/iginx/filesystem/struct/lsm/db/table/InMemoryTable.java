@@ -21,6 +21,7 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemSubTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.TagKVUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.*;
@@ -35,27 +36,42 @@ import java.util.*;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import javax.annotation.WillCloseWhenClosed;
+
+import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MemoryTable implements Table, NoexceptAutoCloseable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(MemoryTable.class);
+public class InMemoryTable implements Table, NoexceptAutoCloseable {
+  private static final Logger LOGGER = LoggerFactory.getLogger(InMemoryTable.class);
 
   private final LinkedHashMap<Field, MemSubTable.Snapshot> columns;
   private final Map<String, Field> fieldMap = new HashMap<>();
   private final SingleCache<StorageManager.TableMeta> meta =
       new SingleCache<>(() -> new MemoryTableMeta(getSchema(), getRanges(), getCounts()));
 
-  public MemoryTable(@WillCloseWhenClosed LinkedHashMap<Field, MemSubTable.Snapshot> columns) {
+
+  public static InMemoryTable of(@WillCloseWhenClosed MemTable.Snapshot snapshot) {
+    LinkedHashMap<Field, MemSubTable.Snapshot> columns = new LinkedHashMap<>();
+    for (Field field : snapshot.getFields()) {
+      columns.put(field, snapshot.getSubTable(field));
+    }
+    return new InMemoryTable(columns);
+  }
+
+  public static InMemoryTable of(@WillCloseWhenClosed MemTable.Snapshot snapshot, RangeSet<Long> ranges) {
+    LinkedHashMap<Field, MemSubTable.Snapshot> columns = new LinkedHashMap<>();
+    for (Field field : snapshot.getFields()) {
+      columns.put(field, snapshot.getSubTable(field));
+    }
+    return new InMemoryTable(columns);
+  }
+
+  public InMemoryTable(@WillCloseWhenClosed MemTable.Snapshot snapshot, BufferAllocator allocator) {
     this.columns = new LinkedHashMap<>(columns);
     for (Field field : columns.keySet()) {
       fieldMap.put(getFieldString(field), field);
     }
-  }
-
-  public static MemoryTable empty() {
-    return new MemoryTable(new LinkedHashMap<>());
   }
 
   public Set<Field> getFields() {
@@ -95,7 +111,7 @@ public class MemoryTable implements Table, NoexceptAutoCloseable {
 
   @Override
   public String toString() {
-    return new StringJoiner(", ", MemoryTable.class.getSimpleName() + "[", "]")
+    return new StringJoiner(", ", InMemoryTable.class.getSimpleName() + "[", "]")
         .add("meta=" + meta)
         .toString();
   }
@@ -134,12 +150,12 @@ public class MemoryTable implements Table, NoexceptAutoCloseable {
     columns.clear();
   }
 
-  public MemoryTable subTable(List<Field> fields) {
+  public InMemoryTable subTable(List<Field> fields) {
     LinkedHashMap<Field, MemSubTable.Snapshot> subColumns = new LinkedHashMap<>();
     for (Field field : fields) {
       subColumns.put(field, columns.get(field));
     }
-    return new MemoryTable(subColumns) {
+    return new InMemoryTable(subColumns) {
       @Override
       public void close() {
         // do nothing

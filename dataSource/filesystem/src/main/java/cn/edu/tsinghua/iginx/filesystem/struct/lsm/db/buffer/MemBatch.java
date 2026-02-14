@@ -34,6 +34,7 @@ import org.apache.arrow.vector.util.VectorBatchAppender;
 import javax.annotation.WillCloseWhenClosed;
 import javax.annotation.concurrent.Immutable;
 import javax.annotation.concurrent.ThreadSafe;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.IntStream;
 
@@ -75,7 +76,7 @@ public final class MemBatch implements NoexceptAutoCloseable {
   }
 
   public synchronized Snapshot snapshot(BufferAllocator allocator) {
-    return new Snapshot(keyVector, fieldVectors, IntStream.range(0, fieldVectors.size()), 0, keyVector.getValueCount(), allocator);
+    return new Snapshot(keyVector, fieldVectors, IntStream.range(0, fieldVectors.size()).toArray(), 0, keyVector.getValueCount(), allocator);
   }
 
   @SuppressWarnings("unchecked")
@@ -135,13 +136,13 @@ public final class MemBatch implements NoexceptAutoCloseable {
     private Snapshot(
         BigIntVector keyVector,
         List<FieldVector> fieldVectors,
-        IntStream fields,
+        int[] fields,
         int startIndex,
         int length,
         BufferAllocator allocator) {
       this(
           slice(keyVector, startIndex, length, allocator),
-          fields.mapToObj(fieldVectors::get)
+          Arrays.stream(fields).mapToObj(fieldVectors::get)
               .map(v -> slice(v, startIndex, length, allocator))
               .collect(ImmutableList.toImmutableList()));
     }
@@ -165,15 +166,15 @@ public final class MemBatch implements NoexceptAutoCloseable {
       return fieldVectors;
     }
 
-    public Snapshot slice(IntStream fields, BufferAllocator allocator) {
+    public Snapshot slice(int[] fields, BufferAllocator allocator) {
       return slice(fields, 0, getValueCount(), allocator);
     }
 
     public Snapshot slice(int startIndex, int length, BufferAllocator allocator) {
-      return slice(IntStream.range(0, getFieldVectors().size()), startIndex, length, allocator);
+      return slice(IntStream.range(0, getFieldVectors().size()).toArray(), startIndex, length, allocator);
     }
 
-    public Snapshot slice(IntStream fields, int startIndex, int length, BufferAllocator allocator) {
+    public Snapshot slice(int[] fields, int startIndex, int length, BufferAllocator allocator) {
       return new Snapshot(keyVector, fieldVectors, fields, startIndex, length, allocator);
     }
 

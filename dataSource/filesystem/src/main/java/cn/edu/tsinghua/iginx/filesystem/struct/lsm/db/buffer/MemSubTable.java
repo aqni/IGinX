@@ -22,7 +22,9 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Range;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntLinkedOpenHashSet;
+import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.shorts.ShortArrays;
 import it.unimi.dsi.fastutil.shorts.ShortComparator;
 import org.apache.arrow.memory.BufferAllocator;
@@ -30,9 +32,12 @@ import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.types.pojo.Field;
 
+import javax.annotation.WillCloseWhenClosed;
 import javax.annotation.concurrent.ThreadSafe;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.IntStream;
 
 @ThreadSafe
@@ -66,13 +71,14 @@ public class MemSubTable implements NoexceptAutoCloseable {
   }
 
   public synchronized MemSubTable split(IntLinkedOpenHashSet fields, BufferAllocator allocator) {
-    IntStream remainingFields = IntStream.range(0, this.fields.size()).filter(i -> !fields.contains(i));
-    this.fields = remainingFields.mapToObj(this.fields::get).collect(ImmutableList.toImmutableList());
+    int[] remainingFields = IntStream.range(0, this.fields.size()).filter(i -> !fields.contains(i)).toArray();
+    int[] fieldsArray = fields.toIntArray();
+    this.fields = Arrays.stream(remainingFields).mapToObj(this.fields::get).collect(ImmutableList.toImmutableList());
 
     List<SortedChunkSnapshot> splitSnapshots = new ArrayList<>();
     List<SortedChunkSnapshot> remainingSnapshots = new ArrayList<>();
     for (SortedChunkSnapshot snapshot : this.snapshots) {
-      splitSnapshots.add(snapshot.slice(fields.intStream(), allocator));
+      splitSnapshots.add(snapshot.slice(fieldsArray, allocator));
       remainingSnapshots.add(snapshot.slice(remainingFields, this.allocator));
       snapshot.close();
     }
@@ -80,7 +86,7 @@ public class MemSubTable implements NoexceptAutoCloseable {
 
     SortedChunkSnapshot splitActiveChunkSnapshot = null;
     if (this.activeChunkSnapshot != null) {
-      splitActiveChunkSnapshot = this.activeChunkSnapshot.slice(fields.intStream(), allocator);
+      splitActiveChunkSnapshot = this.activeChunkSnapshot.slice(fieldsArray, allocator);
       SortedChunkSnapshot remainingActiveChunkSnapshot = this.activeChunkSnapshot.slice(remainingFields, this.allocator);
       this.activeChunkSnapshot.close();
       this.activeChunkSnapshot = remainingActiveChunkSnapshot;
@@ -100,7 +106,11 @@ public class MemSubTable implements NoexceptAutoCloseable {
         splitActiveChunkSnapshot);
   }
 
-  public synchronized Snapshot snapshot(IntStream intStream, BufferAllocator allocator) {
+  public synchronized Snapshot snapshot(BufferAllocator allocator) {
+    return snapshot(IntStream.range(0, fields.size()).toArray(), allocator);
+  }
+
+  public synchronized Snapshot snapshot(int[] fields, BufferAllocator allocator) {
     if (active != null) {
       if (activeChunkSnapshot == null) {
         try (MemBatch.Snapshot activeSnapshot = active.snapshot(allocator)) {
@@ -112,7 +122,12 @@ public class MemSubTable implements NoexceptAutoCloseable {
     if (activeChunkSnapshot != null) {
       chunkSnapshots.add(activeChunkSnapshot);
     }
-    return new Snapshot(fields, chunkSnapshots, intStream, allocator);
+
+    return new Snapshot(
+        Arrays.stream(fields).mapToObj(this.fields::get).collect(ImmutableList.toImmutableList()),
+        chunkSnapshots.stream()
+            .map(s -> s.slice(fields, allocator))
+            .collect(ImmutableList.toImmutableList()));
   }
 
   public synchronized void append(MemBatch.Snapshot batch) {
@@ -162,12 +177,12 @@ public class MemSubTable implements NoexceptAutoCloseable {
     private final ImmutableList<Field> fields;
     private final ImmutableList<SortedChunkSnapshot> chunks;
 
-    Snapshot(List<Field> fields, List<SortedChunkSnapshot> chunks, IntStream fieldIndex, BufferAllocator allocator) {
-      this.fields = fieldIndex.mapToObj(fields::get).collect(ImmutableList.toImmutableList());
-      this.chunks = chunks.stream().map(s -> s.slice(fieldIndex, allocator)).collect(ImmutableList.toImmutableList());
+    Snapshot(ImmutableList<Field> fields, @WillCloseWhenClosed ImmutableList<SortedChunkSnapshot> chunks) {
+      this.fields = Objects.requireNonNull(fields);
+      this.chunks = Objects.requireNonNull(chunks);
     }
 
-    public List<Field> getSchema() {
+    public List<Field> getFields() {
       return fields;
     }
 
@@ -186,7 +201,7 @@ public class MemSubTable implements NoexceptAutoCloseable {
     private final MemBatch.Snapshot snapshot;
     private final ShareMeta shareMeta;
 
-    private SortedChunkSnapshot(MemBatch.Snapshot snapshot, IntStream fields, BufferAllocator allocator, ShareMeta shareMeta) {
+    private SortedChunkSnapshot(MemBatch.Snapshot snapshot, int[] fields, BufferAllocator allocator, ShareMeta shareMeta) {
       Preconditions.checkArgument(snapshot.getValueCount() > 0);
       Preconditions.checkArgument(snapshot.getValueCount() <= Short.MAX_VALUE);
       this.snapshot = snapshot.slice(fields, allocator);
@@ -194,10 +209,10 @@ public class MemSubTable implements NoexceptAutoCloseable {
     }
 
     SortedChunkSnapshot(MemBatch.Snapshot snapshot, BufferAllocator allocator) {
-      this(snapshot, IntStream.range(0, snapshot.getFieldVectors().size()), allocator, new ShareMeta());
+      this(snapshot, IntStream.range(0, snapshot.getFieldVectors().size()).toArray(), allocator, new ShareMeta());
     }
 
-    public SortedChunkSnapshot slice(IntStream fields, BufferAllocator allocator) {
+    public SortedChunkSnapshot slice(int[] fields, BufferAllocator allocator) {
       return new SortedChunkSnapshot(snapshot, fields, allocator, shareMeta);
     }
 

@@ -21,15 +21,19 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
 import com.google.common.collect.ImmutableList;
+import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
-import it.unimi.dsi.fastutil.ints.IntIntPair;
+import it.unimi.dsi.fastutil.ints.IntImmutableList;
 import it.unimi.dsi.fastutil.ints.IntLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntList;
+import it.unimi.dsi.fastutil.objects.ObjectObjectImmutablePair;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.types.pojo.Field;
 
+import javax.annotation.WillCloseWhenClosed;
+import javax.annotation.concurrent.Immutable;
 import javax.annotation.concurrent.ThreadSafe;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -54,30 +58,32 @@ public class MemTable implements NoexceptAutoCloseable {
   public Snapshot snapshot(BufferAllocator allocator) {
     lock.readLock().lock();
     try {
-      return snapshot(fieldToSchema.keySet(), allocator);
+      return snapshot(ImmutableList.copyOf(fieldToSchema.keySet()), allocator);
     } finally {
       lock.readLock().unlock();
     }
   }
 
-  public Snapshot snapshot(Set<Field> mayBeExistedFields, BufferAllocator allocator) {
+  public Snapshot snapshot(List<Field> mayBeExistedFields, BufferAllocator allocator) {
     lock.readLock().lock();
     try {
-      HashMap<MemSubTable, IntStream> toSnapshot = new HashMap<>();
+      List<MemSubTable.Snapshot> subTableSnapshots = new ArrayList<>();
+      List<IntImmutableList> subTableFieldIndex = new ArrayList<>();
 
-      Map<List<Field>, List<IntIntPair>> schemaToSourceTargetIndex = hitSubTable(ImmutableList.copyOf(mayBeExistedFields));
-      for (Map.Entry<List<Field>, List<IntIntPair>> entry : schemaToSourceTargetIndex.entrySet()) {
+      Map<List<Field>, Pair<int[], int[]>> schemaToSourceTargetIndex = hitSubTable(mayBeExistedFields);
+      for (Map.Entry<List<Field>, Pair<int[], int[]>> entry : schemaToSourceTargetIndex.entrySet()) {
         List<Field> schema = entry.getKey();
         if (schema == null) {
           continue;
         }
-        List<IntIntPair> sourceTargetIndex = entry.getValue();
-        IntStream targetIndex = sourceTargetIndex.stream().mapToInt(IntIntPair::firstInt);
+        int[] sourceIndexes = entry.getValue().left();
+        int[] targetIndexes = entry.getValue().right();
         MemSubTable subTable = subTables.get(schema);
-        toSnapshot.put(subTable, targetIndex);
+        subTableSnapshots.add(subTable.snapshot(targetIndexes, allocator));
+        subTableFieldIndex.add(IntImmutableList.of(sourceIndexes));
       }
 
-      return new Snapshot(toSnapshot, allocator);
+      return new Snapshot(subTableSnapshots, subTableFieldIndex);
     } finally {
       lock.readLock().unlock();
     }
@@ -87,64 +93,61 @@ public class MemTable implements NoexceptAutoCloseable {
     List<Field> fields = data.getFieldVectors().stream().map(FieldVector::getField).distinct().collect(ImmutableList.toImmutableList());
     Preconditions.checkArgument(fields.size() == data.getFieldVectors().size(), "Fields in snapshot should be distinct");
 
-    boolean needSplitOrCreate = false;
     lock.readLock().lock();
     try {
-      Map<List<Field>, List<IntIntPair>> schemaToSourceTargetIndex = hitSubTable(fields);
-      for (Map.Entry<List<Field>, List<IntIntPair>> entry : schemaToSourceTargetIndex.entrySet()) {
+      boolean needSplitOrCreate = false;
+      Map<List<Field>, Pair<int[], int[]>> schemaToSourceTargetIndex = hitSubTable(fields);
+      for (Map.Entry<List<Field>, Pair<int[], int[]>> entry : schemaToSourceTargetIndex.entrySet()) {
         List<Field> schema = entry.getKey();
+        int[] sourceIndexes = entry.getValue().left();
         if (schema == null) {
+          // need create
           needSplitOrCreate = true;
           break;
         }
-        List<IntIntPair> sourceTargetIndex = entry.getValue();
-        if (sourceTargetIndex.size() != schema.size()) {
+        if (sourceIndexes.length != schema.size()) {
+          // need split
           needSplitOrCreate = true;
           break;
         }
       }
       if (!needSplitOrCreate) {
         doAppend(data, schemaToSourceTargetIndex);
+        return;
       }
     } finally {
       lock.readLock().unlock();
     }
-    if (needSplitOrCreate) {
-      lock.writeLock().lock();
-      try {
-        Map<List<Field>, List<IntIntPair>> schemaToSourceTargetIndex = hitSubTable(fields);
-        doAppend(data, schemaToSourceTargetIndex);
-      } finally {
-        lock.writeLock().unlock();
-      }
+
+    lock.writeLock().lock();
+    try {
+      doAppend(data, hitSubTable(fields));
+    } finally {
+      lock.writeLock().unlock();
     }
   }
 
-  private void doAppend(MemBatch.Snapshot data, Map<List<Field>, List<IntIntPair>> schemaToSourceTargetIndex) {
-    for (Map.Entry<List<Field>, List<IntIntPair>> entry : schemaToSourceTargetIndex.entrySet()) {
+  private void doAppend(MemBatch.Snapshot data, Map<List<Field>, Pair<int[], int[]>> schemaToSourceTargetIndex) {
+    for (Map.Entry<List<Field>, Pair<int[], int[]>> entry : schemaToSourceTargetIndex.entrySet()) {
       List<Field> schema = entry.getKey();
-      List<IntIntPair> sourceTargetIndex = entry.getValue();
-      IntStream sourceIndex = sourceTargetIndex.stream().mapToInt(IntIntPair::firstInt);
+      int[] sourceIndexes = entry.getValue().left();
+      int[] targetIndexes = entry.getValue().right();
 
-      try (MemBatch.Snapshot dataSlice = data.slice(sourceIndex, allocator)) {
+      try (MemBatch.Snapshot dataSlice = data.slice(sourceIndexes, allocator)) {
         MemSubTable subTable;
-
         if (schema == null) {
           // create new sub-table
-          ImmutableList<Field> sourceFields = sourceIndex.mapToObj(i -> data.getFieldVectors().get(i).getField()).collect(ImmutableList.toImmutableList());
+          ImmutableList<Field> sourceFields = Arrays.stream(sourceIndexes).mapToObj(i -> data.getFieldVectors().get(i).getField()).collect(ImmutableList.toImmutableList());
           subTable = new MemSubTable(sourceFields, allocator, maxChunkValueCount);
           addSubTable(subTable);
-        } else if (sourceTargetIndex.size() == schema.size()) {
+        } else if (sourceIndexes.length == schema.size()) {
           // just append
           subTable = subTables.get(schema);
         } else {
           // spilt and append
-          IntLinkedOpenHashSet targetIndex = sourceTargetIndex.stream()
-              .mapToInt(IntIntPair::secondInt)
-              .collect(IntLinkedOpenHashSet::new, IntLinkedOpenHashSet::add, IntLinkedOpenHashSet::addAll);
           schema.forEach(fieldToSchema::remove);
           MemSubTable oldSubTable = subTables.remove(schema);
-          subTable = oldSubTable.split(targetIndex, allocator);
+          subTable = oldSubTable.split(IntLinkedOpenHashSet.of(targetIndexes), allocator);
           addSubTable(oldSubTable);
           addSubTable(subTable);
         }
@@ -161,7 +164,7 @@ public class MemTable implements NoexceptAutoCloseable {
     }
   }
 
-  private Map<List<Field>, List<IntIntPair>> hitSubTable(List<Field> fields) {
+  private Map<List<Field>, Pair<int[], int[]>> hitSubTable(List<Field> fields) {
     Map<List<Field>, IntList> schemaToHit = new IdentityHashMap<>();
     for (int fieldIndex = 0; fieldIndex < fields.size(); fieldIndex++) {
       Field mayBeExistedField = fields.get(fieldIndex);
@@ -169,20 +172,15 @@ public class MemTable implements NoexceptAutoCloseable {
           .add(fieldIndex);
     }
 
-    Map<List<Field>, List<IntIntPair>> hitSourceTargetIndex = new IdentityHashMap<>();
+    Map<List<Field>, Pair<int[], int[]>> hitSourceTargetIndex = new IdentityHashMap<>();
     for (Map.Entry<List<Field>, IntList> entry : schemaToHit.entrySet()) {
       List<Field> schema = entry.getKey();
-      IntList hitFieldIndexes = entry.getValue();
+      int[] sourceIndexes = entry.getValue().toIntArray();
       Map<Field, Integer> schemaField2Index = IntStream.range(0, schema.size())
           .boxed()
           .collect(Collectors.toMap(schema::get, Integer::valueOf));
-      List<IntIntPair> hitFieldIndexesWithTargetIndex = new ArrayList<>();
-      for (int sourceIndex : hitFieldIndexes) {
-        Field sourceField = fields.get(sourceIndex);
-        int targetIndex = schemaField2Index.get(sourceField);
-        hitFieldIndexesWithTargetIndex.add(IntIntPair.of(sourceIndex, targetIndex));
-      }
-      hitSourceTargetIndex.put(schema, hitFieldIndexesWithTargetIndex);
+      int[] targetIndexes = Arrays.stream(sourceIndexes).mapToObj(fields::get).map(schemaField2Index::get).mapToInt(Integer::intValue).toArray();
+      hitSourceTargetIndex.put(schema, ObjectObjectImmutablePair.of(sourceIndexes, targetIndexes));
     }
     return hitSourceTargetIndex;
   }
@@ -197,17 +195,30 @@ public class MemTable implements NoexceptAutoCloseable {
     }
   }
 
+  @Immutable
   public static class Snapshot implements NoexceptAutoCloseable {
     private final List<MemSubTable.Snapshot> subTables;
+    private final List<IntImmutableList> subTableFieldIndex;
 
-    Snapshot(Map<MemSubTable, IntStream> columns, BufferAllocator allocator) {
-      this.subTables = columns.entrySet().stream()
-          .map(e -> e.getKey().snapshot(e.getValue(), allocator))
-          .collect(ImmutableList.toImmutableList());
+    Snapshot(@WillCloseWhenClosed List<MemSubTable.Snapshot> subTables, List<IntImmutableList> subTableFieldIndex) {
+      this.subTables = subTables;
+      this.subTableFieldIndex = subTableFieldIndex;
     }
 
-    public List<MemSubTable.Snapshot> getColumns() {
-      return subTables;
+    public static Snapshot empty() {
+      return new Snapshot(Collections.emptyList(), Collections.emptyList());
+    }
+
+    public int getSubTableCount() {
+      return subTables.size();
+    }
+
+    public MemSubTable.Snapshot getSubTable(int index) {
+      return subTables.get(index);
+    }
+
+    public IntList getFieldIndex(int index) {
+      return subTableFieldIndex.get(index);
     }
 
     @Override

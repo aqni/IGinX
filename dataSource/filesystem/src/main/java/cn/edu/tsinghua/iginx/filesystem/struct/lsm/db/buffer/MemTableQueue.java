@@ -19,205 +19,127 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.MemoryTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.InMemoryTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Awaitable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.RangeSet;
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.util.AutoCloseables;
+import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnegative;
+import javax.annotation.WillCloseWhenClosed;
 import javax.annotation.concurrent.ThreadSafe;
-import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Consumer;
+import java.util.function.LongConsumer;
 
 @ThreadSafe
 public class MemTableQueue implements NoexceptAutoCloseable {
   private final Logger LOGGER = LoggerFactory.getLogger(MemTableQueue.class);
 
-  private final ReentrantLock checkSizeLock = new ReentrantLock(true);
-  private final ReentrantReadWriteLock queueLock = new ReentrantReadWriteLock(true);
-  private final ReentrantLock pollLock = new ReentrantLock(true);
-  private final Condition pollLockCond = pollLock.newCondition();
+  private final ReentrantReadWriteLock queueLock = new ReentrantReadWriteLock();
 
+  private final BlockingQueue<Long> toFlushIds = new PriorityBlockingQueue<>();
   private final NavigableMap<Long, ArchivedMemTable> archives = new TreeMap<>();
   private final BufferAllocator allocator;
   private final ActiveMemTable active;
 
   public MemTableQueue(Shared shared, BufferAllocator allocator) {
-    String allocatorName =
-        String.join("-", allocator.getName(), MemTableQueue.class.getSimpleName());
+    String allocatorName = String.join("-", allocator.getName(), MemTableQueue.class.getSimpleName());
     this.allocator = allocator.newChildAllocator(allocatorName, 0, Long.MAX_VALUE);
     this.active = new ActiveMemTable(shared, this.allocator);
   }
 
   public void store(Iterable<MemBatch.Snapshot> data) throws InterruptedException {
-    checkSizeLock.lock();
+    queueLock.writeLock().lock();
     try {
       if (active.isOverloaded()) {
-        compact();
+        archive(true);
       }
     } finally {
-      checkSizeLock.unlock();
+      queueLock.writeLock().unlock();
     }
     active.store(data);
   }
 
-  public void compact() throws InterruptedException {
-    checkSizeLock.lock();
+  private void archive(boolean createNewTable) throws InterruptedException {
+    queueLock.writeLock().lock();
     try {
-      Map<Long, ArchivedMemTable> temp = active.archive();
-      queueLock.writeLock().lock();
-      try {
-        archives.putAll(temp);
-        temp.clear();
-      } finally {
-        queueLock.writeLock().unlock();
-        temp.values().forEach(ArchivedMemTable::close);
-      }
+      Map<Long, ArchivedMemTable> tables = active.archive(createNewTable);
+      archives.putAll(tables);
+      toFlushIds.addAll(tables.keySet());
     } finally {
-      checkSizeLock.unlock();
+      queueLock.writeLock().unlock();
     }
-    signalAll();
   }
 
-  public void flush() throws InterruptedException {
-    Awaitable flush;
+  public void flushAll(boolean compact) throws InterruptedException {
     List<Awaitable> waiters = new ArrayList<>();
-    queueLock.readLock().lock();
+    queueLock.writeLock().lock();
     try {
-      flush = active.flush();
-      for (ArchivedMemTable archivedMemTable : archives.values()) {
-        waiters.add(archivedMemTable::waitUntilClosed);
-      }
+      archive(compact);
+      archives.values().forEach(archivedMemTable -> waiters.add(archivedMemTable::waitUntilClosed));
     } finally {
-      queueLock.readLock().unlock();
+      queueLock.writeLock().unlock();
     }
-    signalAll();
-    flush.await();
     for (Awaitable waiter : waiters) {
       waiter.await();
     }
   }
 
-  private void await() throws InterruptedException {
-    pollLock.lock();
-    try {
-      pollLockCond.await();
-    } finally {
-      pollLock.unlock();
-    }
-  }
-
-  private void signalAll() {
-    pollLock.lock();
-    try {
-      pollLockCond.signalAll();
-    } finally {
-      pollLock.unlock();
-    }
-  }
-
-  /**
-   * take next table id, if no table id available, block until new table id available
-   *
-   * @param idAtLeast the non-negative table id at least
-   * @return the next non-negative table id
-   */
-  @Nonnegative
-  public long awaitNext(@Nonnegative long idAtLeast) throws InterruptedException {
-    while (true) {
-      queueLock.readLock().lock();
-      try {
-        Long nextId = archives.ceilingKey(idAtLeast);
-        if (nextId != null) {
-          return nextId;
-        }
-        Long activeNextId = active.newestKey(idAtLeast);
-        if (activeNextId != null) {
-          return activeNextId;
-        }
-      } finally {
-        queueLock.readLock().unlock();
-      }
-      await();
-    }
-  }
-
-  public void eliminate(long id, Consumer<Boolean> commiter)
-      throws InterruptedException {
-    active.eliminate(id);
-
+  public TookTable takeToFlush() throws InterruptedException {
+    long id = toFlushIds.take();
     queueLock.writeLock().lock();
     try {
-      if (archives.containsKey(id)) {
-        try (ArchivedMemTable memTable = archives.remove(id)) {
-          commiter.accept(false);
-        }
-        return;
-      }
+      ArchivedMemTable archivedMemTable = archives.get(id);
+      MemTable.Snapshot snapshot = archivedMemTable.getMemTable().snapshot(allocator);
+      return new TookTable(id, InMemoryTable.of(snapshot), toFlushIds::add, this::remove);
     } finally {
       queueLock.writeLock().unlock();
     }
-
-    commiter.accept(true);
   }
 
-  public MemoryTable snapshot(long id, BufferAllocator allocator) {
-    queueLock.readLock().lock();
-    try {
-      ArchivedMemTable archived = archives.get(id);
-      if (archived != null) {
-        return archived.snapshot(allocator);
-      }
-      return active.snapshot(id, allocator);
+  private void remove(long id) {
+    queueLock.writeLock().lock();
+    try (ArchivedMemTable ignored = archives.remove(id)) {
+      active.onTableFlushed(id);
     } finally {
-      queueLock.readLock().unlock();
+      queueLock.writeLock().unlock();
     }
   }
 
-  public List<Scanner<Long, Scanner<String, Object>>> scan(
-      List<Field> fields, RangeSet<Long> ranges, BufferAllocator allocator) throws IOException {
-    Set<String> innerFields = ArrowFields.toInnerFields(fields);
-    List<Scanner<Long, Scanner<String, Object>>> scanners = new ArrayList<>();
+  public long takeToDelete() throws InterruptedException {
+    return active.takeToDelete();
+  }
+
+  public List<InMemoryTable> snapshot(List<Field> fields, RangeSet<Long> ranges, BufferAllocator allocator) {
+    List<MemTable.Snapshot> snapshots = new ArrayList<>();
     queueLock.readLock().lock();
     try {
       for (ArchivedMemTable archivedMemTable : archives.values()) {
-        try (MemoryTable table = archivedMemTable.snapshot(fields, ranges, allocator)) {
-          Scanner<Long, Scanner<String, Object>> scanner = table.scan(innerFields, ranges);
-          scanners.add(scanner);
-        }
+        snapshots.add(archivedMemTable.getMemTable().snapshot(fields, allocator));
       }
-      active.scan(fields, ranges, allocator, scanners::add);
-    } catch (Exception e) {
-      try {
-        AutoCloseables.close(scanners);
-      } catch (Exception ex) {
-        e.addSuppressed(ex);
-      }
-      throw e;
+      snapshots.add(active.snapshot(fields, allocator));
     } finally {
       queueLock.readLock().unlock();
     }
-    return scanners;
+    return snapshots.stream().map(s -> InMemoryTable.of(s, ranges)).collect(ImmutableList.toImmutableList());
   }
 
   public void clear() {
     queueLock.writeLock().lock();
     try {
-      active.reset();
+      toFlushIds.clear();
       archives.values().forEach(ArchivedMemTable::close);
       archives.clear();
+      active.clear();
     } finally {
       queueLock.writeLock().unlock();
     }
@@ -225,7 +147,200 @@ public class MemTableQueue implements NoexceptAutoCloseable {
 
   @Override
   public void close() {
-    clear();
-    allocator.close();
+    queueLock.writeLock().lock();
+    try {
+      clear();
+      active.close();
+      allocator.close();
+    } finally {
+      queueLock.writeLock().unlock();
+    }
+  }
+
+  static class ArchivedMemTable implements NoexceptAutoCloseable {
+    private final MemTable memTable;
+    private final Collection<NoexceptAutoCloseable> onClose;
+    private final CountDownLatch latch = new CountDownLatch(1);
+
+    public ArchivedMemTable(@WillCloseWhenClosed MemTable memTable, @WillCloseWhenClosed Collection<NoexceptAutoCloseable> onClose) {
+      this.memTable = Preconditions.checkNotNull(memTable);
+      this.onClose = new ArrayList<>(onClose);
+    }
+
+    public MemTable getMemTable() {
+      return memTable;
+    }
+
+    public void waitUntilClosed() throws InterruptedException {
+      latch.await();
+    }
+
+    @Override
+    public void close() {
+      latch.countDown();
+      onClose.forEach(NoexceptAutoCloseable::close);
+    }
+  }
+
+  static class ActiveMemTable {
+    private final ReentrantReadWriteLock switchTableLock = new ReentrantReadWriteLock(true);
+
+    private final Shared shared;
+    private final BufferAllocator allocator;
+
+    private long currentId = 0;
+    private BufferAllocator activeAllocator;
+    private MemTable activeTable;
+    private volatile boolean activeTableWritten;
+    private final NavigableSet<Long> duplicateIds = new TreeSet<>();
+    private final BlockingQueue<Long> toDeleteIds = new PriorityBlockingQueue<>();
+
+    ActiveMemTable(Shared shared, BufferAllocator allocator) {
+      this.shared = Preconditions.checkNotNull(shared);
+      this.allocator = Preconditions.checkNotNull(allocator);
+      createNewMemtable();
+    }
+
+    private void createNewMemtable() {
+      String name = String.join("-", allocator.getName(), MemTable.class.getSimpleName(), String.valueOf(currentId));
+      activeAllocator = allocator.newChildAllocator(name, 0, Long.MAX_VALUE);
+      activeTable = new MemTable(activeAllocator, shared.getStorageProperties().getWriteBufferChunkValuesMax());
+      activeTableWritten = false;
+    }
+
+    public boolean isOverloaded() {
+      switchTableLock.readLock().lock();
+      try {
+        return activeAllocator.getAllocatedMemory() >= shared.getStorageProperties().getWriteBufferSize();
+      } finally {
+        switchTableLock.readLock().unlock();
+      }
+    }
+
+    public void store(Iterable<MemBatch.Snapshot> data) {
+      switchTableLock.readLock().lock();
+      try {
+        for (MemBatch.Snapshot snapshot : data) {
+          activeTable.append(snapshot);
+        }
+        activeTableWritten = true;
+      } finally {
+        switchTableLock.readLock().unlock();
+      }
+    }
+
+    public Map<Long, ArchivedMemTable> archive(boolean createNewTable) throws InterruptedException {
+      switchTableLock.writeLock().lock();
+      try {
+        if (!activeTableWritten) {
+          return Collections.emptyMap();
+        }
+        List<NoexceptAutoCloseable> onClose = new ArrayList<>();
+        shared.getMemTablePermits().acquire();
+        onClose.add(() -> shared.getMemTablePermits().release());
+
+        Map<Long, ArchivedMemTable> result = new HashMap<>();
+        long archiveId = currentId++;
+        result.put(archiveId, new ArchivedMemTable(activeTable, onClose));
+
+        if (createNewTable) {
+          onClose.add(activeTable);
+          onClose.add(activeAllocator::close);
+          createNewMemtable();
+        } else {
+          duplicateIds.add(archiveId);
+        }
+        return result;
+      } finally {
+        switchTableLock.writeLock().unlock();
+      }
+    }
+
+    public MemTable.Snapshot snapshot(List<Field> fields, BufferAllocator allocator) {
+      switchTableLock.readLock().lock();
+      try {
+        return activeTable.snapshot(fields, allocator);
+      } finally {
+        switchTableLock.readLock().unlock();
+      }
+    }
+
+    public long takeToDelete() throws InterruptedException {
+      return toDeleteIds.take();
+    }
+
+    public void onTableFlushed(long id) {
+      switchTableLock.writeLock().lock();
+      try {
+        Set<Long> toDeleteIds = duplicateIds.subSet(Long.MIN_VALUE, id);
+        this.toDeleteIds.addAll(toDeleteIds);
+        toDeleteIds.clear();
+      } finally {
+        switchTableLock.writeLock().unlock();
+      }
+    }
+
+    public void clear() {
+      switchTableLock.writeLock().lock();
+      try {
+        activeTable.close();
+        activeAllocator.close();
+        currentId = 0;
+        createNewMemtable();
+        duplicateIds.clear();
+        toDeleteIds.clear();
+      } finally {
+        switchTableLock.writeLock().unlock();
+      }
+    }
+
+    public void close() {
+      switchTableLock.writeLock().lock();
+      try {
+        clear();
+        activeTable.close();
+        activeAllocator.close();
+      } finally {
+        switchTableLock.writeLock().unlock();
+      }
+    }
+  }
+
+  public static class TookTable implements NoexceptAutoCloseable {
+
+    private final long id;
+    private final InMemoryTable table;
+    private final LongConsumer onFailure;
+    private final LongConsumer onSuccess;
+    private boolean failed = false;
+
+    TookTable(long id, @WillCloseWhenClosed InMemoryTable memTable, LongConsumer onFailure, LongConsumer onSuccess) {
+      this.id = id;
+      this.table = memTable;
+      this.onFailure = onFailure;
+      this.onSuccess = onSuccess;
+    }
+
+    public long getId() {
+      return id;
+    }
+
+    public InMemoryTable getMemTable() {
+      return table;
+    }
+
+    public void fail() {
+      failed = true;
+    }
+
+    @Override
+    public void close() {
+      table.close();
+      if (failed) {
+        onFailure.accept(id);
+      } else {
+        onSuccess.accept(id);
+      }
+    }
   }
 }
