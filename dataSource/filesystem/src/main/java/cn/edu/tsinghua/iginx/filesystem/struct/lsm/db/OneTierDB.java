@@ -30,6 +30,7 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemBatch;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.Catalog;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.TableStorage;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.*;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
@@ -65,16 +66,16 @@ public class OneTierDB implements AutoCloseable {
   private final Catalog catalog;
   private final TableStorage tableStorage;
   private final MemTableQueue memTableQueue;
-  private final Flusher flusher;
+  private final Compactor flusher;
 
-  public OneTierDB(String name, Shared shared, StorageManager readerWriter) throws IOException {
+  public OneTierDB(String name, Shared shared, StorageManager readerWriter) throws StorageException {
     this.name = name;
     this.shared = shared;
-    this.allocator = shared.getAllocator().newChildAllocator(name, 0, Long.MAX_VALUE);
     this.catalog = new Catalog(shared);
     this.tableStorage = new TableStorage(shared, catalog, readerWriter);
+    this.allocator = shared.getAllocator().newChildAllocator(name, 0, Long.MAX_VALUE);
     this.memTableQueue = new MemTableQueue(shared, allocator);
-    this.flusher = new Flusher(name, shared, memTableQueue, tableStorage);
+    this.flusher = new Compactor(name, shared, memTableQueue, tableStorage);
     flusher.start();
   }
 
@@ -182,16 +183,13 @@ public class OneTierDB implements AutoCloseable {
     }
   }
 
-  private void deleteRanges(List<Field> fields, RangeSet<Long> ranges) throws InterruptedException, IOException {
-    AreaSet<Long, Field> areaSet = new AreaSet<>();
-    areaSet.add(new HashSet<>(fields), ranges);
-    AreaSet<Long, String> innerAreas = ArrowFields.toInnerAreas(areaSet);
+  private void deleteRanges(List<Field> fields, RangeSet<Long> keyRangeSet) throws InterruptedException, IOException {
     deleteLock.writeLock().lock();
     try {
-      LOGGER.debug("start to delete {} in {}", areaSet, name);
+      LOGGER.debug("start to delete {} where {} in {}", fields, keyRangeSet, name);
       memTableQueue.flushAll(true);
-      catalog.delete(innerAreas);
-      tableStorage.delete(innerAreas);
+      catalog.delete(fields, keyRangeSet);
+      tableStorage.delete(fields, keyRangeSet);
     } finally {
       deleteLock.writeLock().unlock();
     }
@@ -200,12 +198,10 @@ public class OneTierDB implements AutoCloseable {
   private void deleteFields(List<Field> fields) throws StorageException, IOException, InterruptedException {
     deleteLock.writeLock().lock();
     try {
+      LOGGER.debug("start to delete {} in {}", fields, name);
       memTableQueue.flushAll(true);
       catalog.delete(fields);
-      AreaSet<Long, Field> areas = new AreaSet<>();
-      areas.add(new HashSet<>(fields));
-      AreaSet<Long, String> innerAreas = ArrowFields.toInnerAreas(areas);
-      tableStorage.delete(innerAreas);
+      tableStorage.delete(fields);
     } finally {
       deleteLock.writeLock().unlock();
     }
@@ -239,7 +235,6 @@ public class OneTierDB implements AutoCloseable {
         memTableQueue.flushAll(true);
       }
       flusher.stop();
-      tableStorage.close();
       memTableQueue.close();
       allocator.close();
     } finally {

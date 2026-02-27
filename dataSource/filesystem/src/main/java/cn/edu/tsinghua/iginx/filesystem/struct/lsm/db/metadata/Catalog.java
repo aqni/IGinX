@@ -21,133 +21,72 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field.FieldIndex;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.NotIntegrityException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
-import cn.edu.tsinghua.iginx.thrift.DataType;
-import com.google.common.collect.ImmutableRangeSet;
-import com.google.common.collect.Range;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.RangeSet;
-import com.google.common.collect.TreeRangeSet;
-import java.util.*;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.*;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 public class Catalog {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Catalog.class);
-  private final ReadWriteLock insertLock = new ReentrantReadWriteLock(true);
-  private final ReadWriteLock deleteLock = new ReentrantReadWriteLock(true);
+  private final ReadWriteLock deleteLock = new ReentrantReadWriteLock();
+  private final ReadWriteLock schemaLock = new ReentrantReadWriteLock();
 
-  private final Map<String, ColumnIndex> indexes = new HashMap<>();
-  private final FieldIndex fieldIndex;
+  private final Map<Field, ColumnTableIndex> index = new HashMap<>();
+  private final FieldIndex schema;
 
   public Catalog(Shared shared) {
-    this.fieldIndex = shared.getStorageProperties().getCatalogFieldIndexType().create();
+    this.schema = shared.getStorageProperties().getCatalogFieldIndexType().create();
   }
 
   public List<Field> find(List<String> patterns, TagFilter tagFilter) {
     deleteLock.readLock().lock();
-    insertLock.readLock().lock();
+    schemaLock.readLock().lock();
     try {
-      return fieldIndex.find(patterns, tagFilter);
+      return schema.find(patterns, tagFilter);
     } finally {
-      insertLock.readLock().unlock();
+      schemaLock.readLock().unlock();
       deleteLock.readLock().unlock();
     }
-  }
-
-  public Set<String> find(AreaSet<Long, String> areas) {
-    Set<String> result = new HashSet<>();
-    deleteLock.readLock().lock();
-    insertLock.readLock().lock();
-    try {
-      RangeSet<Long> rangeSet = areas.getKeys();
-      if (!rangeSet.isEmpty()) {
-        for (ColumnIndex columnIndex : indexes.values()) {
-          Set<String> tables = columnIndex.find(rangeSet);
-          result.addAll(tables);
-        }
-      }
-      for (String field : areas.getFields()) {
-        ColumnIndex columnIndex = indexes.get(field);
-        if (columnIndex == null) {
-          continue;
-        }
-        Set<String> tables = columnIndex.find();
-        result.addAll(tables);
-      }
-      for (Map.Entry<String, RangeSet<Long>> entry : areas.getSegments().entrySet()) {
-        ColumnIndex columnIndex = indexes.get(entry.getKey());
-        if (columnIndex == null) {
-          continue;
-        }
-        Set<String> tables = columnIndex.find(entry.getValue());
-        result.addAll(tables);
-      }
-    } finally {
-      insertLock.readLock().unlock();
-      deleteLock.readLock().unlock();
-    }
-    return result;
-  }
-
-  public Map<String, Range<Long>> ranges() {
-    Map<String, Range<Long>> result = new HashMap<>();
-    deleteLock.readLock().lock();
-    insertLock.readLock().lock();
-    try {
-      for (Map.Entry<String, ColumnIndex> entry : indexes.entrySet()) {
-        RangeSet<Long> rangeSet = entry.getValue().ranges();
-        if (!rangeSet.isEmpty()) {
-          result.put(entry.getKey(), rangeSet.span());
-        }
-      }
-    } finally {
-      insertLock.readLock().unlock();
-      deleteLock.readLock().unlock();
-    }
-    return result;
   }
 
   public void verifyAndInsertFields(List<Field> fields) throws TypeConflictedException {
-
     deleteLock.readLock().lock();
     try {
-      insertLock.readLock().lock();
+      schemaLock.readLock().lock();
       try {
-        List<Boolean> contains = fieldIndex.contain(fields);
+        List<Boolean> contains = schema.contain(fields);
         if (contains.stream().allMatch(Boolean::booleanValue)) {
           return;
         }
       } finally {
-        insertLock.readLock().unlock();
+        schemaLock.readLock().unlock();
       }
-      insertLock.writeLock().lock();
+      schemaLock.writeLock().lock();
       try {
-        List<Boolean> contains = fieldIndex.contain(fields);
+        List<Boolean> contains = schema.contain(fields);
         List<Field> toInsert = new ArrayList<>();
         for (int i = 0; i < fields.size(); i++) {
           if (!contains.get(i)) {
             toInsert.add(fields.get(i));
           }
         }
-        fieldIndex.insert(toInsert);
+        schema.insert(toInsert);
         for (Field field : toInsert) {
-          String fieldName = ArrowFields.toFullName(field);
-          if (!indexes.containsKey(fieldName)) {
-            indexes.put(fieldName, new ColumnIndex());
-          }
+          index.computeIfAbsent(field, f -> new ColumnTableIndex(Types.getMinorTypeForArrowType(f.getType())));
         }
       } finally {
-        insertLock.writeLock().unlock();
+        schemaLock.writeLock().unlock();
       }
     } finally {
       deleteLock.readLock().unlock();
@@ -156,63 +95,77 @@ public class Catalog {
 
   public List<Field> findFields(List<String> patterns, @Nullable TagFilter tagFilter) {
     deleteLock.readLock().lock();
-    insertLock.readLock().lock();
+    schemaLock.readLock().lock();
     try {
-      return fieldIndex.find(patterns, tagFilter);
+      return schema.find(patterns, tagFilter);
     } finally {
-      insertLock.readLock().unlock();
+      schemaLock.readLock().unlock();
       deleteLock.readLock().unlock();
     }
   }
 
-  public void addTable(String name, StorageManager.TableMeta meta) throws TypeConflictedException {
-    List<Field> fields = ArrowFields.fromIginxSchema(meta.getSchema());
-    verifyAndInsertFields(fields);
+  public void addTable(long tableId, Table.Meta meta) throws TypeConflictedException {
+    Map<Field, Table.Statistic> fieldStats = meta.getFieldStats();
     deleteLock.readLock().lock();
-    insertLock.readLock().lock();
     try {
-      Map<String, DataType> types = meta.getSchema();
-      for (String field : types.keySet()) {
-        ColumnIndex columnIndex = indexes.get(field);
-        if (columnIndex == null) {
-          throw new NotIntegrityException("field " + field + " is not found in schema");
+      verifyAndInsertFields(ImmutableList.copyOf(fieldStats.keySet()));
+      schemaLock.readLock().lock();
+      try {
+        for (Map.Entry<Field, Table.Statistic> entry : fieldStats.entrySet()) {
+          Field field = entry.getKey();
+          Table.Statistic statistic = entry.getValue();
+          ColumnTableIndex columnIndex = index.get(field);
+          columnIndex.addTable(tableId, statistic.getKeyRange());
         }
-        Range<Long> range = meta.getRange(field);
-        columnIndex.addTable(name, Objects.requireNonNull(range));
+      } finally {
+        schemaLock.readLock().unlock();
       }
     } finally {
-      insertLock.readLock().unlock();
       deleteLock.readLock().unlock();
     }
+  }
+
+  public Set<Long> findTable(List<Field> fields, RangeSet<Long> keyRangeSet) {
+    Set<Long> result = new HashSet<>();
+    deleteLock.readLock().lock();
+    schemaLock.readLock().lock();
+    try {
+      for (Field field : fields) {
+        ColumnTableIndex columnIndex = index.get(field);
+        if (columnIndex == null) {
+          continue;
+        }
+        Set<Long> tableIds = columnIndex.find(keyRangeSet);
+        result.addAll(tableIds);
+      }
+    } finally {
+      schemaLock.readLock().unlock();
+      deleteLock.readLock().unlock();
+    }
+    return result;
   }
 
   public void delete(List<Field> fields) throws TypeConflictedException {
     deleteLock.writeLock().lock();
     try {
-      fieldIndex.remove(fields);
+      schema.remove(fields);
       for (Field field : fields) {
-        String fullFieldName = ArrowFields.toFullName(field);
-        indexes.remove(fullFieldName);
+        index.remove(field);
       }
     } finally {
       deleteLock.writeLock().unlock();
     }
   }
 
-  public void delete(AreaSet<Long, String> areas) {
+  public void delete(List<Field> fields, RangeSet<Long> keyRangeSet) {
     deleteLock.writeLock().lock();
     try {
-      if (!areas.getFields().isEmpty()) {
-        throw new IllegalStateException("cannot delete whole fields from table index");
-      }
-      for (ColumnIndex columnIndex : indexes.values()) {
-        columnIndex.delete(areas.getKeys());
-      }
-      for (Map.Entry<String, RangeSet<Long>> entry : areas.getSegments().entrySet()) {
-        ColumnIndex columnIndex = indexes.get(entry.getKey());
-        if (columnIndex != null) {
-          columnIndex.delete(entry.getValue());
+      for (Field field : fields) {
+        ColumnTableIndex columnIndex = index.get(field);
+        if (columnIndex == null) {
+          continue;
         }
+        columnIndex.delete(keyRangeSet);
       }
     } finally {
       deleteLock.writeLock().unlock();
@@ -222,98 +175,10 @@ public class Catalog {
   public void clear() {
     deleteLock.writeLock().lock();
     try {
-      fieldIndex.clear();
-      indexes.clear();
+      schema.clear();
+      index.clear();
     } finally {
       deleteLock.writeLock().unlock();
-    }
-  }
-
-  public static class ColumnIndex {
-    private final ReadWriteLock lock = new ReentrantReadWriteLock(true);
-    private final Map<String, Range<Long>> tableRange = new HashMap<>();
-
-    public void addTable(String name, Range<Long> range) {
-      lock.writeLock().lock();
-      try {
-        if (this.tableRange.containsKey(name)) {
-          throw new NotIntegrityException("table " + name + " already exists");
-        }
-        this.tableRange.put(name, range);
-      } finally {
-        lock.writeLock().unlock();
-      }
-    }
-
-    public void removeTable(String name) {
-      lock.writeLock().lock();
-      try {
-        this.tableRange.remove(name);
-      } finally {
-        lock.writeLock().unlock();
-      }
-    }
-
-    public Set<String> find(RangeSet<Long> ranges) {
-      Set<String> result = new HashSet<>();
-      lock.readLock().lock();
-      try {
-        for (Map.Entry<String, Range<Long>> entry : tableRange.entrySet()) {
-          if (ranges.intersects(entry.getValue())) {
-            result.add(entry.getKey());
-          }
-        }
-      } finally {
-        lock.readLock().unlock();
-      }
-      return result;
-    }
-
-    public Set<String> find() {
-      Set<String> result = new HashSet<>();
-      lock.readLock().lock();
-      try {
-        result.addAll(tableRange.keySet());
-      } finally {
-        lock.readLock().unlock();
-      }
-      return result;
-    }
-
-    public void delete(RangeSet<Long> ranges) {
-      lock.writeLock().lock();
-      try {
-        RangeSet<Long> validRanges = ranges.complement();
-        Iterator<Map.Entry<String, Range<Long>>> iterator = tableRange.entrySet().iterator();
-        Map<String, Range<Long>> overlap = new HashMap<>();
-        while (iterator.hasNext()) {
-          Map.Entry<String, Range<Long>> entry = iterator.next();
-          if (!ranges.intersects(entry.getValue())) {
-            continue;
-          }
-          if (ranges.encloses(entry.getValue())) {
-            iterator.remove();
-          } else {
-            overlap.put(entry.getKey(), validRanges.subRangeSet(entry.getValue()).span());
-          }
-        }
-        tableRange.putAll(overlap);
-      } finally {
-        lock.writeLock().unlock();
-      }
-    }
-
-    public RangeSet<Long> ranges() {
-      TreeRangeSet<Long> rangeSet = TreeRangeSet.create();
-      lock.readLock().lock();
-      try {
-        for (Range<Long> range : tableRange.values()) {
-          rangeSet.add(range);
-        }
-      } finally {
-        lock.readLock().unlock();
-      }
-      return ImmutableRangeSet.copyOf(rangeSet);
     }
   }
 }

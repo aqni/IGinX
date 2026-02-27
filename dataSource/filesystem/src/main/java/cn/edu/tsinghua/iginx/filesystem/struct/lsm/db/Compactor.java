@@ -20,6 +20,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.TableStorage;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -33,9 +34,9 @@ import java.time.Duration;
 import java.util.concurrent.*;
 
 @NotThreadSafe
-public class Flusher {
+public class Compactor {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(Flusher.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(Compactor.class);
 
   private final String name;
   private final Shared shared;
@@ -48,7 +49,7 @@ public class Flusher {
   private ExecutorService deleter = null;
   private ScheduledExecutorService scheduler = null;
 
-  public Flusher(
+  public Compactor(
       String name,
       Shared shared,
       MemTableQueue memTableQueue,
@@ -115,7 +116,7 @@ public class Flusher {
   private void flush(MemTableQueue.TookTable table) {
     LOGGER.debug("start to flush memtable {}", table.getId());
     try (MemTableQueue.TookTable ignored = table) {
-      tableStorage.flush(idBase + table.getId(), table.getMemTable());
+      tableStorage.flush(idBase + table.getId(), table.getMemTable(), table.isFinalTable());
     } catch (StorageException | IOException e) {
       table.fail();
       LOGGER.error("flush memtable {} failed", idBase + table.getId(), e);
@@ -140,7 +141,7 @@ public class Flusher {
         long id = memTableQueue.takeToDelete();
         LOGGER.debug("flushed table {} is need to delete", idBase + id);
         try {
-          tableStorage.delete(idBase + id);
+          tableStorage.deleteNoCompact(idBase + id);
         } catch (IOException e) {
           LOGGER.error("delete memtable {} failed, giving up", idBase + id, e);
         }

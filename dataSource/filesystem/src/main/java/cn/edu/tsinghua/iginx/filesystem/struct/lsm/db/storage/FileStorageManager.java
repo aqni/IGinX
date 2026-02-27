@@ -191,7 +191,7 @@ abstract class FileStorageManager<META extends FileStorageManager.CacheableTable
   }
 
   @Override
-  public Iterable<String> reload() throws IOException {
+  public Iterable<String> list() throws IOException {
     List<String> names = new ArrayList<>();
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*" + this.fileSuffixName)) {
       for (Path path : stream) {

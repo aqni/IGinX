@@ -19,56 +19,32 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage;
 
-import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
-import cn.edu.tsinghua.iginx.thrift.DataType;
-import com.google.common.collect.Range;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
 import com.google.common.collect.RangeSet;
+import it.unimi.dsi.fastutil.longs.LongIterable;
+import org.apache.arrow.vector.types.pojo.Field;
+
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 public interface StorageManager {
 
   String getName();
 
-  void flush(String name, TableMeta meta, Scanner<Long, Scanner<String, Object>> scanner)
-      throws IOException;
+  void flush(long tableId, Table table) throws IOException;
 
-  TableMeta readMeta(String name) throws IOException;
+  Table read(long tableId) throws IOException;
 
-  Scanner<Long, Scanner<String, Object>> scanData(
-      String name, Set<String> fields, RangeSet<Long> ranges, Filter predicate) throws IOException;
+  void delete(long tableId) throws IOException;
 
-  void delete(String name, AreaSet<Long, String> areas) throws IOException;
+  void delete(long tableId, List<Field> fields) throws IOException;
 
-  void delete(long tableId);
+  void delete(long tableId, List<Field> fields, RangeSet<Long> keyRangeSet) throws IOException;
 
-  Iterable<String> reload() throws IOException;
+  Iterable<Long> list() throws IOException;
 
   void clear() throws IOException;
-
-  interface TableMeta {
-    Map<String, DataType> getSchema();
-
-    Range<Long> getRange(String field);
-
-    default Range<Long> getRange(Iterable<String> fields) {
-      Range<Long> range = null;
-      for (String field : fields) {
-        Range<Long> fieldRange = getRange(field);
-        if (range == null) {
-          range = getRange(field);
-        } else {
-          range = range.span(fieldRange);
-        }
-      }
-      return range;
-    }
-
-    @Nullable
-    Long getValueCount(String field);
-  }
 }

@@ -20,6 +20,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.InMemoryTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Awaitable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
@@ -100,7 +101,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     try {
       ArchivedMemTable archivedMemTable = archives.get(id);
       MemTable.Snapshot snapshot = archivedMemTable.getMemTable().snapshot(allocator);
-      return new TookTable(id, InMemoryTable.of(snapshot), toFlushIds::add, this::remove);
+      return new TookTable(id, InMemoryTable.of(snapshot), archivedMemTable.isOwnTable(), toFlushIds::add, this::remove);
     } finally {
       queueLock.writeLock().unlock();
     }
@@ -130,7 +131,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     } finally {
       queueLock.readLock().unlock();
     }
-    return snapshots.stream().map(s -> InMemoryTable.of(s, ranges)).collect(ImmutableList.toImmutableList());
+    return snapshots.stream().map(InMemoryTable::of).collect(ImmutableList.toImmutableList());
   }
 
   public void clear() {
@@ -159,16 +160,24 @@ public class MemTableQueue implements NoexceptAutoCloseable {
 
   static class ArchivedMemTable implements NoexceptAutoCloseable {
     private final MemTable memTable;
-    private final Collection<NoexceptAutoCloseable> onClose;
+    private final BufferAllocator allocator;
+    private final NoexceptAutoCloseable onClose;
+    private final boolean ownTable;
     private final CountDownLatch latch = new CountDownLatch(1);
 
-    public ArchivedMemTable(@WillCloseWhenClosed MemTable memTable, @WillCloseWhenClosed Collection<NoexceptAutoCloseable> onClose) {
+    public ArchivedMemTable(@WillCloseWhenClosed MemTable memTable, @WillCloseWhenClosed BufferAllocator allocator, boolean ownTable, @WillCloseWhenClosed NoexceptAutoCloseable onClose) {
       this.memTable = Preconditions.checkNotNull(memTable);
-      this.onClose = new ArrayList<>(onClose);
+      this.allocator = Preconditions.checkNotNull(allocator);
+      this.ownTable = ownTable;
+      this.onClose = onClose;
     }
 
     public MemTable getMemTable() {
       return memTable;
+    }
+
+    private boolean isOwnTable() {
+      return ownTable;
     }
 
     public void waitUntilClosed() throws InterruptedException {
@@ -178,7 +187,11 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     @Override
     public void close() {
       latch.countDown();
-      onClose.forEach(NoexceptAutoCloseable::close);
+      if (ownTable) {
+        memTable.close();
+        allocator.close();
+      }
+      onClose.close();
     }
   }
 
@@ -235,17 +248,13 @@ public class MemTableQueue implements NoexceptAutoCloseable {
         if (!activeTableWritten) {
           return Collections.emptyMap();
         }
-        List<NoexceptAutoCloseable> onClose = new ArrayList<>();
         shared.getMemTablePermits().acquire();
-        onClose.add(() -> shared.getMemTablePermits().release());
 
         Map<Long, ArchivedMemTable> result = new HashMap<>();
         long archiveId = currentId++;
-        result.put(archiveId, new ArchivedMemTable(activeTable, onClose));
+        result.put(archiveId, new ArchivedMemTable(activeTable, activeAllocator, createNewTable, () -> shared.getMemTablePermits().release()));
 
         if (createNewTable) {
-          onClose.add(activeTable);
-          onClose.add(activeAllocator::close);
           createNewMemtable();
         } else {
           duplicateIds.add(archiveId);
@@ -310,13 +319,15 @@ public class MemTableQueue implements NoexceptAutoCloseable {
 
     private final long id;
     private final InMemoryTable table;
+    private final boolean finalTable;
     private final LongConsumer onFailure;
     private final LongConsumer onSuccess;
     private boolean failed = false;
 
-    TookTable(long id, @WillCloseWhenClosed InMemoryTable memTable, LongConsumer onFailure, LongConsumer onSuccess) {
+    TookTable(long id, @WillCloseWhenClosed InMemoryTable memTable, boolean finalTable, LongConsumer onFailure, LongConsumer onSuccess) {
       this.id = id;
       this.table = memTable;
+      this.finalTable = finalTable;
       this.onFailure = onFailure;
       this.onSuccess = onSuccess;
     }
@@ -325,7 +336,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
       return id;
     }
 
-    public InMemoryTable getMemTable() {
+    public Table getMemTable() {
       return table;
     }
 
@@ -341,6 +352,10 @@ public class MemTableQueue implements NoexceptAutoCloseable {
       } else {
         onSuccess.accept(id);
       }
+    }
+
+    public boolean isFinalTable() {
+      return finalTable;
     }
   }
 }

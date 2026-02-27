@@ -19,38 +19,42 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table;
 
+import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.LazyRowScanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
-import com.google.common.collect.RangeSet;
-import java.io.IOException;
-import java.util.Set;
+import com.google.common.collect.Range;
+import lombok.NonNull;
+import lombok.Value;
+import org.apache.arrow.vector.types.pojo.Field;
+
 import javax.annotation.Nullable;
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 public interface Table {
 
-  StorageManager.TableMeta getMeta() throws IOException;
+  Meta getMeta() throws IOException;
 
-  Scanner<Long, Scanner<String, Object>> scan(
-      Set<String> fields, RangeSet<Long> range, @Nullable Filter superSetPredicate)
-      throws IOException;
+  List<SubTable> getSubTables() throws IOException;
 
-  default Scanner<Long, Scanner<String, Object>> scan(Set<String> fields, RangeSet<Long> ranges)
-      throws IOException {
-    return scan(fields, ranges, null);
+  interface SubTable {
+    Meta getMeta() throws IOException;
+
+    RowStream scan(List<Field> fields, @Nullable Filter predicate) throws IOException;
   }
 
-  default Scanner<Long, Scanner<String, Object>> lazyScan(
-      Set<String> fields, RangeSet<Long> ranges) {
-    return new LazyRowScanner<>(
-        () -> {
-          try {
-            return scan(fields, ranges);
-          } catch (IOException e) {
-            throw new StorageException(e);
-          }
-        });
+  @Value
+  class Statistic {
+    Range<Long> keyRange;
+    long nullCount;
+    long valueCount;
+    Object maxValue;
+    Object minValue;
+  }
+
+  @Value
+  class Meta {
+    @NonNull
+    Map<Field, Statistic> fieldStats;
   }
 }

@@ -27,11 +27,12 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.TagKVUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.*;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.SingleCache;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
+
+import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -47,9 +48,6 @@ public class InMemoryTable implements Table, NoexceptAutoCloseable {
 
   private final LinkedHashMap<Field, MemSubTable.Snapshot> columns;
   private final Map<String, Field> fieldMap = new HashMap<>();
-  private final SingleCache<StorageManager.TableMeta> meta =
-      new SingleCache<>(() -> new MemoryTableMeta(getSchema(), getRanges(), getCounts()));
-
 
   public static InMemoryTable of(@WillCloseWhenClosed MemTable.Snapshot snapshot) {
     LinkedHashMap<Field, MemSubTable.Snapshot> columns = new LinkedHashMap<>();
@@ -59,15 +57,7 @@ public class InMemoryTable implements Table, NoexceptAutoCloseable {
     return new InMemoryTable(columns);
   }
 
-  public static InMemoryTable of(@WillCloseWhenClosed MemTable.Snapshot snapshot, RangeSet<Long> ranges) {
-    LinkedHashMap<Field, MemSubTable.Snapshot> columns = new LinkedHashMap<>();
-    for (Field field : snapshot.getFields()) {
-      columns.put(field, snapshot.getSubTable(field));
-    }
-    return new InMemoryTable(columns);
-  }
-
-  public InMemoryTable(@WillCloseWhenClosed MemTable.Snapshot snapshot, BufferAllocator allocator) {
+  private InMemoryTable(@WillCloseWhenClosed MemTable.Snapshot snapshot, BufferAllocator allocator) {
     this.columns = new LinkedHashMap<>(columns);
     for (Field field : columns.keySet()) {
       fieldMap.put(getFieldString(field), field);
@@ -119,6 +109,11 @@ public class InMemoryTable implements Table, NoexceptAutoCloseable {
   @Override
   public StorageManager.TableMeta getMeta() {
     return meta.get();
+  }
+
+  @Override
+  public List<SubTable> getSubTables() throws IOException {
+    return Collections.emptyList();
   }
 
   @Override

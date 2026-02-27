@@ -59,7 +59,7 @@ public class FileLsmManager implements FileManager {
   private final Path path;
   private final OneTierDB db;
 
-  public FileLsmManager(Shared shared, Path path) throws IOException {
+  public FileLsmManager(Shared shared, Path path) throws StorageException {
     this.shared = shared;
     this.path = path;
     StorageManager storageManager = new ParquetFileStorageManager(shared, path); // tpch
