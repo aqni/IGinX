@@ -40,16 +40,12 @@ public interface Table {
   interface SubTable {
     Meta getMeta() throws IOException;
 
-    RowStream scan(List<Field> fields, @Nullable Filter predicate) throws IOException;
+    RowStream scan(List<Field> fields, Filter predicate) throws IOException;
   }
 
   @Value
   class Statistic {
     Range<Long> keyRange;
-    long nullCount;
-    long valueCount;
-    Object maxValue;
-    Object minValue;
   }
 
   @Value

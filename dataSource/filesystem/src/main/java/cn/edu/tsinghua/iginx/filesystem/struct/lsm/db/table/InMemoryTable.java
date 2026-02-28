@@ -19,284 +19,239 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table;
 
+import cn.edu.tsinghua.iginx.engine.shared.data.read.FilterRowStreamWrapper;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Header;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Row;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemSubTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.TagKVUtils;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.*;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
-import cn.edu.tsinghua.iginx.thrift.DataType;
-import com.google.common.collect.Range;
-import com.google.common.collect.RangeSet;
-
-import java.io.IOException;
-import java.util.*;
-import java.util.stream.Collectors;
-import javax.annotation.Nullable;
-import javax.annotation.WillCloseWhenClosed;
-
-import org.apache.arrow.memory.BufferAllocator;
+import com.google.common.collect.*;
+import it.unimi.dsi.fastutil.ints.IntHeapPriorityQueue;
+import it.unimi.dsi.fastutil.ints.IntPriorityQueue;
+import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class InMemoryTable implements Table, NoexceptAutoCloseable {
+import javax.annotation.WillCloseWhenClosed;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(InMemoryTable.class);
 
-  private final LinkedHashMap<Field, MemSubTable.Snapshot> columns;
-  private final Map<String, Field> fieldMap = new HashMap<>();
+  private final MemTable.Snapshot snapshot;
+  private final ImmutableList<SubTable> subTables;
 
-  public static InMemoryTable of(@WillCloseWhenClosed MemTable.Snapshot snapshot) {
-    LinkedHashMap<Field, MemSubTable.Snapshot> columns = new LinkedHashMap<>();
-    for (Field field : snapshot.getFields()) {
-      columns.put(field, snapshot.getSubTable(field));
-    }
-    return new InMemoryTable(columns);
-  }
-
-  private InMemoryTable(@WillCloseWhenClosed MemTable.Snapshot snapshot, BufferAllocator allocator) {
-    this.columns = new LinkedHashMap<>(columns);
-    for (Field field : columns.keySet()) {
-      fieldMap.put(getFieldString(field), field);
-    }
-  }
-
-  public Set<Field> getFields() {
-    return columns.keySet();
-  }
-
-  public boolean isEmpty() {
-    return columns.isEmpty();
-  }
-
-  private Map<String, DataType> getSchema() {
-    return (Map) ArrowFields.toIginxSchema(columns.keySet());
-  }
-
-  private Map<String, Range<Long>> getRanges() {
-    return columns.keySet().stream()
-        .collect(Collectors.toMap(this::getFieldString, this::getRange));
-  }
-
-  private Map<String, Long> getCounts() {
-    // TODO: give statistics
-    return Collections.emptyMap();
-  }
-
-  private String getFieldString(Field field) {
-    return TagKVUtils.toFullName(ArrowFields.toColumnKey(field));
-  }
-
-  private Range<Long> getRange(Field field) {
-    MemSubTable.Snapshot snapshot = columns.get(field);
-    RangeSet<Long> ranges = snapshot.getRanges();
-    if (ranges.isEmpty()) {
-      return Range.closed(0L, 0L);
-    }
-    return ranges.span();
-  }
-
-  @Override
-  public String toString() {
-    return new StringJoiner(", ", InMemoryTable.class.getSimpleName() + "[", "]")
-        .add("meta=" + meta)
-        .toString();
-  }
-
-  @Override
-  public StorageManager.TableMeta getMeta() {
-    return meta.get();
-  }
-
-  @Override
-  public List<SubTable> getSubTables() throws IOException {
-    return Collections.emptyList();
-  }
-
-  @Override
-  public Scanner<Long, Scanner<String, Object>> scan(
-      Set<String> fields, RangeSet<Long> ranges, @Nullable Filter superSetPredicate) {
-    if (LOGGER.isDebugEnabled()) {
-      LOGGER.debug("read {} where {} from {}", fields, ranges, meta);
-    }
-    Map<String, Scanner<Long, Object>> columns = new HashMap<>();
-    for (String field : fields) {
-      if (!fieldMap.containsKey(field)) {
-        continue;
-      }
-      Field arrowField = fieldMap.get(field);
-      MemSubTable.Snapshot snapshot = this.columns.get(arrowField);
-      columns.put(field, scan(snapshot, ranges));
-    }
-    return new ColumnUnionRowScanner<>(columns);
-  }
-
-  private Scanner<Long, Object> scan(MemSubTable.Snapshot snapshot, RangeSet<Long> ranges) {
-    MemSubTable.Snapshot sliced = snapshot.slice(ranges);
-    return new ListenCloseScanner<>(new IteratorScanner<>(sliced.iterator()), sliced::close);
+  public InMemoryTable(@WillCloseWhenClosed MemTable.Snapshot snapshot) {
+    this.snapshot = snapshot;
+    this.subTables = IntStream.range(0, snapshot.getSubTableCount())
+        .mapToObj(snapshot::getSubTable)
+        .map(InMemorySubTable::new)
+        .collect(ImmutableList.toImmutableList());
   }
 
   @Override
   public void close() {
-    columns.values().forEach(MemSubTable.Snapshot::close);
-    columns.clear();
+    snapshot.close();
   }
 
-  public InMemoryTable subTable(List<Field> fields) {
-    LinkedHashMap<Field, MemSubTable.Snapshot> subColumns = new LinkedHashMap<>();
-    for (Field field : fields) {
-      subColumns.put(field, columns.get(field));
-    }
-    return new InMemoryTable(subColumns) {
-      @Override
-      public void close() {
-        // do nothing
+  @Override
+  public List<SubTable> getSubTables() {
+    return subTables;
+  }
+
+  private static class InMemorySubTable implements SubTable {
+
+    private final MemSubTable.Snapshot snapshot;
+    private final Meta meta;
+
+    InMemorySubTable(MemSubTable.Snapshot snapshot) {
+      this.snapshot = snapshot;
+      RangeSet<Long> rangeSet = TreeRangeSet.create();
+      for (MemSubTable.SortedChunkSnapshot chunk : snapshot.getChunks()) {
+        rangeSet.add(chunk.getKeyRange());
       }
-    };
-  }
-
-  public static class MemoryTableMeta implements StorageManager.TableMeta {
-
-    private final Map<String, DataType> schema;
-    private final Map<String, Range<Long>> ranges;
-    private final Map<String, Long> counts;
-
-    MemoryTableMeta(
-        Map<String, DataType> schema, Map<String, Range<Long>> ranges, Map<String, Long> counts) {
-      this.schema = Collections.unmodifiableMap(schema);
-      this.ranges = Collections.unmodifiableMap(ranges);
-      this.counts = Collections.unmodifiableMap(counts);
-    }
-
-    public Map<String, DataType> getSchema() {
-      return schema;
+      Range<Long> range = rangeSet.isEmpty() ? Range.closedOpen(0L, 0L) : rangeSet.span();
+      ImmutableMap<Field, Statistic> fieldStats = snapshot.getFields().stream()
+          .collect(ImmutableMap.toImmutableMap(
+              field -> field,
+              field -> new Statistic(range)
+          ));
+      this.meta = new Meta(fieldStats);
     }
 
     @Override
-    public Range<Long> getRange(String field) {
-      if (!schema.containsKey(field)) {
+    public Meta getMeta() {
+      return meta;
+    }
+
+    @Override
+    public RowStream scan(List<Field> fields, Filter predicate) {
+      RangeSet<Long> keyRangeSet = FilterRangeUtils.rangeSetOf(predicate);
+      Filter remainingFilter = FilterRangeUtils.withoutKeyRangeSet(predicate);
+
+      Map<Field, Integer> snapshotFieldIndexMap = new HashMap<>();
+      List<Field> snapshotFields = snapshot.getFields();
+      for (int i = 0; i < snapshotFields.size(); i++) {
+        snapshotFieldIndexMap.put(snapshotFields.get(i), i);
+      }
+
+      int[] fieldIndexMapping = new int[fields.size()];
+      for (int i = 0; i < fields.size(); i++) {
+        Field requestedField = fields.get(i);
+        Integer fieldIndex = snapshotFieldIndexMap.get(requestedField);
+
+        // 检查字段是否存在
+        if (fieldIndex == null) {
+          throw new IllegalArgumentException(
+              "Requested field not found in snapshot: " + requestedField.getName());
+        }
+
+        fieldIndexMapping[i] = fieldIndex;
+      }
+
+      RowStream rowStream = new MergedRowStream(snapshot, keyRangeSet, fieldIndexMapping);
+      if (remainingFilter != null) {
+        rowStream = new FilterRowStreamWrapper(rowStream, remainingFilter);
+      }
+      return rowStream;
+    }
+  }
+
+  /**
+   * 多路归并RowStream实现
+   * 使用最小堆对多个已排序的chunk进行归并去重
+   */
+  private static class MergedRowStream implements RowStream {
+
+    private final Header header;
+    private final int[] fieldIndexMapping;
+    private final ChunkIterator[] iterators;
+    private final IntPriorityQueue heap;
+    private Row nextRow;
+
+    MergedRowStream(MemSubTable.Snapshot snapshot, RangeSet<Long> keyRangeSet, int[] fieldIndexMapping) {
+      List<Field> snapshotFields = snapshot.getFields();
+      this.header = new Header(cn.edu.tsinghua.iginx.engine.shared.data.read.Field.KEY,
+          Arrays.stream(fieldIndexMapping).mapToObj(snapshotFields::get).map(ArrowFields::toIginxField).collect(Collectors.toList())
+      );
+      this.fieldIndexMapping = fieldIndexMapping;
+
+      List<ChunkIterator> validIterators = new ArrayList<>();
+      for (MemSubTable.SortedChunkSnapshot chunk : snapshot.getChunks()) {
+        if (keyRangeSet.intersects(chunk.getKeyRange())) {
+          validIterators.add(new ChunkIterator(chunk, keyRangeSet));
+        }
+      }
+
+      this.iterators = validIterators.toArray(new ChunkIterator[0]);
+      this.heap = new IntHeapPriorityQueue(
+          iterators.length,
+          (i1, i2) -> Long.compare(iterators[i1].currentKey, iterators[i2].currentKey)
+      );
+      for (int i = 0; i < iterators.length; i++) {
+        if (iterators[i].advance()) {
+          heap.enqueue(i);
+        }
+      }
+
+      advance();
+    }
+
+    private void advance() {
+      if (heap.isEmpty()) {
+        nextRow = null;
+        return;
+      }
+
+      int minIdx = heap.dequeueInt();
+      long minKey = iterators[minIdx].currentKey;
+
+      Object[] orderedValues = new Object[fieldIndexMapping.length];
+      iterators[minIdx].fillValues(orderedValues, fieldIndexMapping);
+
+      if (iterators[minIdx].advance()) {
+        heap.enqueue(minIdx);
+      }
+
+      while (!heap.isEmpty() && iterators[heap.firstInt()].currentKey == minKey) {
+        int idx = heap.dequeueInt();
+        if (iterators[idx].advance()) {
+          heap.enqueue(idx);
+        }
+      }
+
+      nextRow = new Row(header, minKey, orderedValues);
+    }
+
+    @Override
+    public Header getHeader() {
+      return header;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return nextRow != null;
+    }
+
+    @Override
+    public Row next() {
+      if (!hasNext()) {
         throw new NoSuchElementException();
       }
-      return Objects.requireNonNull(ranges.get(field));
+      Row row = nextRow;
+      advance();
+      return row;
     }
 
     @Override
-    public Long getValueCount(String field) {
-      if (!schema.containsKey(field)) {
-        throw new NoSuchElementException();
+    public void close() {
+    }
+
+    private static class ChunkIterator {
+      private final BigIntVector keyVector;
+      private final FieldVector[] fieldVectors;
+      private final short[] sortedIndex;
+      private final RangeSet<Long> keyRangeSet;
+      private int position;
+      long currentKey;
+
+      ChunkIterator(MemSubTable.SortedChunkSnapshot chunk, RangeSet<Long> keyRangeSet) {
+        this.keyVector = chunk.getSnapshot().getKeyVector();
+        this.fieldVectors = chunk.getSnapshot().getFieldVectors().toArray(new FieldVector[0]);
+        this.sortedIndex = chunk.getIndex();
+        this.keyRangeSet = keyRangeSet;
+        this.position = 0;
+        this.currentKey = Long.MAX_VALUE;
       }
-      return counts.get(field);
-    }
 
-    public Map<String, Range<Long>> getRanges() {
-      return ranges;
-    }
+      boolean advance() {
+        while (position < sortedIndex.length) {
+          int idx = sortedIndex[position++];
+          long key = keyVector.get(idx);
+          if (keyRangeSet.contains(key)) {
+            currentKey = key;
+            return true;
+          }
+        }
+        currentKey = Long.MAX_VALUE;
+        return false;
+      }
 
-    @Override
-    public String toString() {
-      return new StringJoiner(", ", MemoryTableMeta.class.getSimpleName() + "[", "]")
-          .add("schema=" + schema)
-          .add("ranges=" + ranges)
-          .toString();
+      void fillValues(Object[] orderedValues, int[] fieldIndexMapping) {
+        int idx = sortedIndex[position - 1];
+        for (int i = 0; i < fieldIndexMapping.length; i++) {
+          orderedValues[i] = fieldVectors[fieldIndexMapping[i]].getObject(idx);
+        }
+      }
     }
   }
+
 }
-
-//    public Iterator<LongObjectPair<Object[]>> scan(RangeSet<Long> ranges) {
-//      @SuppressWarnings("unchecked")
-//      Iterator<LongIntPair>[] iterators = Arrays.stream(chunks).map(c -> c.iterator(ranges)).toArray(Iterator[]::new);
-//
-//      return new Iterator<LongObjectPair<Object[]>>() {
-//        private final LongIntPair[] currentValues = new LongIntPair[iterators.length];
-//        private final IntPriorityQueue iteratorHeap = new IntHeapPriorityQueue(currentValues.length, IntComparator.comparingLong(i -> currentValues[i].leftLong()).thenComparing(IntComparators.NATURAL_COMPARATOR));
-//        private LongObjectPair<Object[]> nextResult;
-//
-//        {
-//          for (int i = 0; i < iterators.length; i++) {
-//            if (iterators[i].hasNext()) {
-//              currentValues[i] = iterators[i].next();
-//              iteratorHeap.enqueue(i);
-//            }
-//          }
-//          advance();
-//        }
-//
-//        private void advance() {
-//          if (iteratorHeap.isEmpty()) {
-//            nextResult = null;
-//            return;
-//          }
-//
-//          long minKey = currentValues[iteratorHeap.firstInt()].leftLong();
-//          Object[] row = new Object[fields.size()];
-//          do {
-//            int iterIdx = iteratorHeap.dequeueInt();
-//            chunks[iterIdx].fillRowWithOriginIndex(currentValues[iterIdx].rightInt(), row);
-//            if (iterators[iterIdx].hasNext()) {
-//              currentValues[iterIdx] = iterators[iterIdx].next();
-//              iteratorHeap.enqueue(iterIdx);
-//            }
-//          } while (!iteratorHeap.isEmpty() && currentValues[iteratorHeap.firstInt()].leftLong() == minKey);
-//          nextResult = new LongObjectImmutablePair<>(minKey, row);
-//        }
-//
-//        @Override
-//        public boolean hasNext() {
-//          return nextResult != null;
-//        }
-//
-//        @Override
-//        public LongObjectPair<Object[]> next() {
-//          if (!hasNext()) {
-//            throw new NoSuchElementException();
-//          }
-//          LongObjectPair<Object[]> result = nextResult;
-//          advance();
-//          return result;
-//        }
-//      };
-//    }
-
-//    Iterator<LongIntPair> iterator(RangeSet<Long> keyRanges) {
-//      RangeSet<Long> intersected = keyRanges.subRangeSet(keyRange);
-//      return new Iterator<LongIntPair>() {
-//
-//        private int nextIndex = 0;
-//        private LongIntPair nextValue;
-//
-//        {
-//          advance();
-//        }
-//
-//        @Override
-//        public boolean hasNext() {
-//          return nextValue != null;
-//        }
-//
-//        @Override
-//        public LongIntPair next() {
-//          if (!hasNext()) {
-//            throw new NoSuchElementException();
-//          }
-//          LongIntPair result = nextValue;
-//          advance();
-//          return result;
-//        }
-//
-//        private void advance() {
-//          while (nextIndex < getValueCount()) {
-//            int originIndex = getOriginIndex(nextIndex);
-//            nextIndex++;
-//            long key = snapshot.getKey(originIndex);
-//            if (intersected.contains(key)) {
-//              nextValue = new LongIntImmutablePair(key, originIndex);
-//              return;
-//            }
-//          }
-//          nextValue = null;
-//        }
-//      };
-//    }

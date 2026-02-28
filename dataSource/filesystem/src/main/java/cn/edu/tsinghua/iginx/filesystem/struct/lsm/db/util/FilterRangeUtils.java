@@ -21,12 +21,15 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.*;
 import com.google.common.collect.*;
+
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 public class FilterRangeUtils {
-  private FilterRangeUtils() {}
+  private FilterRangeUtils() {
+  }
 
   public static RangeSet<Long> rangeSetOf(Filter filter) {
     switch (filter.getType()) {
@@ -41,7 +44,7 @@ public class FilterRangeUtils {
       case Bool:
       case Not:
       default:
-        return ImmutableRangeSet.of(Range.closed(Long.MIN_VALUE, Long.MAX_VALUE));
+        return ImmutableRangeSet.of(Range.all());
     }
   }
 
@@ -144,4 +147,46 @@ public class FilterRangeUtils {
     }
     return new OrFilter(subRangeFilters);
   }
+
+  @Nullable
+  public static Filter withoutKeyRangeSet(Filter predicate) {
+    if (predicate == null) {
+      return null;
+    }
+
+    switch (predicate.getType()) {
+      case Key:
+        // KeyFilter should be removed, return null
+        return null;
+      case And:
+        return withoutKeyRangeSet((AndFilter) predicate);
+      case Or:
+      case Not:
+      case Value:
+      case Path:
+      case Bool:
+      default:
+        return predicate;
+    }
+  }
+
+  @Nullable
+  private static Filter withoutKeyRangeSet(AndFilter filter) {
+    List<Filter> newChildren = new ArrayList<>();
+    for (Filter child : filter.getChildren()) {
+      Filter newChild = withoutKeyRangeSet(child);
+      if (newChild != null) {
+        newChildren.add(newChild);
+      }
+    }
+
+    if (newChildren.isEmpty()) {
+      return null;
+    } else if (newChildren.size() == 1) {
+      return newChildren.get(0);
+    } else {
+      return new AndFilter(newChildren);
+    }
+  }
+
 }
