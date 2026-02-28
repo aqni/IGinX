@@ -24,6 +24,7 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.Header;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Row;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+import cn.edu.tsinghua.iginx.filesystem.common.Filters;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemSubTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
@@ -110,15 +111,14 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
 
         // 检查字段是否存在
         if (fieldIndex == null) {
-          throw new IllegalArgumentException(
-              "Requested field not found in snapshot: " + requestedField.getName());
+          throw new IllegalArgumentException("Requested field not found: " + requestedField);
         }
 
         fieldIndexMapping[i] = fieldIndex;
       }
 
       RowStream rowStream = new MergedRowStream(snapshot, keyRangeSet, fieldIndexMapping);
-      if (remainingFilter != null) {
+      if (!Filters.isTrue(remainingFilter)) {
         rowStream = new FilterRowStreamWrapper(rowStream, remainingFilter);
       }
       return rowStream;

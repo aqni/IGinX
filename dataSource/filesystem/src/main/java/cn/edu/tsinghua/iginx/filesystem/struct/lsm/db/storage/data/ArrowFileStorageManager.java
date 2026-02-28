@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
 
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table;
@@ -28,6 +28,7 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.BatchStream;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.BatchStreams;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.ImmutableFileStorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ScannerRowStream;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
@@ -59,7 +60,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ArrowFileStorageManager
-    extends FileStorageManager<ArrowFileStorageManager.ArrowFileTableMeta> {
+    extends ImmutableFileStorageManager<ArrowFileStorageManager.ArrowFileTableMeta> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ArrowFileStorageManager.class);
 
@@ -123,7 +124,7 @@ public class ArrowFileStorageManager
     throw new UnsupportedOperationException("unimplemented");
   }
 
-  protected static class ArrowFileTableMeta implements FileStorageManager.CacheableTableMeta {
+  protected static class ArrowFileTableMeta implements ImmutableFileStorageManager.CacheableTableMeta {
     private final TableMeta meta;
 
     protected ArrowFileTableMeta(TableMeta meta) {

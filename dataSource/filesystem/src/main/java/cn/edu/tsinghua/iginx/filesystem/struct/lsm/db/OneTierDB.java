@@ -30,7 +30,6 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemBatch;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.Catalog;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.TableStorage;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.*;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
@@ -81,48 +80,48 @@ public class OneTierDB implements AutoCloseable {
 
   public RowStream query(List<String> patterns, @Nullable TagFilter tagFilter, Filter filter) throws StorageException {
     String queryDescription = String.format("Query{patterns: %s, tagFilter: %s, filter: %s}", patterns, tagFilter, filter);
+    return null;
 
-
-    deleteLock.readLock().lock();
-    try () {
-      List<Field> fields = catalog.find(patterns, tagFilter);
-      List<String> columnKeys = fields.stream().map(field -> TagKVUtils.toFullName(ArrowFields.toColumnKey(field))).collect(ImmutableList.toImmutableList());
-
-      Map<String, Field> schema = new HashMap<>();
-      for (int i = 0; i < fields.size(); i++) {
-        schema.put(columnKeys.get(i), fields.get(i));
-      }
-
-      //      Filter projectedFilter = ProjectUtils.project(filter, schemaMatchTags);
-      RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(filter);
-
-      List<Scanner<Long, Scanner<String, Object>>> inMemories;
-      try {
-        inMemories = memTableQueue.scan(fields, rangeSet, allocator);
-      } catch (IOException e) {
-        throw new StorageException(e);
-      }
-
-      Set<String> columnKeySet = new HashSet<>(columnKeys);
-      try (AutoCloseable c = AutoCloseables.all(inMemories)) {
-        DataBuffer<Long, String, Object> readBuffer = tableStorage.query(columnKeySet, rangeSet, filter);
-        for (Scanner<Long, Scanner<String, Object>> scanner : inMemories) {
-          readBuffer.putRows(scanner);
-        }
-        Scanner<Long, Scanner<String, Object>> scanner = readBuffer.scanRows(columnKeySet, Range.all());
-        RowStream rowStream = new ScannerRowStream(scanner, schema);
-        if (!Filters.isTrue(filter)) {
-          rowStream = new FilterRowStreamWrapper(rowStream, filter);
-        }
-        return rowStream;
-      } catch (RuntimeException e) {
-        throw e;
-      } catch (Exception e) {
-        throw new StorageException(e);
-      }
-    } finally {
-      deleteLock.readLock().unlock();
-    }
+//    deleteLock.readLock().lock();
+//    try () {
+//      List<Field> fields = catalog.find(patterns, tagFilter);
+//      List<String> columnKeys = fields.stream().map(field -> TagKVUtils.toFullName(ArrowFields.toColumnKey(field))).collect(ImmutableList.toImmutableList());
+//
+//      Map<String, Field> schema = new HashMap<>();
+//      for (int i = 0; i < fields.size(); i++) {
+//        schema.put(columnKeys.get(i), fields.get(i));
+//      }
+//
+//      //      Filter projectedFilter = ProjectUtils.project(filter, schemaMatchTags);
+//      RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(filter);
+//
+//      List<Scanner<Long, Scanner<String, Object>>> inMemories;
+//      try {
+//        inMemories = memTableQueue.scan(fields, rangeSet, allocator);
+//      } catch (IOException e) {
+//        throw new StorageException(e);
+//      }
+//
+//      Set<String> columnKeySet = new HashSet<>(columnKeys);
+//      try (AutoCloseable c = AutoCloseables.all(inMemories)) {
+//        DataBuffer<Long, String, Object> readBuffer = tableStorage.query(columnKeySet, rangeSet, filter);
+//        for (Scanner<Long, Scanner<String, Object>> scanner : inMemories) {
+//          readBuffer.putRows(scanner);
+//        }
+//        Scanner<Long, Scanner<String, Object>> scanner = readBuffer.scanRows(columnKeySet, Range.all());
+//        RowStream rowStream = new ScannerRowStream(scanner, schema);
+//        if (!Filters.isTrue(filter)) {
+//          rowStream = new FilterRowStreamWrapper(rowStream, filter);
+//        }
+//        return rowStream;
+//      } catch (RuntimeException e) {
+//        throw e;
+//      } catch (Exception e) {
+//        throw new StorageException(e);
+//      }
+//    } finally {
+//      deleteLock.readLock().unlock();
+//    }
 
   }
 

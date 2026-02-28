@@ -28,7 +28,7 @@ import org.ehcache.sizeof.SizeOf;
 
 public class CachePool {
 
-  private final Cache<String, Cacheable> cache;
+  private final Cache<Object, Cacheable> cache;
 
   public CachePool(StorageProperties prop) {
     Caffeine<Object, Object> cacheBuilder = Caffeine.newBuilder();
@@ -43,7 +43,7 @@ public class CachePool {
     this.cache = cacheBuilder.build();
   }
 
-  public ConcurrentMap<String, Cacheable> asMap() {
+  public ConcurrentMap<Object, Cacheable> asMap() {
     return cache.asMap();
   }
 

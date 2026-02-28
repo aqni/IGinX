@@ -20,7 +20,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow;
 
 import cn.edu.tsinghua.iginx.engine.physical.storage.domain.ColumnKey;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AreaSet;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.AreaSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.TagKVUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Constants;
 import cn.edu.tsinghua.iginx.thrift.DataType;
@@ -87,32 +87,6 @@ public class ArrowFields {
             Collectors.toMap(
                 field -> TagKVUtils.toFullName(toColumnKey(field)),
                 field -> ArrowTypes.toIginxType(field.getType())));
-  }
-
-  public static List<Field> fromIginxSchema(Map<String, DataType> schema) {
-    return schema.entrySet().stream()
-        .map(entry -> of(TagKVUtils.splitFullName(entry.getKey()), entry.getValue()))
-        .collect(Collectors.toList());
-  }
-
-  public static AreaSet<Long, String> toInnerAreas(AreaSet<Long, Field> areas) {
-    AreaSet<Long, String> innerAreas = new AreaSet<>();
-    innerAreas.add(areas.getKeys());
-    Set<String> innerFields =
-        areas.getFields().stream().map(ArrowFields::toFullName).collect(Collectors.toSet());
-    innerAreas.add(innerFields);
-    areas
-        .getSegments()
-        .forEach(
-            (field, rangeSet) -> {
-              String innerField = toFullName(field);
-              innerAreas.add(Collections.singleton(innerField), rangeSet);
-            });
-    return innerAreas;
-  }
-
-  public static String toFullName(Field field) {
-    return TagKVUtils.toFullName(toColumnKey(field));
   }
 
   public static AreaSet<Long, Field> of(AreaSet<Long, String> areas, Map<String, DataType> schema) {

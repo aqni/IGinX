@@ -17,9 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.ImmutableFileStorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
@@ -38,7 +39,7 @@ import org.apache.tsfile.write.schema.MeasurementSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class TsFileStorageManager extends FileStorageManager<TsFileStorageManager.TsFileTableMeta> {
+public class TsFileStorageManager extends ImmutableFileStorageManager<TsFileStorageManager.TsFileTableMeta> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(TsFileStorageManager.class);
 
@@ -195,7 +196,7 @@ public class TsFileStorageManager extends FileStorageManager<TsFileStorageManage
     throw new UnsupportedOperationException("unimplemented");
   }
 
-  protected static class TsFileTableMeta implements FileStorageManager.CacheableTableMeta {
+  protected static class TsFileTableMeta implements ImmutableFileStorageManager.CacheableTableMeta {
     private final TableMeta meta;
 
     protected TsFileTableMeta(TableMeta meta) {

@@ -32,8 +32,6 @@ import java.util.Set;
 
 public interface StorageManager {
 
-  String getName();
-
   void flush(long tableId, Table table) throws IOException;
 
   Table read(long tableId) throws IOException;

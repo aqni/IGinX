@@ -17,13 +17,14 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.format.parquet.IParquetReader;
 import cn.edu.tsinghua.iginx.filesystem.format.parquet.IParquetWriter;
 import cn.edu.tsinghua.iginx.filesystem.format.parquet.IRecord;
 import cn.edu.tsinghua.iginx.filesystem.struct.legacy.parquet.manager.dummy.Storer;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.ImmutableFileStorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.IteratorScanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Constants;
@@ -44,7 +45,7 @@ import shaded.iginx.org.apache.parquet.schema.MessageType;
 import shaded.iginx.org.apache.parquet.schema.Type;
 
 public class ParquetFileStorageManager
-    extends FileStorageManager<ParquetFileStorageManager.ParquetTableMeta> {
+    extends ImmutableFileStorageManager<ParquetFileStorageManager.ParquetTableMeta> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ParquetFileStorageManager.class);
 
@@ -209,7 +210,7 @@ public class ParquetFileStorageManager
     }
   }
 
-  protected static class ParquetTableMeta implements FileStorageManager.CacheableTableMeta {
+  protected static class ParquetTableMeta implements ImmutableFileStorageManager.CacheableTableMeta {
     private final Map<String, DataType> schemaDst;
     private final Map<String, Range<Long>> rangeMap;
     private final Map<String, Long> countMap;
