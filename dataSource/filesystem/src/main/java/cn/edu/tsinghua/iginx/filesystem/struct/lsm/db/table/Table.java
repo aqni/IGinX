@@ -21,15 +21,15 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table;
 
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Range;
 import lombok.NonNull;
 import lombok.Value;
 import org.apache.arrow.vector.types.pojo.Field;
 
-import javax.annotation.Nullable;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.List;
-import java.util.Map;
 
 public interface Table {
 
@@ -44,13 +44,13 @@ public interface Table {
   }
 
   @Value
-  class Statistic {
+  class Statistic implements Serializable {
     Range<Long> keyRange;
   }
 
   @Value
   class Meta {
     @NonNull
-    Map<Field, Statistic> fieldStats;
+    ImmutableMap<Field, Statistic> fieldStats;
   }
 }

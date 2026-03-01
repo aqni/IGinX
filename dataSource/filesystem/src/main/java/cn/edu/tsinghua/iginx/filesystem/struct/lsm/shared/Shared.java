@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.util.concurrent.Semaphore;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.FileLsmConfig;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.StorageProperties;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.DBConfig;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import org.apache.arrow.memory.BufferAllocator;

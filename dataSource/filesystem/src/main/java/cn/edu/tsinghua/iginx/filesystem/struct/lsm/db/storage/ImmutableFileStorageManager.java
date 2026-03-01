@@ -24,7 +24,6 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.Tombston
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.TombstoneStorage;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.TombstoneTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.RangeSet;
 import com.google.common.io.MoreFiles;
@@ -54,10 +53,10 @@ public class ImmutableFileStorageManager
 
   private final ImmutableFileFormat immutableFileFormat;
 
-  public ImmutableFileStorageManager(Path path, StorageConfig storage, CachePool cachePool) {
+  public ImmutableFileStorageManager(Path path, StorageConfig config, CachePool cachePool) {
     this.dir = path;
     this.tombstoneStorage = new TombstoneStorage(cachePool);
-    this.immutableFileFormat = storage.getImmutableFileFormat();
+    this.immutableFileFormat = config.getFileFormat().create(config.getFileConfig(), cachePool);
   }
 
   @Override

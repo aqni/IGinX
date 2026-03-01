@@ -1,5 +1,6 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table;
 
+import com.google.common.collect.ImmutableMap;
 import org.apache.arrow.vector.types.pojo.Field;
 
 import java.io.IOException;
@@ -20,7 +21,7 @@ public abstract class AbstractTable implements Table {
   }
 
   private static Meta mergeMeta(Iterable<Meta> subMetas) {
-    Map<Field, Statistic> fieldStats = new HashMap<>();
+    HashMap<Field, Statistic> fieldStats = new HashMap<>();
     for (Meta subMeta : subMetas) {
       Map<Field, Statistic> subFieldStats = subMeta.getFieldStats();
       for (Map.Entry<Field, Statistic> entry : subFieldStats.entrySet()) {
@@ -29,7 +30,7 @@ public abstract class AbstractTable implements Table {
         fieldStats.merge(field, statistic, AbstractTable::mergeStatistic);
       }
     }
-    return new Meta(fieldStats);
+    return new Meta(ImmutableMap.copyOf(fieldStats));
   }
 
   private static Statistic mergeStatistic(Statistic s1, Statistic s2) {

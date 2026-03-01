@@ -19,8 +19,8 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,18 +34,18 @@ import java.nio.file.StandardOpenOption;
 
 public class TombstoneStorage {
   private static final Logger LOGGER = LoggerFactory.getLogger(TombstoneStorage.class);
-  private final Shared shared;
+  private final CachePool cachePool;
 
-  public TombstoneStorage(Shared shared) {
-    this.shared = shared;
+  public TombstoneStorage(CachePool cachePool) {
+    this.cachePool = cachePool;
   }
 
   public @Nullable Tombstone get(Path path) {
-    return (Tombstone) shared.getCachePool().asMap().computeIfAbsent(path, p -> loadCache(path));
+    return (Tombstone) cachePool.asMap().computeIfAbsent(path, p -> loadCache(path));
   }
 
   public void delete(Path path, Tombstone tombstone) {
-    shared.getCachePool().asMap().compute(path, (key, value) -> {
+    cachePool.asMap().compute(path, (key, value) -> {
       Tombstone newValue;
       if (value != null) {
         newValue = Tombstone.merge((Tombstone) value, tombstone);
@@ -60,7 +60,7 @@ public class TombstoneStorage {
   private void flushCache(Path path, Tombstone tombstone) {
     try {
       Files.createDirectories(path);
-      try (ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(path, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING))) {
+      try (ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))) {
         oos.writeObject(tombstone);
       }
     } catch (IOException e) {

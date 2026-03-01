@@ -19,117 +19,139 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
 
+import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
+import cn.edu.tsinghua.iginx.engine.physical.memory.execute.compute.util.VectorSchemaRoots;
+import cn.edu.tsinghua.iginx.engine.physical.memory.execute.executor.util.Batch;
+import cn.edu.tsinghua.iginx.engine.physical.memory.execute.naive.NaiveOperatorMemoryExecutor;
+import cn.edu.tsinghua.iginx.engine.physical.task.memory.row.BatchStreamToRowStreamWrapper;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
+import cn.edu.tsinghua.iginx.engine.shared.operator.filter.BoolFilter;
+import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+import cn.edu.tsinghua.iginx.filesystem.common.Filters;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
-import com.google.common.io.MoreFiles;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
+import com.google.common.collect.ImmutableMap;
+import com.typesafe.config.Config;
+import org.apache.arrow.compression.CommonsCompressionFactory;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.BaseValueVector;
+import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.FieldVector;
+import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.compression.CompressionUtil;
+import org.apache.arrow.vector.ipc.ArrowFileReader;
+import org.apache.arrow.vector.ipc.ArrowFileWriter;
+import org.apache.arrow.vector.ipc.message.IpcOption;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.channels.WritableByteChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.IntStream;
 
-public class ArrowFormat extends ImmutableFileFormat {
+public class ArrowFormat extends DenseImmutableFileFormat {
 
-  public ArrowFormat() {
-    super("arrow");
+  private final Logger LOGGER = LoggerFactory.getLogger(ArrowFormat.class);
+
+  public ArrowFormat(Config fileConfig, CachePool cachePool) {
+    super("arrow", cachePool);
   }
 
   @Override
-  public void flush(Path dst, Table table) throws IOException {
+  protected void flush(Path path, Table.SubTable subTable) throws IOException {
+    Table.Meta meta = subTable.getMeta();
+    List<Field> fields = new ArrayList<>(meta.getFieldStats().keySet());
+    try (RowStream rowStream = subTable.scan(fields, new BoolFilter(true))) {
+      RowStream toRead = NaiveOperatorMemoryExecutor.transformToTable(rowStream);
+      long startTime = System.currentTimeMillis();
+      try (BufferAllocator allocator = new RootAllocator(); BatchStream batchStream = BatchStreams.wrap(allocator, toRead, BaseValueVector.INITIAL_VALUE_ALLOCATION); VectorSchemaRoot root = VectorSchemaRoot.create(batchStream.getSchema().raw(), allocator); WritableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE); ArrowFileWriter writer = new ArrowFileWriter(root, null, channel, null, IpcOption.DEFAULT, CommonsCompressionFactory.INSTANCE, CompressionUtil.CodecType.LZ4_FRAME)) {
+        writer.start();
+        while (batchStream.hasNext()) {
+          try (Batch batch = batchStream.getNext()) {
+            VectorSchemaRoots.transfer(root, batch.getData());
+            writer.writeBatch();
+          }
+        }
+        writer.end();
+      }
+      long endTime = System.currentTimeMillis();
+      LOGGER.debug("write arrow file {} takes {} ms", path, (endTime - startTime));
+    } catch (PhysicalException e) {
+      throw new IOException(e);
+    }
+    flushMeta(getMetaPath(path), meta);
+  }
 
+  private Path getMetaPath(Path path) {
+    return path.resolveSibling(path.getFileName().toString() + ".meta");
+  }
+
+  private void flushMeta(Path path, Table.Meta meta) throws IOException {
+    List<Table.Statistic> stats = new ArrayList<>(meta.getFieldStats().values());
+    try (ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE))) {
+      oos.writeObject(stats);
+    }
   }
 
   @Override
-  public Table read(Path src) throws IOException {
-    return null;
+  protected Table.Meta loadMeta(Path src) throws IOException {
+    List<Field> fields;
+    try (BufferAllocator allocator = new RootAllocator(); SeekableByteChannel channel = Files.newByteChannel(src, StandardOpenOption.READ); ArrowFileReader reader = new ArrowFileReader(channel, allocator)) {
+      fields = reader.getVectorSchemaRoot().getSchema().getFields();
+    }
+    try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(getMetaPath(src), StandardOpenOption.READ))) {
+      @SuppressWarnings("unchecked") List<Table.Statistic> stats = (List<Table.Statistic>) ois.readObject();
+      if (fields.size() != stats.size()) {
+        throw new IOException("Meta file for " + src + " is corrupted: field count does not match statistic count");
+      }
+      return new Table.Meta(IntStream.range(0, fields.size()).boxed().collect(ImmutableMap.toImmutableMap(fields::get, stats::get)));
+    } catch (ClassNotFoundException e) {
+      throw new IOException("Failed to read meta file for " + src, e);
+    }
   }
+
+  @Override
+  protected RowStream scan(Path src, List<Field> fields, Filter predicate) throws IOException {
+    Header header;
+    List<Row> rows = new ArrayList<>();
+    try (BufferAllocator allocator = new RootAllocator(); SeekableByteChannel channel = Files.newByteChannel(src, StandardOpenOption.READ); ArrowFileReader reader = new ArrowFileReader(channel, allocator)) {
+      VectorSchemaRoot root = reader.getVectorSchemaRoot();
+      header = BatchStreamToRowStreamWrapper.getHeader(BatchSchema.of(root.getSchema()));
+      while (reader.loadNextBatch()) {
+        List<FieldVector> allVectors = root.getFieldVectors();
+        FieldVector[] valueVectors = allVectors.subList(1, allVectors.size()).toArray(new FieldVector[0]);
+        BigIntVector keyVector = (BigIntVector) allVectors.get(0);
+        int rowCount = root.getRowCount();
+        for (int i = 0; i < rowCount; i++) {
+          long key = keyVector.get(i);
+          Object[] values = new Object[valueVectors.length];
+          for (int j = 0; j < valueVectors.length; j++) {
+            values[j] = valueVectors[j].getObject(i);
+          }
+          rows.add(new Row(header, key, values));
+        }
+      }
+    }
+
+    RowStream result = new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, rows);
+    if (!Filters.isTrue(predicate)) {
+      result = new FilterRowStreamWrapper(result, predicate);
+    }
+    return result;
+  }
+
 }
 
-//public class ArrowFileStorageManager
-//    extends ImmutableFileStorageManager<ArrowFileStorageManager.ArrowFileTableMeta> {
-//
-//  private static final Logger LOGGER = LoggerFactory.getLogger(ArrowFileStorageManager.class);
-//
-//  private final int batchSize = 3970;
-//
-//  public ArrowFileStorageManager(Shared shared, Path dir) {
-//    super(shared, dir, "arrow");
-//  }
-//
-//  @Override
-//  public String getName() {
-//    return super.getName() + "(arrow)";
-//  }
-//
-//  @Override
-//  protected ArrowFileTableMeta flush(
-//      TableMeta meta, Scanner<Long, Scanner<String, Object>> scanner, Path path)
-//      throws IOException {
-//    try (RowStream rowStream = new ScannerRowStream(meta.getSchema(), scanner)) {
-//      Table table = NaiveOperatorMemoryExecutor.transformToTable(rowStream);
-//      long startTime = System.currentTimeMillis();
-//      try (BatchStream batchStream = BatchStreams.wrap(shared.getAllocator(), table, batchSize);
-//          VectorSchemaRoot root =
-//              VectorSchemaRoot.create(batchStream.getSchema().raw(), shared.getAllocator());
-//          WritableByteChannel channel =
-//              Files.newByteChannel(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-//          ArrowFileWriter writer =
-//              new ArrowFileWriter(
-//                  root,
-//                  null,
-//                  channel,
-//                  null,
-//                  IpcOption.DEFAULT,
-//                  new FastestCompressionFactory(),
-//                  CompressionUtil.CodecType.LZ4_FRAME)) {
-//        writer.start();
-//        while (batchStream.hasNext()) {
-//          try (Batch batch = batchStream.getNext()) {
-//            VectorSchemaRoots.transfer(root, batch.getData());
-//            writer.writeBatch();
-//          }
-//        }
-//        writer.end();
-//      }
-//      long endTime = System.currentTimeMillis();
-//      LOGGER.info("write arrow file {} takes {} ms", path, (endTime - startTime));
-//    } catch (PhysicalException e) {
-//      throw new IOException(e);
-//    }
-//    return new ArrowFileTableMeta(meta);
-//  }
-//
-//  @Override
-//  protected ArrowFileTableMeta readMeta(Path path) throws IOException {
-//    throw new UnsupportedOperationException("unimplemented");
-//  }
-//
-//  @Override
-//  protected Scanner<Long, Scanner<String, Object>> scanFile(
-//      Path path, ArrowFileTableMeta meta, Set<String> fields, Filter filter) throws IOException {
-//    throw new UnsupportedOperationException("unimplemented");
-//  }
-//
-//  protected static class ArrowFileTableMeta implements ImmutableFileStorageManager.CacheableTableMeta {
-//    private final TableMeta meta;
-//
-//    protected ArrowFileTableMeta(TableMeta meta) {
-//      this.meta = Objects.requireNonNull(meta);
-//    }
-//
-//    @Override
-//    public Map<String, DataType> getSchema() {
-//      return meta.getSchema();
-//    }
-//
-//    @Override
-//    public Range<Long> getRange(String field) {
-//      return meta.getRange(field);
-//    }
-//
-//    @Nullable
-//    @Override
-//    public Long getValueCount(String field) {
-//      return meta.getValueCount(field);
-//    }
-//  }
 //
 //  public static class FastestCompressionFactory implements CompressionCodec.Factory {
 //
