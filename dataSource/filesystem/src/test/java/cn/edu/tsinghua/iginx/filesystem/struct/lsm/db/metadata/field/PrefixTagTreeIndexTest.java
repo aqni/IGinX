@@ -20,8 +20,8 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.BaseTagFilter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;

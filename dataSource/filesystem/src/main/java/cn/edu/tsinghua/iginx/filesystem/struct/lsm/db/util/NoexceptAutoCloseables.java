@@ -17,25 +17,23 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util;
 
-public class InvalidFieldNameException extends SchemaException {
+import org.apache.arrow.util.AutoCloseables;
 
-  private final String fieldName;
+public class NoexceptAutoCloseables {
 
-  private final String reason;
-
-  public InvalidFieldNameException(String fieldName, String reason) {
-    super(String.format("invalid field name %s, because: ", fieldName, reason));
-    this.fieldName = fieldName;
-    this.reason = reason;
+  public static void close(Iterable<? extends NoexceptAutoCloseable> closeables) {
+    try {
+      AutoCloseables.close(closeables);
+    } catch (RuntimeException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
   }
 
-  public String getFieldName() {
-    return fieldName;
-  }
-
-  public String getReason() {
-    return reason;
+  public static NoexceptAutoCloseable all(Iterable<? extends NoexceptAutoCloseable> closeables) {
+    return () -> close(closeables);
   }
 }

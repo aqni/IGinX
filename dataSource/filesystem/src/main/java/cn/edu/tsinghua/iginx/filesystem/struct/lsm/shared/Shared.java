@@ -17,16 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.Semaphore;
+
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.FileLsmConfig;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.StorageProperties;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.DBConfig;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 
 public class Shared implements Closeable {
-  private final StorageProperties storageProperties;
+  private final DBConfig config;
 
   private final Semaphore flusherPermits;
 
@@ -37,28 +42,29 @@ public class Shared implements Closeable {
   private final BufferAllocator allocator;
 
   public Shared(
-      StorageProperties storageProperties,
+      DBConfig config,
       Semaphore flusherPermits,
       Semaphore memTablePermits,
       CachePool cachePool,
       BufferAllocator allocator) {
-    this.storageProperties = storageProperties;
+    this.config = config;
     this.flusherPermits = flusherPermits;
     this.memTablePermits = memTablePermits;
     this.cachePool = cachePool;
     this.allocator = allocator;
   }
 
-  public static Shared of(StorageProperties storageProperties) {
-    Semaphore flusherPermits = new Semaphore(storageProperties.getCompactPermits(), true);
-    Semaphore memTablePermits = new Semaphore(storageProperties.getWriteBufferPermits(), true);
-    CachePool cachePool = new CachePool(storageProperties);
+  public static Shared of(FileLsmConfig config) {
+    SharedConfig sharedConfig = config.getShared();
+    Semaphore flusherPermits = new Semaphore(sharedConfig.getWriters(), true);
+    Semaphore memTablePermits = new Semaphore(sharedConfig.getMemtableQueue(), true);
+    CachePool cachePool = new CachePool(sharedConfig.getCache());
     BufferAllocator allocator = new RootAllocator();
-    return new Shared(storageProperties, flusherPermits, memTablePermits, cachePool, allocator);
+    return new Shared(config.getDb(), flusherPermits, memTablePermits, cachePool, allocator);
   }
 
-  public StorageProperties getStorageProperties() {
-    return storageProperties;
+  public DBConfig getConfig() {
+    return config;
   }
 
   public Semaphore getFlusherPermits() {

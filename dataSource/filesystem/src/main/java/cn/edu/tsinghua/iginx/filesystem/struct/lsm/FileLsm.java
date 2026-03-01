@@ -21,16 +21,15 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.FileManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.FileStructure;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.StorageProperties;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
 import com.google.auto.service.AutoService;
 import com.typesafe.config.Config;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.time.Duration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @AutoService(FileStructure.class)
 public class FileLsm implements FileStructure {
@@ -51,68 +50,10 @@ public class FileLsm implements FileStructure {
 
   @Override
   public Closeable newShared(Config config) throws IOException {
-    StorageProperties.Builder builder = StorageProperties.builder();
-    if (config.hasPath(StorageProperties.Builder.FLUSH_ON_CLOSE)) {
-      builder.setFlushOnClose(config.getBoolean(StorageProperties.Builder.FLUSH_ON_CLOSE));
-    }
-    if (config.hasPath(StorageProperties.Builder.WRITE_BUFFER_SIZE)) {
-      builder.setWriteBufferSize(config.getBytes(StorageProperties.Builder.WRITE_BUFFER_SIZE));
-    }
-    if (config.hasPath(StorageProperties.Builder.WRITE_BUFFER_PERMITS)) {
-      builder.setWriteBufferPermits(config.getInt(StorageProperties.Builder.WRITE_BUFFER_PERMITS));
-    }
-    if (config.hasPath(StorageProperties.Builder.WRITE_BUFFER_CHUNK_VALUES_MAX)) {
-      builder.setWriteBufferChunkValuesMax(
-          config.getInt(StorageProperties.Builder.WRITE_BUFFER_CHUNK_VALUES_MAX));
-    }
-    if (config.hasPath(StorageProperties.Builder.WRITE_BUFFER_TIMEOUT)) {
-      builder.setWriteBufferTimeout(
-          Duration.ofMillis(
-              config.getDuration(StorageProperties.Builder.WRITE_BUFFER_TIMEOUT).toMillis()));
-    }
-    if (config.hasPath(StorageProperties.Builder.CACHE_CAPACITY)) {
-      builder.setCacheCapacity(config.getBytes(StorageProperties.Builder.CACHE_CAPACITY));
-    }
-    if (config.hasPath(StorageProperties.Builder.CACHE_TIMEOUT)) {
-      builder.setCacheTimeout(
-          Duration.ofMillis(
-              config.getDuration(StorageProperties.Builder.CACHE_TIMEOUT).toMillis()));
-    }
-    if (config.hasPath(StorageProperties.Builder.CACHE_VALUE_SOFT)) {
-      builder.setCacheSoftValues(config.getBoolean(StorageProperties.Builder.CACHE_VALUE_SOFT));
-    }
-    if (config.hasPath(StorageProperties.Builder.COMPACT_PERMITS)) {
-      builder.setCompactorPermits(config.getInt(StorageProperties.Builder.COMPACT_PERMITS));
-    }
-    if (config.hasPath(StorageProperties.Builder.PARQUET_BLOCK_SIZE)) {
-      builder.setParquetRowGroupSize(config.getBytes(StorageProperties.Builder.PARQUET_BLOCK_SIZE));
-    }
-    if (config.hasPath(StorageProperties.Builder.PARQUET_PAGE_SIZE)) {
-      builder.setParquetPageSize(config.getBytes(StorageProperties.Builder.PARQUET_PAGE_SIZE));
-    }
-    if (config.hasPath(StorageProperties.Builder.PARQUET_OUTPUT_BUFFER_SIZE)) {
-      builder.setParquetOutputBufferMaxSize(
-          Math.toIntExact(config.getBytes(StorageProperties.Builder.PARQUET_OUTPUT_BUFFER_SIZE)));
-    }
-    if (config.hasPath(StorageProperties.Builder.PARQUET_COMPRESSOR)) {
-      builder.setParquetCompression(config.getString(StorageProperties.Builder.PARQUET_COMPRESSOR));
-    }
-    if (config.hasPath(StorageProperties.Builder.ZSTD_LEVEL)) {
-      builder.setZstdLevel(config.getInt(StorageProperties.Builder.ZSTD_LEVEL));
-    }
-    if (config.hasPath(StorageProperties.Builder.ZSTD_WORKERS)) {
-      builder.setZstdWorkers(config.getInt(StorageProperties.Builder.ZSTD_WORKERS));
-    }
-    if (config.hasPath(StorageProperties.Builder.PARQUET_LZ4_BUFFER_SIZE)) {
-      builder.setParquetLz4BufferSize(
-          Math.toIntExact(config.getBytes(StorageProperties.Builder.PARQUET_LZ4_BUFFER_SIZE)));
-    }
+    FileLsmConfig fileLsmConfig = FileLsmConfig.of(config);
+    LOGGER.info("storage config: {}", fileLsmConfig);
 
-    StorageProperties storageProperties = builder.build();
-
-    LOGGER.info("Create shared storage properties: {}", storageProperties);
-
-    return Shared.of(storageProperties);
+    return Shared.of(fileLsmConfig);
   }
 
   @Override

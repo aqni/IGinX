@@ -20,7 +20,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
 import java.util.List;
 import javax.annotation.Nullable;
 import org.apache.arrow.vector.types.pojo.Field;

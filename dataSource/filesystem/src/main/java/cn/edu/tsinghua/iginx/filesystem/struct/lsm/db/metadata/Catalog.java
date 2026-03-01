@@ -22,8 +22,8 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field.FieldIndex;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.RangeSet;
 import org.apache.arrow.vector.types.Types;
@@ -45,8 +45,8 @@ public class Catalog {
   private final Map<Field, ColumnTableIndex> index = new HashMap<>();
   private final FieldIndex schema;
 
-  public Catalog(Shared shared) {
-    this.schema = shared.getStorageProperties().getCatalogFieldIndexType().create();
+  public Catalog(CatalogConfig config) {
+    this.schema = config.getSchemaIndexType().create();
   }
 
   public List<Field> find(List<String> patterns, TagFilter tagFilter) {

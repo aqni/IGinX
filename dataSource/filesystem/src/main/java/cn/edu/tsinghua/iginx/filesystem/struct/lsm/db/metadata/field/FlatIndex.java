@@ -21,8 +21,8 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field;
 
 import cn.edu.tsinghua.iginx.engine.physical.storage.utils.TagKVUtils;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
 import cn.edu.tsinghua.iginx.utils.StringUtils;
 import com.google.common.collect.ImmutableList;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;

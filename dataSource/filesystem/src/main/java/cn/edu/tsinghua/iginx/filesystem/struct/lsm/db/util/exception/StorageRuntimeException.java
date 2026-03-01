@@ -17,23 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception;
 
-import org.apache.arrow.util.AutoCloseables;
+import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalRuntimeException;
 
-public class NoexceptAutoCloseables {
-
-  public static void close(Iterable<? extends NoexceptAutoCloseable> closeables) {
-    try {
-      AutoCloseables.close(closeables);
-    } catch (RuntimeException e) {
-      throw e;
-    } catch (Exception e) {
-      throw new IllegalStateException(e);
-    }
+public class StorageRuntimeException extends PhysicalRuntimeException {
+  public StorageRuntimeException(String message) {
+    super(message);
   }
 
-  public static NoexceptAutoCloseable all(Iterable<? extends NoexceptAutoCloseable> closeables) {
-    return () -> close(closeables);
+  public StorageRuntimeException(String message, Throwable cause) {
+    super(message, cause);
+  }
+
+  public StorageRuntimeException(Throwable cause) {
+    super(cause);
   }
 }

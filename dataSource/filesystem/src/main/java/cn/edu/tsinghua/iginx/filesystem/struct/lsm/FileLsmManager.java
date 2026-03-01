@@ -32,11 +32,9 @@ import cn.edu.tsinghua.iginx.filesystem.common.Patterns;
 import cn.edu.tsinghua.iginx.filesystem.struct.DataTarget;
 import cn.edu.tsinghua.iginx.filesystem.struct.FileManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.OneTierDB;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.ParquetFileStorageManager;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.filesystem.thrift.DataBoundary;
 import cn.edu.tsinghua.iginx.thrift.AggregateType;
 import com.google.common.collect.RangeSet;
@@ -52,19 +50,14 @@ import java.util.stream.Collectors;
 
 public class FileLsmManager implements FileManager {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(FileLsmManager.class);
-
   private final Shared shared;
   private final Path path;
   private final OneTierDB db;
 
-  public FileLsmManager(Shared shared, Path path) throws StorageException {
+  public FileLsmManager(Shared shared, Path path) {
     this.shared = shared;
     this.path = path;
-    StorageManager storageManager = new ParquetFileStorageManager(shared, path); // tpch
-    //    StorageManager storageManager = new TsFileStorageManager(shared, path); // tsbs
-    //    StorageManager storageManager = new ArrowFileStorageManager(shared, path); // tpch
-    this.db = new OneTierDB(path.toString(), shared, storageManager);
+    this.db = new OneTierDB(shared, path);
   }
 
   @Override

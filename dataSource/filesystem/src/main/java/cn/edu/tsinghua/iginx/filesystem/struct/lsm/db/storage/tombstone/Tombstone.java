@@ -1,13 +1,13 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.CachePool;
-import com.google.common.collect.ImmutableMap;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeRangeSet;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.Field;
-import org.apache.arrow.vector.types.pojo.FieldType;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -74,7 +74,7 @@ public class Tombstone implements Serializable, CachePool.Cacheable {
       Preconditions.checkArgument(field.getChildren() == null);
       Preconditions.checkArgument(field.getDictionary() == null);
       oos.writeObject(field.getName());
-      oos.writeObject(ImmutableMap.copyOf(field.getMetadata()));
+      oos.writeObject(ImmutableSortedMap.copyOf(field.getMetadata()));
       oos.writeObject(Types.getMinorTypeForArrowType(field.getType()));
       oos.writeObject(entry.getValue());
     }
@@ -86,9 +86,9 @@ public class Tombstone implements Serializable, CachePool.Cacheable {
     for (int i = 0; i < size; i++) {
       String name = (String) ois.readObject();
       @SuppressWarnings("unchecked")
-      Map<String, String> metadata = (ImmutableMap<String, String>) ois.readObject();
+      ImmutableSortedMap<String, String> metadata = (ImmutableSortedMap<String, String>) ois.readObject();
       Types.MinorType minorType = (Types.MinorType) ois.readObject();
-      Field field = new Field(name, new FieldType(true, minorType.getType(), null, metadata), null);
+      Field field = ArrowFields.of(name, metadata, minorType);
       @SuppressWarnings("unchecked")
       TreeRangeSet<Long> rangeSet = (TreeRangeSet<Long>) ois.readObject();
       keyRanges.put(field, rangeSet);

@@ -21,9 +21,9 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.InMemoryTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Awaitable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Awaitable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.RangeSet;
 import org.apache.arrow.memory.BufferAllocator;
@@ -38,6 +38,7 @@ import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.LongConsumer;
 
@@ -52,10 +53,10 @@ public class MemTableQueue implements NoexceptAutoCloseable {
   private final BufferAllocator allocator;
   private final ActiveMemTable active;
 
-  public MemTableQueue(Shared shared, BufferAllocator allocator) {
+  public MemTableQueue(MemTableConfig config, Semaphore memTablePermits, BufferAllocator allocator) {
     String allocatorName = String.join("-", allocator.getName(), MemTableQueue.class.getSimpleName());
     this.allocator = allocator.newChildAllocator(allocatorName, 0, Long.MAX_VALUE);
-    this.active = new ActiveMemTable(shared, this.allocator);
+    this.active = new ActiveMemTable(config, this.allocator, memTablePermits);
   }
 
   public void store(Iterable<MemBatch.Snapshot> data) throws InterruptedException {
@@ -101,7 +102,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     try {
       ArchivedMemTable archivedMemTable = archives.get(id);
       MemTable.Snapshot snapshot = archivedMemTable.getMemTable().snapshot(allocator);
-      return new TookTable(id, InMemoryTable.of(snapshot), archivedMemTable.isOwnTable(), toFlushIds::add, this::remove);
+      return new TookTable(id, new InMemoryTable(snapshot), archivedMemTable.isOwnTable(), toFlushIds::add, this::remove);
     } finally {
       queueLock.writeLock().unlock();
     }
@@ -131,7 +132,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     } finally {
       queueLock.readLock().unlock();
     }
-    return snapshots.stream().map(InMemoryTable::of).collect(ImmutableList.toImmutableList());
+    return snapshots.stream().map(InMemoryTable::new).collect(ImmutableList.toImmutableList());
   }
 
   public void clear() {
@@ -198,7 +199,8 @@ public class MemTableQueue implements NoexceptAutoCloseable {
   static class ActiveMemTable {
     private final ReentrantReadWriteLock switchTableLock = new ReentrantReadWriteLock(true);
 
-    private final Shared shared;
+    private final MemTableConfig config;
+    private final Semaphore memTablePermits;
     private final BufferAllocator allocator;
 
     private long currentId = 0;
@@ -208,23 +210,24 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     private final NavigableSet<Long> duplicateIds = new TreeSet<>();
     private final BlockingQueue<Long> toDeleteIds = new PriorityBlockingQueue<>();
 
-    ActiveMemTable(Shared shared, BufferAllocator allocator) {
-      this.shared = Preconditions.checkNotNull(shared);
+    public ActiveMemTable(MemTableConfig config, BufferAllocator allocator, Semaphore memTablePermits) {
+      this.config = Preconditions.checkNotNull(config);
       this.allocator = Preconditions.checkNotNull(allocator);
+      this.memTablePermits = Preconditions.checkNotNull(memTablePermits);
       createNewMemtable();
     }
 
     private void createNewMemtable() {
       String name = String.join("-", allocator.getName(), MemTable.class.getSimpleName(), String.valueOf(currentId));
       activeAllocator = allocator.newChildAllocator(name, 0, Long.MAX_VALUE);
-      activeTable = new MemTable(activeAllocator, shared.getStorageProperties().getWriteBufferChunkValuesMax());
+      activeTable = new MemTable(activeAllocator, config.getChunkValues());
       activeTableWritten = false;
     }
 
     public boolean isOverloaded() {
       switchTableLock.readLock().lock();
       try {
-        return activeAllocator.getAllocatedMemory() >= shared.getStorageProperties().getWriteBufferSize();
+        return activeAllocator.getAllocatedMemory() >= config.getCapacity().toBytes();
       } finally {
         switchTableLock.readLock().unlock();
       }
@@ -248,11 +251,11 @@ public class MemTableQueue implements NoexceptAutoCloseable {
         if (!activeTableWritten) {
           return Collections.emptyMap();
         }
-        shared.getMemTablePermits().acquire();
+        memTablePermits.acquire();
 
         Map<Long, ArchivedMemTable> result = new HashMap<>();
         long archiveId = currentId++;
-        result.put(archiveId, new ArchivedMemTable(activeTable, activeAllocator, createNewTable, () -> shared.getMemTablePermits().release()));
+        result.put(archiveId, new ArchivedMemTable(activeTable, activeAllocator, createNewTable, memTablePermits::release));
 
         if (createNewTable) {
           createNewMemtable();

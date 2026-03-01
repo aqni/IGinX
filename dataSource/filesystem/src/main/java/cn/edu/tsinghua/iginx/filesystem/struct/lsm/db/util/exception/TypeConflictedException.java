@@ -17,14 +17,29 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception;
 
-public class TimeoutException extends StorageException {
-  public TimeoutException(String message) {
-    super(message);
+public class TypeConflictedException extends StorageException {
+  private final String field;
+  private final String type;
+  private final String oldType;
+
+  public TypeConflictedException(String field, String type, String oldType) {
+    super(String.format("can't insert %s value into %s column at %s", type, oldType, field));
+    this.field = field;
+    this.type = type;
+    this.oldType = oldType;
   }
 
-  public TimeoutException(String message, Throwable cause) {
-    super(message, cause);
+  public String getField() {
+    return field;
+  }
+
+  public String getType() {
+    return type;
+  }
+
+  public String getOldType() {
+    return oldType;
   }
 }

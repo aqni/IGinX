@@ -24,7 +24,8 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.Tombston
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.TombstoneStorage;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.TombstoneTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.RangeSet;
 import com.google.common.io.MoreFiles;
 import com.google.common.io.RecursiveDeleteOption;
@@ -47,19 +48,16 @@ public class ImmutableFileStorageManager
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ImmutableFileStorageManager.class);
 
-  protected final Shared shared;
-
   private final Path dir;
 
   private final TombstoneStorage tombstoneStorage;
 
   private final ImmutableFileFormat immutableFileFormat;
 
-  public ImmutableFileStorageManager(Shared shared, Path dir) {
-    this.shared = shared;
-    this.dir = dir;
-    this.tombstoneStorage = new TombstoneStorage(shared);
-    this.immutableFileFormat = null;
+  public ImmutableFileStorageManager(Path path, StorageConfig storage, CachePool cachePool) {
+    this.dir = path;
+    this.tombstoneStorage = new TombstoneStorage(cachePool);
+    this.immutableFileFormat = storage.getImmutableFileFormat();
   }
 
   @Override

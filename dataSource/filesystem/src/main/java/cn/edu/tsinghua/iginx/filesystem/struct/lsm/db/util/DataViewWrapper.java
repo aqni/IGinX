@@ -23,7 +23,7 @@ import cn.edu.tsinghua.iginx.engine.physical.storage.domain.ColumnKey;
 import cn.edu.tsinghua.iginx.engine.shared.data.write.BitmapView;
 import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import java.util.*;
 

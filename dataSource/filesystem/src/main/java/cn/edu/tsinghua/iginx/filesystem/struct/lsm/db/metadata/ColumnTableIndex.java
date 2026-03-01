@@ -1,6 +1,6 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.NotIntegrityException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import org.apache.arrow.vector.types.Types;
@@ -22,7 +22,7 @@ public class ColumnTableIndex {
     lock.writeLock().lock();
     try {
       if (this.tableRange.containsKey(id)) {
-        throw new NotIntegrityException("table " + id + " already exists");
+        throw new StorageRuntimeException("table " + id + " already exists");
       }
       this.tableRange.put(id, range);
     } finally {

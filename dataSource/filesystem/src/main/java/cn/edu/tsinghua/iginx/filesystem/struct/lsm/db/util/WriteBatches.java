@@ -22,24 +22,19 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util;
 import cn.edu.tsinghua.iginx.engine.physical.storage.domain.ColumnKey;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemBatch;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowFields;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowTypes;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowVectors;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableList;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
-import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.writer.FieldWriter;
 import org.apache.arrow.vector.types.Types;
 

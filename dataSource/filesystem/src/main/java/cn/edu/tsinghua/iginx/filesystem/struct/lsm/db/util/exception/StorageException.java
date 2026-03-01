@@ -17,18 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception;
 
-public class NotIntegrityException extends StorageRuntimeException {
-  public NotIntegrityException(String message) {
+import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
+
+public class StorageException extends PhysicalException {
+
+  public StorageException(Throwable cause) {
+    super(cause);
+  }
+
+  public StorageException(String message) {
     super(message);
   }
 
-  public NotIntegrityException(String message, Throwable cause) {
+  public StorageException(String message, Throwable cause) {
     super(message, cause);
-  }
-
-  public NotIntegrityException(Throwable cause) {
-    super(cause);
   }
 }

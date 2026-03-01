@@ -19,7 +19,7 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field.tagkv;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.TypeConflictedException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
 import java.util.Map;
 import org.apache.arrow.vector.types.Types;
 

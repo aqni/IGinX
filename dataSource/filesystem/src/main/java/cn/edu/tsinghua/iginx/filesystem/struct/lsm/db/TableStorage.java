@@ -20,10 +20,15 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.Catalog;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.ImmutableFileStorageManager;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageConfig;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
@@ -32,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -43,10 +49,10 @@ public class TableStorage {
   private final Catalog catalog;
   private final StorageManager storageManager;
 
-  public TableStorage(Shared shared, Catalog index, StorageManager storageManager)
-      throws StorageException {
-    this.catalog = index;
-    this.storageManager = storageManager;
+
+  public TableStorage(Path path, StorageConfig storage, Catalog catalog, CachePool cachePool) {
+    this.catalog = catalog;
+    this.storageManager = new ImmutableFileStorageManager(path, storage, cachePool);
 
     try {
       for (long tableId : storageManager.list()) {
@@ -54,8 +60,8 @@ public class TableStorage {
         Table table = storageManager.read(tableId);
         catalog.addTable(tableId, table.getMeta());
       }
-    } catch (IOException e) {
-      throw new StorageException(e);
+    } catch (IOException | TypeConflictedException e) {
+      throw new StorageRuntimeException("reload failed: " + path, e);
     }
   }
 

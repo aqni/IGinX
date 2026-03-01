@@ -19,7 +19,7 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.NoexceptAutoCloseable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
 import com.google.common.collect.ImmutableList;
 import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.ints.IntArrayList;

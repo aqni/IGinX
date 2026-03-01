@@ -19,8 +19,8 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageRuntimeException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

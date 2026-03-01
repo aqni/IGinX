@@ -20,8 +20,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.Shared;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.exception.StorageException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.arrow.util.Preconditions;
 import org.slf4j.Logger;
@@ -38,7 +37,8 @@ public class Compactor {
   private static final Logger LOGGER = LoggerFactory.getLogger(Compactor.class);
 
   private final String name;
-  private final Shared shared;
+  private final Semaphore flusherPermits;
+  private final Duration memTableTimeout;
   private final MemTableQueue memTableQueue;
   private final TableStorage tableStorage;
   private final long idBase = System.nanoTime();
@@ -50,11 +50,13 @@ public class Compactor {
 
   public Compactor(
       String name,
-      Shared shared,
+      Semaphore flusherPermits,
+      Duration memTableTimeout,
       MemTableQueue memTableQueue,
       TableStorage tableStorage) {
     this.name = name;
-    this.shared = shared;
+    this.flusherPermits = flusherPermits;
+    this.memTableTimeout = memTableTimeout;
     this.memTableQueue = memTableQueue;
     this.tableStorage = tableStorage;
   }
@@ -81,10 +83,9 @@ public class Compactor {
     ThreadFactory schedulerFactory =
         new ThreadFactoryBuilder().setNameFormat("flusher-" + name + "-scheduler-%d").build();
     this.scheduler = Executors.newSingleThreadScheduledExecutor(schedulerFactory);
-    Duration timeout = shared.getStorageProperties().getWriteBufferTimeout();
-    if (!timeout.isZero() && !timeout.isNegative()) {
-      LOGGER.info("flusher {} start to force flush every {}", name, timeout);
-      this.scheduler.scheduleWithFixedDelay(this::schedule, timeout.getNano(), timeout.getNano(), TimeUnit.NANOSECONDS);
+    if (!memTableTimeout.isZero() && !memTableTimeout.isNegative()) {
+      LOGGER.info("flusher {} start to force flush every {}", name, memTableTimeout);
+      this.scheduler.scheduleWithFixedDelay(this::schedule, memTableTimeout.getNano(), memTableTimeout.getNano(), TimeUnit.NANOSECONDS);
     }
   }
 

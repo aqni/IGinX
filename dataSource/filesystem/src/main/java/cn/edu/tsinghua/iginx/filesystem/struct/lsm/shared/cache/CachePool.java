@@ -17,11 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.util;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Scheduler;
+
+import java.util.Optional;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
 import org.ehcache.sizeof.SizeOf;
@@ -30,16 +32,13 @@ public class CachePool {
 
   private final Cache<Object, Cacheable> cache;
 
-  public CachePool(StorageProperties prop) {
+  public CachePool(CacheConfig config) {
     Caffeine<Object, Object> cacheBuilder = Caffeine.newBuilder();
     cacheBuilder.weigher((String name, Cacheable cacheable) -> cacheable.getWeight());
-    cacheBuilder.maximumWeight(prop.getCacheCapacity());
-    prop.getCacheTimeout().ifPresent(cacheBuilder::expireAfterAccess);
+    cacheBuilder.maximumWeight(config.getCapacity().toBytes());
+    Optional.ofNullable(config.getTimeout()).ifPresent(cacheBuilder::expireAfterAccess);
     cacheBuilder.scheduler(
         Scheduler.forScheduledExecutorService(Executors.newSingleThreadScheduledExecutor()));
-    if (prop.getCacheSoftValues()) {
-      cacheBuilder.softValues();
-    }
     this.cache = cacheBuilder.build();
   }
 
