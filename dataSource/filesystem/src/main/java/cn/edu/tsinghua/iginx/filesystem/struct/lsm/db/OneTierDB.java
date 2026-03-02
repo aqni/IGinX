@@ -27,7 +27,6 @@ import cn.edu.tsinghua.iginx.filesystem.common.Patterns;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemBatch;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.Catalog;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.DataViewWrapper;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseables;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.WriteBatches;
@@ -77,7 +76,7 @@ public class OneTierDB implements AutoCloseable {
 
   public RowStream query(List<String> patterns, @Nullable TagFilter tagFilter, Filter filter) throws StorageException {
     String queryDescription = String.format("Query{patterns: %s, tagFilter: %s, filter: %s}", patterns, tagFilter, filter);
-    return null;
+    throw new UnsupportedOperationException("unimplemented");
 
 //    deleteLock.readLock().lock();
 //    try () {
@@ -133,21 +132,12 @@ public class OneTierDB implements AutoCloseable {
 
   public void insert(DataView data) throws StorageException, InterruptedException {
     List<MemBatch.Snapshot> batches = new ArrayList<>();
-    try (NoexceptAutoCloseable closer = NoexceptAutoCloseables.all(batches)) {
-      DataViewWrapper wrappedData = new DataViewWrapper(data);
-      if (wrappedData.isRowData()) {
-        try (Scanner<Long, Scanner<String, Object>> scanner = wrappedData.getRowsScanner()) {
-          batches.addAll(WriteBatches.recordOfRows(scanner, wrappedData.getSchema(), allocator));
-        }
-      } else {
-        try (Scanner<String, Scanner<Long, Object>> scanner = wrappedData.getColumnsScanner()) {
-          batches.addAll(WriteBatches.recordOfColumns(scanner, wrappedData.getSchema(), allocator));
-        }
-      }
+    try (NoexceptAutoCloseable ignored = NoexceptAutoCloseables.all(batches)) {
+      batches.addAll(WriteBatches.of(data, allocator));
 
       deleteLock.readLock().lock();
       try {
-        List<Field> fields = batches.stream().map(MemBatch.Snapshot::getFieldVectors).flatMap(List::stream).map(FieldVector::getField).collect(ImmutableList.toImmutableList());
+        List<Field> fields = batches.stream().map(MemBatch.Snapshot::getFieldVectors).flatMap(List::stream).map(FieldVector::getField).distinct().collect(ImmutableList.toImmutableList());
         catalog.verifyAndInsertFields(fields);
         memTableQueue.store(batches);
         if (shared.getConfig().getMemtable().getTimeout().toMillis() <= 0) {

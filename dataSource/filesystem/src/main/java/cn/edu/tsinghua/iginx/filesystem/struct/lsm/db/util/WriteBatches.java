@@ -19,121 +19,194 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util;
 
-import cn.edu.tsinghua.iginx.engine.physical.storage.domain.ColumnKey;
+import cn.edu.tsinghua.iginx.engine.shared.data.write.BitmapView;
+import cn.edu.tsinghua.iginx.engine.shared.data.write.ColumnDataView;
+import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
+import cn.edu.tsinghua.iginx.engine.shared.data.write.RowDataView;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemBatch;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.util.arrow.ArrowVectors;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
-import cn.edu.tsinghua.iginx.thrift.DataType;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
-
 import com.google.common.collect.ImmutableList;
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.FieldVector;
-import org.apache.arrow.vector.complex.writer.FieldWriter;
-import org.apache.arrow.vector.types.Types;
+import org.apache.arrow.util.Preconditions;
+import org.apache.arrow.vector.*;
+import org.apache.arrow.vector.types.pojo.Field;
+
+import java.util.*;
+import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class WriteBatches {
 
-  private static class ChunkSnapshotBuilder {
-    private final BigIntVector keyVector;
-    private final FieldVector valueVector;
-    private final FieldWriter valueWriter;
-    private final Consumer<Object> valueAppender;
-    private int count = 0;
+  public static Collection<MemBatch.Snapshot> of(DataView data, BufferAllocator allocator) {
+    switch (data.getRawDataType()) {
+      case Column:
+        return of((ColumnDataView) data, allocator, true);
+      case NonAlignedColumn:
+        return of((ColumnDataView) data, allocator, false);
+      case Row:
+        return of((RowDataView) data, allocator, true);
+      case NonAlignedRow:
+        return of((RowDataView) data, allocator, false);
+      default:
+        throw new IllegalArgumentException("Unsupported data type: " + data.getRawDataType());
+    }
+  }
 
-    public ChunkSnapshotBuilder(ColumnKey columnKey, DataType type, BufferAllocator allocator) {
-      this.keyVector = ArrowVectors.key(allocator);
-      Types.MinorType minorType = ArrowTypes.minorTypeOf(type);
-      this.valueVector = minorType.getNewVector(ArrowFields.of(columnKey, type), allocator, null);
-      this.valueWriter = minorType.getNewFieldWriter(valueVector);
-      switch (type) {
-        case BOOLEAN:
-          valueAppender = value -> valueWriter.writeBit(((Boolean) value) ? 1 : 0);
-          break;
-        case INTEGER:
-          valueAppender = value -> valueWriter.writeInt((Integer) value);
-          break;
-        case LONG:
-          valueAppender = value -> valueWriter.writeBigInt((Long) value);
-          break;
-        case FLOAT:
-          valueAppender = value -> valueWriter.writeFloat4((Float) value);
-          break;
-        case DOUBLE:
-          valueAppender = value -> valueWriter.writeFloat8((Double) value);
-          break;
-        case BINARY:
-          valueAppender = value -> valueWriter.writeVarBinary((byte[]) value);
-          break;
-        default:
-          throw new UnsupportedOperationException("Unsupported data type: " + type);
+  private static Collection<MemBatch.Snapshot> of(RowDataView data, BufferAllocator allocator, boolean aligned) {
+    List<Field> fields = buildFields(data);
+    long[] keys = buildKeys(data);
+
+    List<Object[]> columns = IntStream.range(0, data.getPathNum()).mapToObj(i -> new Object[data.getKeySize()]).collect(Collectors.toList());
+    for (int keyIndex = 0; keyIndex < data.getKeySize(); keyIndex++) {
+      BitmapView bitmap = data.getBitmapView(keyIndex);
+      int valueIndex = 0;
+      for (int fieldIndex = 0; fieldIndex < data.getPathNum(); fieldIndex++) {
+        if (bitmap.get(fieldIndex)) {
+          columns.get(fieldIndex)[keyIndex] = data.getValue(keyIndex, valueIndex);
+          valueIndex++;
+        }
       }
     }
 
-    public void append(long key, Object value) {
-      keyVector.setSafe(count, key);
-      valueWriter.setPosition(count);
-      valueAppender.accept(value);
-      count++;
-    }
-
-    public MemBatch.Snapshot build() {
-      keyVector.setValueCount(count);
-      valueVector.setValueCount(count);
-      return new MemBatch.Snapshot(keyVector, ImmutableList.of(valueVector));
-    }
+    return buildSnapshot(fields, keys, columns, allocator, aligned);
   }
 
-  private static <F, T> Map<String, ChunkSnapshotBuilder> builders(
-      Map<F, T> schema, BufferAllocator allocator) {
-    Map<String, ChunkSnapshotBuilder> headers = new HashMap<>();
-    for (Map.Entry<F, T> entry : schema.entrySet()) {
-      String name = (String) entry.getKey();
-      DataType type = (DataType) entry.getValue();
-      ColumnKey columnKey = TagKVUtils.splitFullName(name);
-      ChunkSnapshotBuilder builder = new ChunkSnapshotBuilder(columnKey, type, allocator);
-      headers.put(name, builder);
-    }
-    return headers;
-  }
+  private static Collection<MemBatch.Snapshot> of(ColumnDataView data, BufferAllocator allocator, boolean aligned) {
+    List<Field> fields = buildFields(data);
+    long[] keys = buildKeys(data);
 
-  public static <V, F, K extends Comparable<K>, T> List<MemBatch.Snapshot> recordOfRows(
-      Scanner<K, Scanner<F, V>> rows, Map<F, T> schema, BufferAllocator allocator)
-      throws StorageException {
-    Map<String, ChunkSnapshotBuilder> builders = builders(schema, allocator);
-    while (rows.iterate()) {
-      long key = (Long) rows.key();
-      Scanner<F, V> row = rows.value();
-      while (row.iterate()) {
-        String name = (String) row.key();
-        Object value = row.value();
-        ChunkSnapshotBuilder builder = builders.get(name);
-        builder.append(key, value);
+    List<Object[]> columns = IntStream.range(0, data.getPathNum()).mapToObj(i -> new Object[data.getKeySize()]).collect(Collectors.toList());
+    for (int fieldIndex = 0; fieldIndex < data.getPathNum(); fieldIndex++) {
+      BitmapView bitmap = data.getBitmapView(fieldIndex);
+      int valueIndex = 0;
+      for (int keyIndex = 0; keyIndex < data.getKeySize(); keyIndex++) {
+        if (bitmap.get(keyIndex)) {
+          columns.get(fieldIndex)[keyIndex] = data.getValue(keyIndex, valueIndex);
+          valueIndex++;
+        }
       }
     }
-    return builders.values().stream().map(ChunkSnapshotBuilder::build).collect(ImmutableList.toImmutableList());
+
+    return buildSnapshot(fields, keys, columns, allocator, aligned);
   }
 
-  public static <V, F, K extends Comparable<K>, T> List<MemBatch.Snapshot> recordOfColumns(
-      Scanner<F, Scanner<K, V>> batch, Map<F, T> schema, BufferAllocator allocator)
-      throws StorageException {
-    Map<String, ChunkSnapshotBuilder> builders = builders(schema, allocator);
-    while (batch.iterate()) {
-      String name = (String) batch.key();
-      Scanner<K, V> column = batch.value();
-      ChunkSnapshotBuilder builder = builders.get(name);
-      while (column.iterate()) {
-        long key = (Long) column.key();
-        Object value = column.value();
-        builder.append(key, value);
+  private static List<Field> buildFields(DataView data) {
+    List<Field> fields = new ArrayList<>();
+    for (int i = 0; i < data.getPathNum(); i++) {
+      Map<String, String> tags = data.getTags(i);
+      if (tags == null) {
+        tags = Collections.emptyMap();
+      }
+      fields.add(ArrowFields.of(data.getPath(i), tags, data.getDataType(i)));
+    }
+    return fields;
+  }
+
+  private static long[] buildKeys(DataView data) {
+    long[] keys = new long[data.getKeySize()];
+    for (int i = 0; i < data.getKeySize(); i++) {
+      keys[i] = data.getKey(i);
+    }
+    return keys;
+  }
+
+  private static List<MemBatch.Snapshot> buildSnapshot(List<Field> fields, long[] keys, List<Object[]> columns, BufferAllocator allocator, boolean aligned) {
+    if (aligned) {
+      return ImmutableList.of(buildSnapshotAligned(fields, keys, columns, allocator));
+    } else {
+      return buildSnapshotUnaligned(fields, keys, columns, allocator);
+    }
+  }
+
+  private static List<MemBatch.Snapshot> buildSnapshotUnaligned(List<Field> fields, long[] keys, List<Object[]> columns, BufferAllocator allocator) {
+    Preconditions.checkArgument(fields.size() == columns.size());
+
+    List<MemBatch.Snapshot> snapshots = new ArrayList<>();
+    for (int i = 0; i < fields.size(); i++) {
+      Field field = fields.get(i);
+      Object[] values = columns.get(i);
+      int[] nonnullIndices = IntStream.range(0, values.length).filter(index -> values[index] != null).toArray();
+      long[] nonnullKeys = Arrays.stream(nonnullIndices).mapToLong(index -> keys[index]).toArray();
+      Object[] nonnullValues = Arrays.stream(nonnullIndices).mapToObj(index -> values[index]).toArray();
+      snapshots.add(buildSnapshotAligned(ImmutableList.of(field), nonnullKeys, ImmutableList.of(nonnullValues), allocator));
+    }
+    return snapshots;
+  }
+
+  private static MemBatch.Snapshot buildSnapshotAligned(List<Field> fields, long[] keys, List<Object[]> columns, BufferAllocator allocator) {
+    Preconditions.checkArgument(fields.size() == columns.size());
+
+    BigIntVector keyVector = buildKeyVector(keys, allocator);
+    ImmutableList.Builder<FieldVector> fieldVectorsBuilder = ImmutableList.builder();
+
+    for (int i = 0; i < fields.size(); i++) {
+      Field field = fields.get(i);
+      Object[] values = columns.get(i);
+      FieldVector fieldVector = buildFieldVector(field, values, allocator);
+      fieldVectorsBuilder.add(fieldVector);
+    }
+
+    return new MemBatch.Snapshot(keyVector, fieldVectorsBuilder.build());
+  }
+
+  private static BigIntVector buildKeyVector(long[] keys, BufferAllocator allocator) {
+    BigIntVector keyVector = (BigIntVector) ArrowFields.KEY.createVector(allocator);
+    keyVector.allocateNew(keys.length);
+    for (int i = 0; i < keys.length; i++) {
+      keyVector.set(i, keys[i]);
+    }
+    keyVector.setValueCount(keys.length);
+    return keyVector;
+  }
+
+  private static FieldVector buildFieldVector(Field field, Object[] values, BufferAllocator allocator) {
+    FieldVector valueVector = field.createVector(allocator);
+    valueVector.setInitialCapacity(values.length);
+    if (valueVector instanceof FixedWidthVector) {
+      ((FixedWidthVector) valueVector).allocateNew(values.length);
+    }
+
+    BiConsumer<Integer, Object> appender = createValueAppender(valueVector);
+    for (int i = 0; i < values.length; i++) {
+      Object value = values[i];
+      if (value != null) {
+        appender.accept(i, value);
       }
     }
-    return builders.values().stream().map(ChunkSnapshotBuilder::build).collect(ImmutableList.toImmutableList());
+
+    valueVector.setValueCount(values.length);
+    return valueVector;
   }
+
+  private static BiConsumer<Integer, Object> createValueAppender(FieldVector valueVector) {
+    switch (valueVector.getMinorType()) {
+      case BIT: {
+        BitVector vector = (BitVector) valueVector;
+        return (index, value) -> vector.set(index, (Boolean) value ? 1 : 0);
+      }
+      case INT: {
+        IntVector vector = (IntVector) valueVector;
+        return (index, value) -> vector.set(index, (Integer) value);
+      }
+      case BIGINT: {
+        BigIntVector vector = (BigIntVector) valueVector;
+        return (index, value) -> vector.set(index, (Long) value);
+      }
+      case FLOAT4: {
+        Float4Vector vector = (Float4Vector) valueVector;
+        return (index, value) -> vector.set(index, (Float) value);
+      }
+      case FLOAT8: {
+        Float8Vector vector = (Float8Vector) valueVector;
+        return (index, value) -> vector.set(index, (Double) value);
+      }
+      case VARBINARY: {
+        VarBinaryVector vector = (VarBinaryVector) valueVector;
+        return (index, value) -> vector.setSafe(index, (byte[]) value);
+      }
+      default:
+        throw new IllegalArgumentException("Unsupported data type: " + valueVector.getMinorType());
+    }
+  }
+
 }
