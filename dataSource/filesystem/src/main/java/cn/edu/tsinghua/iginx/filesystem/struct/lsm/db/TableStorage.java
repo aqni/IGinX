@@ -27,7 +27,6 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Range;
@@ -37,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -105,6 +105,7 @@ public class TableStorage {
   public void clear() {
     try {
       storageManager.clear();
+    } catch (NoSuchFileException ignored) {
     } catch (IOException e) {
       LOGGER.error("clear failed", e);
     }

@@ -19,6 +19,7 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 
+import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
@@ -27,6 +28,9 @@ import cn.edu.tsinghua.iginx.filesystem.common.Patterns;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemBatch;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.Catalog;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.InMemoryTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseables;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.WriteBatches;
@@ -35,6 +39,7 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
+import com.google.common.collect.Streams;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -74,51 +79,23 @@ public class OneTierDB implements AutoCloseable {
     flusher.start();
   }
 
-  public RowStream query(List<String> patterns, @Nullable TagFilter tagFilter, Filter filter) throws StorageException {
-    String queryDescription = String.format("Query{patterns: %s, tagFilter: %s, filter: %s}", patterns, tagFilter, filter);
-    throw new UnsupportedOperationException("unimplemented");
-
-//    deleteLock.readLock().lock();
-//    try () {
-//      List<Field> fields = catalog.find(patterns, tagFilter);
-//      List<String> columnKeys = fields.stream().map(field -> TagKVUtils.toFullName(ArrowFields.toColumnKey(field))).collect(ImmutableList.toImmutableList());
-//
-//      Map<String, Field> schema = new HashMap<>();
-//      for (int i = 0; i < fields.size(); i++) {
-//        schema.put(columnKeys.get(i), fields.get(i));
-//      }
-//
-//      //      Filter projectedFilter = ProjectUtils.project(filter, schemaMatchTags);
-//      RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(filter);
-//
-//      List<Scanner<Long, Scanner<String, Object>>> inMemories;
-//      try {
-//        inMemories = memTableQueue.scan(fields, rangeSet, allocator);
-//      } catch (IOException e) {
-//        throw new StorageException(e);
-//      }
-//
-//      Set<String> columnKeySet = new HashSet<>(columnKeys);
-//      try (AutoCloseable c = AutoCloseables.all(inMemories)) {
-//        DataBuffer<Long, String, Object> readBuffer = tableStorage.query(columnKeySet, rangeSet, filter);
-//        for (Scanner<Long, Scanner<String, Object>> scanner : inMemories) {
-//          readBuffer.putRows(scanner);
-//        }
-//        Scanner<Long, Scanner<String, Object>> scanner = readBuffer.scanRows(columnKeySet, Range.all());
-//        RowStream rowStream = new ScannerRowStream(scanner, schema);
-//        if (!Filters.isTrue(filter)) {
-//          rowStream = new FilterRowStreamWrapper(rowStream, filter);
-//        }
-//        return rowStream;
-//      } catch (RuntimeException e) {
-//        throw e;
-//      } catch (Exception e) {
-//        throw new StorageException(e);
-//      }
-//    } finally {
-//      deleteLock.readLock().unlock();
-//    }
-
+  public RowStream scan(List<String> patterns, @Nullable TagFilter tagFilter, Filter filter) throws StorageException {
+    deleteLock.readLock().lock();
+    try {
+      List<Field> fields = catalog.find(patterns, tagFilter);
+      RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(filter);
+      List<InMemoryTable> inMemoryTables = memTableQueue.snapshot(fields, rangeSet, allocator);
+      try (NoexceptAutoCloseable ignored = NoexceptAutoCloseables.all(inMemoryTables)) {
+        List<Table> fileTables = tableStorage.load(fields, rangeSet);
+        List<Table> allHitTables = Streams.concat(fileTables.stream(), inMemoryTables.stream()).collect(ImmutableList.toImmutableList());
+        return ScanExecutor.scan(allHitTables, fields, filter);
+      }
+    } catch (IOException | PhysicalException e) {
+      LOGGER.debug("Query{patterns: {}, tagFilter: {}, filter: {}} failed", patterns, tagFilter, filter);
+      throw new StorageException(e);
+    } finally {
+      deleteLock.readLock().unlock();
+    }
   }
 
   public List<Field> schema(List<String> patterns, @Nullable TagFilter tagFilter) throws StorageException {

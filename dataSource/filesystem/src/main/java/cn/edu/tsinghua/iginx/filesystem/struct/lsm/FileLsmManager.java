@@ -38,8 +38,6 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageExce
 import cn.edu.tsinghua.iginx.filesystem.thrift.DataBoundary;
 import cn.edu.tsinghua.iginx.thrift.AggregateType;
 import com.google.common.collect.RangeSet;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -92,7 +90,7 @@ public class FileLsmManager implements FileManager {
         return new Table(header, Collections.emptyList());
       }
 
-      return db.query(patterns, tagFilter, filter);
+      return db.scan(patterns, tagFilter, filter);
     } catch (StorageException e) {
       throw new IOException(e);
     }
