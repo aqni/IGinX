@@ -96,7 +96,7 @@ public final class MemBatch implements NoexceptAutoCloseable {
   }
 
   public synchronized void append(Snapshot batch) {
-    VectorBatchAppender.batchAppend(keyVector, batch.keyVector);
+    append(keyVector, batch.keyVector);
 
     List<FieldVector> targets = this.fieldVectors;
     List<FieldVector> sources = batch.getFieldVectors();

@@ -21,6 +21,7 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
+import com.google.common.io.MoreFiles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,7 +60,7 @@ public class TombstoneStorage {
 
   private void flushCache(Path path, Tombstone tombstone) {
     try {
-      Files.createDirectories(path);
+      MoreFiles.createParentDirectories(path);
       try (ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))) {
         oos.writeObject(tombstone);
       }

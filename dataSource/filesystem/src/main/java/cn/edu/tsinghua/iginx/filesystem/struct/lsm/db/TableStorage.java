@@ -23,7 +23,7 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.Catalog;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.ImmutableFileStorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageConfig;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
@@ -72,7 +72,7 @@ public class TableStorage {
     }
   }
 
-  public void deleteNoCompact(long tableId) throws IOException {
+  public void deleteUncommitted(long tableId) throws IOException {
     storageManager.delete(tableId);
   }
 

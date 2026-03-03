@@ -28,8 +28,8 @@ import cn.edu.tsinghua.iginx.filesystem.common.Patterns;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemBatch;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.Catalog;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.InMemoryTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.InMemoryTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseables;
@@ -91,7 +91,7 @@ public class OneTierDB implements AutoCloseable {
         return ScanExecutor.scan(allHitTables, fields, filter);
       }
     } catch (IOException | PhysicalException e) {
-      LOGGER.debug("Query{patterns: {}, tagFilter: {}, filter: {}} failed", patterns, tagFilter, filter);
+      LOGGER.debug("Query{patterns: {}, tagFilter: {}, filter: {}} failed", patterns, tagFilter, filter, e);
       throw new StorageException(e);
     } finally {
       deleteLock.readLock().unlock();
@@ -151,8 +151,8 @@ public class OneTierDB implements AutoCloseable {
     try {
       LOGGER.debug("start to delete {} where {} in {}", fields, keyRangeSet, path);
       memTableQueue.flushAll(true);
-      catalog.delete(fields, keyRangeSet);
       tableStorage.delete(fields, keyRangeSet);
+      catalog.delete(fields, keyRangeSet);
     } finally {
       deleteLock.writeLock().unlock();
     }
@@ -163,8 +163,8 @@ public class OneTierDB implements AutoCloseable {
     try {
       LOGGER.debug("start to delete {} in {}", fields, path);
       memTableQueue.flushAll(true);
-      catalog.delete(fields);
       tableStorage.delete(fields);
+      catalog.delete(fields);
     } finally {
       deleteLock.writeLock().unlock();
     }

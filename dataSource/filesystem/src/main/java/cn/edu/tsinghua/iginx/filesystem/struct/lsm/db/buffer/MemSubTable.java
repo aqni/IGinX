@@ -140,7 +140,7 @@ public class MemSubTable implements NoexceptAutoCloseable {
           snapshots.add(new SortedChunkSnapshot(slice, allocator));
         } else {
           if (active == null) {
-            active = new MemBatch(fields, batch.getValueCount(), allocator);
+            active = new MemBatch(fields, length, allocator);
           }
           active.append(slice);
           if (activeChunkSnapshot != null) {

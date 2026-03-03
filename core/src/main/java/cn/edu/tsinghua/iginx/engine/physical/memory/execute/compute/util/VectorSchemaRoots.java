@@ -92,6 +92,8 @@ public class VectorSchemaRoots {
     for (int i = 0; i < target.getFieldVectors().size(); i++) {
       source.getFieldVectors().get(i).makeTransferPair(target.getFieldVectors().get(i)).transfer();
     }
+    target.setRowCount(source.getRowCount());
+    source.clear();
   }
 
   public static VectorSchemaRoot transfer(BufferAllocator allocator, VectorSchemaRoot source) {

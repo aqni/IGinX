@@ -6,7 +6,7 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.Header;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Row;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import com.google.common.collect.RangeSet;

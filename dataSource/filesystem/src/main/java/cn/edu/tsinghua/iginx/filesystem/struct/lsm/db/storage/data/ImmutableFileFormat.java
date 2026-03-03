@@ -1,7 +1,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.AbstractTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.AbstractTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 
 import java.io.IOException;
 import java.nio.file.Path;

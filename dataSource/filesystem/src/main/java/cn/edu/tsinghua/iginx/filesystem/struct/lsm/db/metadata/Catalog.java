@@ -21,8 +21,7 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field.FieldIndex;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.RangeSet;

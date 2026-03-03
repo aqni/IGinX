@@ -1,6 +1,5 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.RangeSet;
@@ -20,9 +19,9 @@ import java.util.Map;
  * Tombstone 用于记录被删除的数据范围。
  * 实现了 Serializable 接口，支持标准的 Java 序列化。
  */
-public class Tombstone implements Serializable, CachePool.Cacheable {
+public class Tombstone implements Serializable {
 
-  private final HashMap<Field, TreeRangeSet<Long>> keyRanges = new HashMap<>();
+  private transient HashMap<Field, TreeRangeSet<Long>> keyRanges = new HashMap<>();
 
   public void add(Field field, RangeSet<Long> ranges) {
     if (!keyRanges.containsKey(field)) {
@@ -70,9 +69,9 @@ public class Tombstone implements Serializable, CachePool.Cacheable {
     oos.writeInt(keyRanges.size());
     for (Map.Entry<Field, TreeRangeSet<Long>> entry : keyRanges.entrySet()) {
       Field field = entry.getKey();
-      Preconditions.checkArgument(field.isNullable());
-      Preconditions.checkArgument(field.getChildren() == null);
-      Preconditions.checkArgument(field.getDictionary() == null);
+      Preconditions.checkState(field.isNullable());
+      Preconditions.checkState(field.getChildren().isEmpty());
+      Preconditions.checkState(field.getDictionary() == null);
       oos.writeObject(field.getName());
       oos.writeObject(ImmutableSortedMap.copyOf(field.getMetadata()));
       oos.writeObject(Types.getMinorTypeForArrowType(field.getType()));
@@ -82,6 +81,7 @@ public class Tombstone implements Serializable, CachePool.Cacheable {
 
   private void readObject(ObjectInputStream ois) throws IOException, ClassNotFoundException {
     ois.defaultReadObject();
+    keyRanges = new HashMap<>();
     int size = ois.readInt();
     for (int i = 0; i < size; i++) {
       String name = (String) ois.readObject();

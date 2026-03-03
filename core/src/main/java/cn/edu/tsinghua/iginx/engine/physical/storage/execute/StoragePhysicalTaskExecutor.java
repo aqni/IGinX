@@ -175,7 +175,7 @@ public class StoragePhysicalTaskExecutor {
                                           new NonExecutablePhysicalTaskException(
                                               "unsupported physical task"));
                               }
-                            } catch (Exception e) {
+                            } catch (Throwable e) {
                               LOGGER.error("execute task error: ", e);
                               result = new TaskExecuteResult(new PhysicalException(e));
                             }

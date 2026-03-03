@@ -22,19 +22,19 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Scheduler;
+import org.ehcache.sizeof.SizeOf;
 
 import java.util.Optional;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
-import org.ehcache.sizeof.SizeOf;
 
 public class CachePool {
 
-  private final Cache<Object, Cacheable> cache;
+  private final Cache<Object, Object> cache;
 
   public CachePool(CacheConfig config) {
     Caffeine<Object, Object> cacheBuilder = Caffeine.newBuilder();
-    cacheBuilder.weigher((String name, Cacheable cacheable) -> cacheable.getWeight());
+    cacheBuilder.weigher((Object key, Object value) -> Math.toIntExact(bytesOf(key) + bytesOf(value)));
     cacheBuilder.maximumWeight(config.getCapacity().toBytes());
     Optional.ofNullable(config.getTimeout()).ifPresent(cacheBuilder::expireAfterAccess);
     cacheBuilder.scheduler(
@@ -42,13 +42,11 @@ public class CachePool {
     this.cache = cacheBuilder.build();
   }
 
-  public ConcurrentMap<Object, Cacheable> asMap() {
+  public ConcurrentMap<Object, Object> asMap() {
     return cache.asMap();
   }
 
-  public interface Cacheable {
-    default int getWeight() {
-      return Math.toIntExact(SizeOf.newInstance().deepSizeOf(this));
-    }
+  private static long bytesOf(Object value) {
+    return SizeOf.newInstance().deepSizeOf(value);
   }
 }

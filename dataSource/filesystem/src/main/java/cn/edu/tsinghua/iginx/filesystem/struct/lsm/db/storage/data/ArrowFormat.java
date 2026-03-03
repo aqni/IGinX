@@ -28,9 +28,10 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.BoolFilter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import com.typesafe.config.Config;
 import org.apache.arrow.compression.CommonsCompressionFactory;
 import org.apache.arrow.memory.BufferAllocator;
@@ -44,6 +45,7 @@ import org.apache.arrow.vector.ipc.ArrowFileReader;
 import org.apache.arrow.vector.ipc.ArrowFileWriter;
 import org.apache.arrow.vector.ipc.message.IpcOption;
 import org.apache.arrow.vector.types.pojo.Field;
+import org.apache.arrow.vector.types.pojo.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +58,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class ArrowFormat extends DenseImmutableFileFormat {
@@ -74,7 +78,18 @@ public class ArrowFormat extends DenseImmutableFileFormat {
     try (RowStream rowStream = subTable.scan(fields, new BoolFilter(true))) {
       RowStream toRead = NaiveOperatorMemoryExecutor.transformToTable(rowStream);
       long startTime = System.currentTimeMillis();
-      try (BufferAllocator allocator = new RootAllocator(); BatchStream batchStream = BatchStreams.wrap(allocator, toRead, BaseValueVector.INITIAL_VALUE_ALLOCATION); VectorSchemaRoot root = VectorSchemaRoot.create(batchStream.getSchema().raw(), allocator); WritableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE); ArrowFileWriter writer = new ArrowFileWriter(root, null, channel, null, IpcOption.DEFAULT, CommonsCompressionFactory.INSTANCE, CompressionUtil.CodecType.LZ4_FRAME)) {
+      try (BufferAllocator allocator = new RootAllocator();
+           BatchStream batchStream = BatchStreams.wrap(allocator, toRead, BaseValueVector.INITIAL_VALUE_ALLOCATION);
+           VectorSchemaRoot root = VectorSchemaRoot.create(batchStream.getSchema().raw(), allocator);
+           WritableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+           ArrowFileWriter writer = new ArrowFileWriter(
+               root,
+               null,
+               channel,
+               null,
+               IpcOption.DEFAULT,
+               CommonsCompressionFactory.INSTANCE,
+               CompressionUtil.CodecType.LZ4_FRAME)) {
         writer.start();
         while (batchStream.hasNext()) {
           try (Batch batch = batchStream.getNext()) {
@@ -105,10 +120,13 @@ public class ArrowFormat extends DenseImmutableFileFormat {
 
   @Override
   protected Table.Meta loadMeta(Path src) throws IOException {
-    List<Field> fields;
-    try (BufferAllocator allocator = new RootAllocator(); SeekableByteChannel channel = Files.newByteChannel(src, StandardOpenOption.READ); ArrowFileReader reader = new ArrowFileReader(channel, allocator)) {
-      fields = reader.getVectorSchemaRoot().getSchema().getFields();
+    List<Field> originFields;
+    try (BufferAllocator allocator = new RootAllocator();
+         SeekableByteChannel channel = Files.newByteChannel(src, StandardOpenOption.READ);
+         ArrowFileReader reader = new ArrowFileReader(channel, allocator)) {
+      originFields = reader.getVectorSchemaRoot().getSchema().getFields();
     }
+    List<Field> fields = originFields.stream().filter(f -> !BatchSchema.KEY.equals(f)).collect(Collectors.toList());
     try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(getMetaPath(src), StandardOpenOption.READ))) {
       @SuppressWarnings("unchecked") List<Table.Statistic> stats = (List<Table.Statistic>) ois.readObject();
       if (fields.size() != stats.size()) {
@@ -124,13 +142,27 @@ public class ArrowFormat extends DenseImmutableFileFormat {
   protected RowStream scan(Path src, List<Field> fields, Filter predicate) throws IOException {
     Header header;
     List<Row> rows = new ArrayList<>();
-    try (BufferAllocator allocator = new RootAllocator(); SeekableByteChannel channel = Files.newByteChannel(src, StandardOpenOption.READ); ArrowFileReader reader = new ArrowFileReader(channel, allocator)) {
-      VectorSchemaRoot root = reader.getVectorSchemaRoot();
-      header = BatchStreamToRowStreamWrapper.getHeader(BatchSchema.of(root.getSchema()));
+    try (BufferAllocator allocator = new RootAllocator();
+         SeekableByteChannel channel = Files.newByteChannel(src, StandardOpenOption.READ);
+         ArrowFileReader reader = new ArrowFileReader(channel, allocator, CommonsCompressionFactory.INSTANCE)) {
+      Schema schema = new Schema(Iterables.concat(Collections.singletonList(BatchSchema.KEY), fields));
+      header = BatchStreamToRowStreamWrapper.getHeader(BatchSchema.of(schema));
+
       while (reader.loadNextBatch()) {
+        VectorSchemaRoot root = reader.getVectorSchemaRoot();
         List<FieldVector> allVectors = root.getFieldVectors();
-        FieldVector[] valueVectors = allVectors.subList(1, allVectors.size()).toArray(new FieldVector[0]);
+
         BigIntVector keyVector = (BigIntVector) allVectors.get(0);
+        FieldVector[] valueVectors = new FieldVector[fields.size()];
+        for (int i = 0; i < fields.size(); i++) {
+          Field field = fields.get(i);
+          FieldVector vector = root.getVector(field);
+          if (vector == null) {
+            throw new IOException("Field " + field + " does not exist in file " + src);
+          }
+          valueVectors[i] = vector;
+        }
+
         int rowCount = root.getRowCount();
         for (int i = 0; i < rowCount; i++) {
           long key = keyVector.get(i);

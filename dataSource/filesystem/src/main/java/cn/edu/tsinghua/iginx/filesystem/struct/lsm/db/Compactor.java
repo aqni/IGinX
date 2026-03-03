@@ -20,6 +20,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.arrow.util.Preconditions;
 import org.slf4j.Logger;
@@ -40,7 +41,7 @@ public class Compactor {
   private final Duration memTableTimeout;
   private final MemTableQueue memTableQueue;
   private final TableStorage tableStorage;
-  private final long idBase = System.nanoTime();
+  private volatile long idBase;
 
   private ExecutorService flusher = null;
   private ExecutorService flushDispatcher = null;
@@ -61,30 +62,44 @@ public class Compactor {
   }
 
   public void start() {
+    idBase = System.nanoTime();
     Preconditions.checkState(flusher == null);
     ThreadFactory workerFactory =
-        new ThreadFactoryBuilder().setNameFormat("flusher-" + name + "-worker-%d").build();
+        new ThreadFactoryBuilder()
+            .setNameFormat("flusher-" + name + "-worker-%d")
+            .setUncaughtExceptionHandler(this::handleUncaughtException)
+            .build();
     flusher = Executors.newCachedThreadPool(workerFactory);
 
     Preconditions.checkState(flushDispatcher == null);
     ThreadFactory dispatcherFactory =
-        new ThreadFactoryBuilder().setNameFormat("flusher-" + name + "-dispatcher-%d").build();
+        new ThreadFactoryBuilder()
+            .setNameFormat("flusher-" + name + "-dispatcher-%d")
+            .setUncaughtExceptionHandler(this::handleUncaughtException)
+            .build();
     flushDispatcher = Executors.newSingleThreadExecutor(dispatcherFactory);
     flushDispatcher.submit(this::flushLoop);
 
     Preconditions.checkState(deleter == null);
     ThreadFactory deleterFactory =
-        new ThreadFactoryBuilder().setNameFormat("flusher-" + name + "-deleter-%d").build();
+        new ThreadFactoryBuilder()
+            .setNameFormat("flusher-" + name + "-deleter-%d")
+            .setUncaughtExceptionHandler(this::handleUncaughtException)
+            .build();
     deleter = Executors.newCachedThreadPool(deleterFactory);
     deleter.submit(this::deleteLoop);
 
     Preconditions.checkState(scheduler == null);
     ThreadFactory schedulerFactory =
-        new ThreadFactoryBuilder().setNameFormat("flusher-" + name + "-scheduler-%d").build();
+        new ThreadFactoryBuilder()
+            .setNameFormat("flusher-" + name + "-scheduler-%d")
+            .setUncaughtExceptionHandler(this::handleUncaughtException)
+            .build();
     this.scheduler = Executors.newSingleThreadScheduledExecutor(schedulerFactory);
     if (!memTableTimeout.isZero() && !memTableTimeout.isNegative()) {
       LOGGER.info("flusher {} start to force flush every {}", name, memTableTimeout);
-      this.scheduler.scheduleWithFixedDelay(this::schedule, memTableTimeout.getNano(), memTableTimeout.getNano(), TimeUnit.NANOSECONDS);
+      long ns = memTableTimeout.toNanos();
+      this.scheduler.scheduleWithFixedDelay(this::schedule, ns, ns, TimeUnit.NANOSECONDS);
     }
   }
 
@@ -107,54 +122,57 @@ public class Compactor {
   }
 
   private void awaitTermination(ExecutorService executor) throws InterruptedException {
-    while (!executor.awaitTermination(1, TimeUnit.MINUTES)) {
-      LOGGER.error("executor {} did not terminate in time, continue waiting", executor);
+    while (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
+      LOGGER.warn("executor {} did not terminate in time, continue waiting", executor);
     }
   }
 
   private void flushLoop() {
-    try {
-      while (!Thread.currentThread().isInterrupted()) {
-        MemTableQueue.TookTable table = memTableQueue.takeToFlush();
-        long tableId = idBase + table.getId();
-
-        flusherPermits.acquireUninterruptibly();
-        flusher.submit(() -> {
-          try (MemTableQueue.TookTable ignored = table) {
-            LOGGER.debug("start to flush table {}", tableId);
-            tableStorage.flush(tableId, table.getMemTable(), table.isFinalTable());
-          } catch (Throwable e) {
-            table.fail();
-            LOGGER.error("flush memtable {} failed", tableId, e);
-          } finally {
-            flusherPermits.release();
-            LOGGER.debug("end to flush table {}", tableId);
-          }
-        });
-
-        LOGGER.debug("memtable {} is submit to flush", tableId);
+    while (!Thread.currentThread().isInterrupted()) {
+      MemTableQueue.TookTable table = null;
+      try {
+        table = memTableQueue.takeToFlush();
+        flusherPermits.acquire();
+      } catch (InterruptedException ignored) {
+        if (table != null) {
+          table.close();
+        }
+        break;
       }
-    } catch (InterruptedException ignored) {
-    } catch (Throwable e) {
-      LOGGER.error("flusher {} dispatch loop is error", name, e);
+      long tableId = idBase + table.getId();
+      MemTableQueue.TookTable finalTable = table;
+      flusher.submit(() -> {
+        try (MemTableQueue.TookTable ignored = finalTable) {
+          LOGGER.debug("start to flush table {}", tableId);
+          tableStorage.flush(tableId, finalTable.getMemTable(), finalTable.isFinalTable());
+        } catch (IOException | StorageException e) {
+          finalTable.fail();
+          LOGGER.error("flush memtable {} failed", tableId, e);
+        } finally {
+          flusherPermits.release();
+          LOGGER.debug("end to flush table {}", tableId);
+        }
+      });
+      LOGGER.debug("memtable {} is submit to flush", tableId);
     }
     LOGGER.info("flusher {} dispatch loop is exited", name);
   }
 
   private void deleteLoop() {
-    try {
-      while (!Thread.currentThread().isInterrupted()) {
-        long id = memTableQueue.takeToDelete();
-        LOGGER.debug("flushed table {} is need to delete", idBase + id);
-        try {
-          tableStorage.deleteNoCompact(idBase + id);
-        } catch (IOException e) {
-          LOGGER.error("delete memtable {} failed, giving up", idBase + id, e);
-        }
+    while (!Thread.currentThread().isInterrupted()) {
+      long id;
+      try {
+        id = memTableQueue.takeToDelete();
+      } catch (InterruptedException ignored) {
+        break;
       }
-    } catch (InterruptedException ignored) {
-    } catch (Throwable e) {
-      LOGGER.error("flusher {} delete loop is error", name, e);
+      long tableId = idBase + id;
+      LOGGER.debug("flushed table {} is need to delete", tableId);
+      try {
+        tableStorage.deleteUncommitted(tableId);
+      } catch (IOException e) {
+        LOGGER.error("delete memtable {} failed, giving up", tableId, e);
+      }
     }
     LOGGER.info("flusher {} delete loop is exited", name);
   }
@@ -162,11 +180,13 @@ public class Compactor {
   private void schedule() {
     try {
       memTableQueue.flushAll(false);
-    } catch (InterruptedException e) {
+    } catch (InterruptedException ignored) {
       LOGGER.info("flusher {} schedule task is cancel", name);
-    } catch (Throwable e) {
-      LOGGER.error("flusher {} schedule task is error", name, e);
     }
+  }
+
+  private void handleUncaughtException(Thread t, Throwable e) {
+    LOGGER.error("flusher {} thread {} is error", name, t, e);
   }
 
 }

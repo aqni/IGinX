@@ -19,11 +19,10 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.InMemoryTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.InMemoryTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Awaitable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.RangeSet;
 import org.apache.arrow.memory.BufferAllocator;
@@ -207,7 +206,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     private BufferAllocator activeAllocator;
     private MemTable activeTable;
     private volatile boolean activeTableWritten;
-    private final NavigableSet<Long> duplicateIds = new TreeSet<>();
+    private final NavigableSet<Long> uncommittedIds = new TreeSet<>();
     private final BlockingQueue<Long> toDeleteIds = new PriorityBlockingQueue<>();
 
     public ActiveMemTable(MemTableConfig config, BufferAllocator allocator, Semaphore memTablePermits) {
@@ -260,7 +259,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
         if (createNewTable) {
           createNewMemtable();
         } else {
-          duplicateIds.add(archiveId);
+          uncommittedIds.add(archiveId);
         }
         return result;
       } finally {
@@ -284,7 +283,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     public void onTableFlushed(long id) {
       switchTableLock.writeLock().lock();
       try {
-        Set<Long> toDeleteIds = duplicateIds.subSet(Long.MIN_VALUE, id);
+        Set<Long> toDeleteIds = uncommittedIds.subSet(Long.MIN_VALUE, id);
         this.toDeleteIds.addAll(toDeleteIds);
         toDeleteIds.clear();
       } finally {
@@ -299,7 +298,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
         activeAllocator.close();
         currentId = 0;
         createNewMemtable();
-        duplicateIds.clear();
+        uncommittedIds.clear();
         toDeleteIds.clear();
       } finally {
         switchTableLock.writeLock().unlock();

@@ -1,4 +1,4 @@
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table;
 
 import com.google.common.collect.ImmutableMap;
 import org.apache.arrow.vector.types.pojo.Field;

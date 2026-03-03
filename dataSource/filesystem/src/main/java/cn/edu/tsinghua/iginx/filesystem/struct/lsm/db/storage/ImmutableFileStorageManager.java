@@ -22,8 +22,8 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.ImmutableFileFormat;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.Tombstone;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.TombstoneStorage;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.Table;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.table.TombstoneTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.TombstoneTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.RangeSet;
 import com.google.common.io.MoreFiles;
@@ -127,7 +127,10 @@ public class ImmutableFileStorageManager
   @Override
   public void delete(long tableId) throws IOException {
     Path tableDir = getTableDir(tableId);
-    MoreFiles.deleteRecursively(tableDir, RecursiveDeleteOption.ALLOW_INSECURE);
+    try {
+      MoreFiles.deleteRecursively(tableDir, RecursiveDeleteOption.ALLOW_INSECURE);
+    } catch (NoSuchFileException ignored) {
+    }
   }
 
   @Override

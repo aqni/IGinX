@@ -18,7 +18,7 @@ import java.util.List;
 public class StorageConfig extends AbstractConfig {
 
   @Optional
-  FileFormatType fileFormat = FileFormatType.PARQUET;
+  FileFormatType fileFormat = FileFormatType.ARROW;
 
   @Optional
   Config fileConfig = ConfigFactory.empty();
