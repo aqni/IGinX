@@ -91,7 +91,7 @@ public final class MemBatch implements NoexceptAutoCloseable {
     TransferPair transferPair = vector.getTransferPair(allocator);
     V replicate = (V) transferPair.getTo();
     replicate.setInitialCapacity(vector.getValueCapacity());
-    VectorBatchAppender.batchAppend(replicate, vector);
+    append(replicate, vector);
     return replicate;
   }
 
@@ -105,8 +105,15 @@ public final class MemBatch implements NoexceptAutoCloseable {
       FieldVector target = targets.get(i);
       FieldVector source = sources.get(i);
       Preconditions.checkArgument(target.getField().equals(source.getField()));
-      VectorBatchAppender.batchAppend(target, source);
+      append(target, source);
     }
+  }
+
+  private static void append(ValueVector target, ValueVector source) {
+    if (target.getValueCapacity() == 0) {
+      target.allocateNew();
+    }
+    VectorBatchAppender.batchAppend(target, source);
   }
 
   public synchronized int getValueCount() {

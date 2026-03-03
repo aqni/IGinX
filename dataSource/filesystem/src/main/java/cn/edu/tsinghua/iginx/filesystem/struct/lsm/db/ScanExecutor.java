@@ -19,6 +19,7 @@ import org.apache.arrow.vector.types.pojo.Field;
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -30,7 +31,9 @@ public class ScanExecutor {
     Filter rangeFilter = FilterRangeUtils.filterOf(rangeSet);
     for (Table table : allHitTables) {
       for (Table.SubTable subTable : table.getSubTables()) {
-        try (RowStream rowStream = subTable.scan(fields, rangeFilter)) {
+        Set<Field> subTableFields = subTable.getMeta().getFieldStats().keySet();
+        List<Field> hitFields = fields.stream().filter(subTableFields::contains).collect(Collectors.toList());
+        try (RowStream rowStream = subTable.scan(hitFields, rangeFilter)) {
           builder.put(rowStream);
         }
       }

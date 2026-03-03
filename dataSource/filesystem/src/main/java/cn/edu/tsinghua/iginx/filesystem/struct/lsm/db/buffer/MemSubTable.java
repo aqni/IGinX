@@ -70,9 +70,10 @@ public class MemSubTable implements NoexceptAutoCloseable {
 
   public synchronized MemSubTable split(IntLinkedOpenHashSet fields, BufferAllocator allocator) {
     int[] remainingFields = IntStream.range(0, this.fields.size()).filter(i -> !fields.contains(i)).toArray();
-    int[] fieldsArray = fields.toIntArray();
+    ImmutableList<Field> splitFields = fields.intStream().mapToObj(this.fields::get).collect(ImmutableList.toImmutableList());
     this.fields = Arrays.stream(remainingFields).mapToObj(this.fields::get).collect(ImmutableList.toImmutableList());
 
+    int[] fieldsArray = fields.toIntArray();
     List<SortedChunkSnapshot> splitSnapshots = new ArrayList<>();
     List<SortedChunkSnapshot> remainingSnapshots = new ArrayList<>();
     for (SortedChunkSnapshot snapshot : this.snapshots) {
@@ -96,7 +97,7 @@ public class MemSubTable implements NoexceptAutoCloseable {
     }
 
     return new MemSubTable(
-        fields.intStream().mapToObj(this.fields::get).collect(ImmutableList.toImmutableList()),
+        splitFields,
         allocator,
         maxChunkValueCount,
         splitSnapshots,

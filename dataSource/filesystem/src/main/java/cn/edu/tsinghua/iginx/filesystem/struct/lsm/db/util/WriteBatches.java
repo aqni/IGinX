@@ -81,7 +81,7 @@ public class WriteBatches {
       int valueIndex = 0;
       for (int keyIndex = 0; keyIndex < data.getKeySize(); keyIndex++) {
         if (bitmap.get(keyIndex)) {
-          columns.get(fieldIndex)[keyIndex] = data.getValue(keyIndex, valueIndex);
+          columns.get(fieldIndex)[keyIndex] = data.getValue(fieldIndex, valueIndex);
           valueIndex++;
         }
       }

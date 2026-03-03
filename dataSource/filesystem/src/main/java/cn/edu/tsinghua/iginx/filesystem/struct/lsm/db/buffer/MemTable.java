@@ -73,12 +73,12 @@ public class MemTable implements NoexceptAutoCloseable {
       Map<List<Field>, Pair<int[], int[]>> schemaToSourceTargetIndex = hitSubTable(mayBeExistedFields);
       for (Map.Entry<List<Field>, Pair<int[], int[]>> entry : schemaToSourceTargetIndex.entrySet()) {
         List<Field> schema = entry.getKey();
-        if (schema == null) {
-          continue;
-        }
         int[] sourceIndexes = entry.getValue().left();
         int[] targetIndexes = entry.getValue().right();
         MemSubTable subTable = subTables.get(schema);
+        if (subTable == null) {
+          continue;
+        }
         subTableSnapshots.add(subTable.snapshot(targetIndexes, allocator));
         subTableFieldIndex.add(IntImmutableList.of(sourceIndexes));
       }
@@ -91,7 +91,6 @@ public class MemTable implements NoexceptAutoCloseable {
 
   public void append(MemBatch.Snapshot data) {
     List<Field> fields = data.getFieldVectors().stream().map(FieldVector::getField).distinct().collect(ImmutableList.toImmutableList());
-    Preconditions.checkArgument(fields.size() == data.getFieldVectors().size(), "Fields in snapshot should be distinct");
 
     lock.readLock().lock();
     try {
@@ -100,7 +99,7 @@ public class MemTable implements NoexceptAutoCloseable {
       for (Map.Entry<List<Field>, Pair<int[], int[]>> entry : schemaToSourceTargetIndex.entrySet()) {
         List<Field> schema = entry.getKey();
         int[] sourceIndexes = entry.getValue().left();
-        if (schema == null) {
+        if (!subTables.containsKey(schema)) {
           // need create
           needSplitOrCreate = true;
           break;
@@ -135,10 +134,9 @@ public class MemTable implements NoexceptAutoCloseable {
 
       try (MemBatch.Snapshot dataSlice = data.slice(sourceIndexes, allocator)) {
         MemSubTable subTable;
-        if (schema == null) {
+        if (!subTables.containsKey(schema)) {
           // create new sub-table
-          ImmutableList<Field> sourceFields = Arrays.stream(sourceIndexes).mapToObj(i -> data.getFieldVectors().get(i).getField()).collect(ImmutableList.toImmutableList());
-          subTable = new MemSubTable(sourceFields, allocator, maxChunkValueCount);
+          subTable = new MemSubTable(ImmutableList.copyOf(schema), allocator, maxChunkValueCount);
           addSubTable(subTable);
         } else if (sourceIndexes.length == schema.size()) {
           // just append
@@ -160,7 +158,8 @@ public class MemTable implements NoexceptAutoCloseable {
     List<Field> schema = subTable.getFields();
     subTables.put(schema, subTable);
     for (Field field : schema) {
-      fieldToSchema.put(field, schema);
+      List<Field> oldValue = fieldToSchema.put(field, schema);
+      Preconditions.checkState(oldValue == null);
     }
   }
 
@@ -174,13 +173,19 @@ public class MemTable implements NoexceptAutoCloseable {
 
     Map<List<Field>, Pair<int[], int[]>> hitSourceTargetIndex = new IdentityHashMap<>();
     for (Map.Entry<List<Field>, IntList> entry : schemaToHit.entrySet()) {
-      List<Field> schema = entry.getKey();
       int[] sourceIndexes = entry.getValue().toIntArray();
-      Map<Field, Integer> schemaField2Index = IntStream.range(0, schema.size())
-          .boxed()
-          .collect(Collectors.toMap(schema::get, Integer::valueOf));
-      int[] targetIndexes = Arrays.stream(sourceIndexes).mapToObj(fields::get).map(schemaField2Index::get).mapToInt(Integer::intValue).toArray();
-      hitSourceTargetIndex.put(schema, ObjectObjectImmutablePair.of(sourceIndexes, targetIndexes));
+      List<Field> schema = entry.getKey();
+      if (schema == null) {
+        List<Field> newFields = Arrays.stream(sourceIndexes).boxed().map(fields::get).collect(ImmutableList.toImmutableList());
+        int[] targetIndexes = IntStream.range(0, newFields.size()).toArray();
+        hitSourceTargetIndex.put(newFields, ObjectObjectImmutablePair.of(sourceIndexes, targetIndexes));
+      } else {
+        Map<Field, Integer> schemaField2Index = IntStream.range(0, schema.size())
+            .boxed()
+            .collect(Collectors.toMap(schema::get, Integer::valueOf));
+        int[] targetIndexes = Arrays.stream(sourceIndexes).mapToObj(fields::get).map(schemaField2Index::get).mapToInt(Integer::intValue).toArray();
+        hitSourceTargetIndex.put(schema, ObjectObjectImmutablePair.of(sourceIndexes, targetIndexes));
+      }
     }
     return hitSourceTargetIndex;
   }
