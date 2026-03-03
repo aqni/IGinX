@@ -179,7 +179,7 @@ public class Compactor {
 
   private void schedule() {
     try {
-      memTableQueue.flushAll(false);
+      memTableQueue.flushAll(true);
     } catch (InterruptedException ignored) {
       LOGGER.info("flusher {} schedule task is cancel", name);
     }
