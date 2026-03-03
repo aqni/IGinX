@@ -28,12 +28,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
-import org.apache.arrow.vector.types.pojo.Field;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.apache.arrow.vector.types.pojo.Field;
 
 public class TombstoneTable extends AbstractTable {
 
@@ -48,7 +47,9 @@ public class TombstoneTable extends AbstractTable {
 
   @Override
   public List<SubTable> getSubTables() throws IOException {
-    return table.getSubTables().stream().map(t -> new TombstoneSubTable(t, tombstone)).collect(ImmutableList.toImmutableList());
+    return table.getSubTables().stream()
+        .map(t -> new TombstoneSubTable(t, tombstone))
+        .collect(ImmutableList.toImmutableList());
   }
 
   private static class TombstoneSubTable implements SubTable {
@@ -74,7 +75,8 @@ public class TombstoneTable extends AbstractTable {
           }
           Range<Long> keyRange = statistic.getKeyRange();
           RangeSet<Long> deletedKeyRangeSet = keyRangeSet.complement().subRangeSet(keyRange);
-          Range<Long> deletedKeyRange = deletedKeyRangeSet.isEmpty() ? Range.closedOpen(0L, 0L) : deletedKeyRangeSet.span();
+          Range<Long> deletedKeyRange =
+              deletedKeyRangeSet.isEmpty() ? Range.closedOpen(0L, 0L) : deletedKeyRangeSet.span();
           fieldBuilder.put(field, new Statistic(deletedKeyRange));
         } else {
           fieldBuilder.put(field, statistic);
@@ -97,7 +99,11 @@ public class TombstoneTable extends AbstractTable {
           tombstoneKeyRangeSets.add(null);
         }
       }
-      return new FilterRowStreamWrapper(new ClearEmptyRowStreamWrapper(new TombstoneRowStream(subTable.scan(fields, new BoolFilter(true)), tombstoneKeyRangeSets)), predicate);
+      return new FilterRowStreamWrapper(
+          new ClearEmptyRowStreamWrapper(
+              new TombstoneRowStream(
+                  subTable.scan(fields, new BoolFilter(true)), tombstoneKeyRangeSets)),
+          predicate);
     }
   }
 

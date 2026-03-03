@@ -22,14 +22,13 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util;
 import cn.edu.tsinghua.iginx.engine.shared.Constants;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.ImmutableSortedMap;
+import java.util.Collections;
+import java.util.Map;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
-
-import java.util.Collections;
-import java.util.Map;
 
 public class ArrowFields {
 
@@ -50,7 +49,8 @@ public class ArrowFields {
     return new Field(name, fieldType, null);
   }
 
-  public static Field KEY = of(false, Constants.KEY, Collections.emptyMap(), Types.MinorType.BIGINT.getType());
+  public static Field KEY =
+      of(false, Constants.KEY, Collections.emptyMap(), Types.MinorType.BIGINT.getType());
 
   public static cn.edu.tsinghua.iginx.engine.shared.data.read.Field toIginxField(Field arrowField) {
     return new cn.edu.tsinghua.iginx.engine.shared.data.read.Field(

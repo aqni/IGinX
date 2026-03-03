@@ -21,15 +21,13 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.*;
 import com.google.common.collect.*;
-
-import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import javax.annotation.Nullable;
 
 public class FilterRangeUtils {
-  private FilterRangeUtils() {
-  }
+  private FilterRangeUtils() {}
 
   public static RangeSet<Long> rangeSetOf(Filter filter) {
     switch (filter.getType()) {
@@ -188,5 +186,4 @@ public class FilterRangeUtils {
       return new AndFilter(newChildren);
     }
   }
-
 }

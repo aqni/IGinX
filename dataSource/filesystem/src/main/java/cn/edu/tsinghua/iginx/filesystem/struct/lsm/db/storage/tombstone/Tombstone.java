@@ -1,24 +1,39 @@
+/*
+ * IGinX - the polystore system with high performance
+ * Copyright (C) Tsinghua University
+ * TSIGinX@gmail.com
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeRangeSet;
-import org.apache.arrow.util.Preconditions;
-import org.apache.arrow.vector.types.Types;
-import org.apache.arrow.vector.types.pojo.Field;
-
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.arrow.util.Preconditions;
+import org.apache.arrow.vector.types.Types;
+import org.apache.arrow.vector.types.pojo.Field;
 
-/**
- * Tombstone 用于记录被删除的数据范围。
- * 实现了 Serializable 接口，支持标准的 Java 序列化。
- */
+/** Tombstone 用于记录被删除的数据范围。 实现了 Serializable 接口，支持标准的 Java 序列化。 */
 public class Tombstone implements Serializable {
 
   private transient HashMap<Field, TreeRangeSet<Long>> keyRanges = new HashMap<>();
@@ -59,9 +74,7 @@ public class Tombstone implements Serializable {
 
   @Override
   public String toString() {
-    return "Tombstone{" +
-        "keyRanges=" + keyRanges +
-        '}';
+    return "Tombstone{" + "keyRanges=" + keyRanges + '}';
   }
 
   private void writeObject(ObjectOutputStream oos) throws IOException {
@@ -86,7 +99,8 @@ public class Tombstone implements Serializable {
     for (int i = 0; i < size; i++) {
       String name = (String) ois.readObject();
       @SuppressWarnings("unchecked")
-      ImmutableSortedMap<String, String> metadata = (ImmutableSortedMap<String, String>) ois.readObject();
+      ImmutableSortedMap<String, String> metadata =
+          (ImmutableSortedMap<String, String>) ois.readObject();
       Types.MinorType minorType = (Types.MinorType) ois.readObject();
       Field field = ArrowFields.of(name, metadata, minorType);
       @SuppressWarnings("unchecked")

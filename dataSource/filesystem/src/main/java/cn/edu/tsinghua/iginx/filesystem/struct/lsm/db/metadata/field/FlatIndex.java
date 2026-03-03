@@ -64,7 +64,9 @@ public class FlatIndex implements FieldIndex {
   @Override
   public List<Field> find(List<String> patterns, @Nullable TagFilter tagFilter) {
     List<Predicate<String>> matchers =
-        patterns.stream().map(StringUtils::toColumnMatcher).collect(ImmutableList.toImmutableList());
+        patterns.stream()
+            .map(StringUtils::toColumnMatcher)
+            .collect(ImmutableList.toImmutableList());
 
     List<Field> result = new ArrayList<>();
     fieldToTypeMap.forEach(

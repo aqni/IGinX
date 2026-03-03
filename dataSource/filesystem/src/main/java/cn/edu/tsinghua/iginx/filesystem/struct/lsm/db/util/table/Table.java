@@ -23,13 +23,12 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Range;
-import lombok.NonNull;
-import lombok.Value;
-import org.apache.arrow.vector.types.pojo.Field;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
+import lombok.NonNull;
+import lombok.Value;
+import org.apache.arrow.vector.types.pojo.Field;
 
 public interface Table {
 
@@ -50,7 +49,6 @@ public interface Table {
 
   @Value
   class Meta {
-    @NonNull
-    ImmutableMap<Field, Statistic> fieldStats;
+    @NonNull ImmutableMap<Field, Statistic> fieldStats;
   }
 }

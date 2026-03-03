@@ -22,6 +22,12 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
 import com.google.common.collect.ImmutableList;
 import it.unimi.dsi.fastutil.ints.IntLinkedOpenHashSet;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.IntStream;
+import javax.annotation.WillCloseWhenClosed;
+import javax.annotation.concurrent.Immutable;
+import javax.annotation.concurrent.ThreadSafe;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.BigIntVector;
@@ -31,13 +37,6 @@ import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.util.TransferPair;
 import org.apache.arrow.vector.util.VectorBatchAppender;
 
-import javax.annotation.WillCloseWhenClosed;
-import javax.annotation.concurrent.Immutable;
-import javax.annotation.concurrent.ThreadSafe;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.IntStream;
-
 @ThreadSafe
 public final class MemBatch implements NoexceptAutoCloseable {
 
@@ -45,38 +44,54 @@ public final class MemBatch implements NoexceptAutoCloseable {
   private ImmutableList<FieldVector> fieldVectors;
 
   public MemBatch(List<Field> fields, int initialCapacity, BufferAllocator allocator) {
-    this(new BigIntVector("", allocator), fields.stream().map(f -> f.createVector(allocator)).collect(ImmutableList.toImmutableList()));
+    this(
+        new BigIntVector("", allocator),
+        fields.stream()
+            .map(f -> f.createVector(allocator))
+            .collect(ImmutableList.toImmutableList()));
     this.keyVector.setInitialCapacity(initialCapacity);
     for (FieldVector valueVector : fieldVectors) {
       valueVector.setInitialCapacity(initialCapacity);
     }
   }
 
-  private MemBatch(@WillCloseWhenClosed BigIntVector keyVector, @WillCloseWhenClosed ImmutableList<FieldVector> fieldVectors) {
+  private MemBatch(
+      @WillCloseWhenClosed BigIntVector keyVector,
+      @WillCloseWhenClosed ImmutableList<FieldVector> fieldVectors) {
     this.keyVector = keyVector;
     this.fieldVectors = fieldVectors;
   }
 
   public synchronized MemBatch split(IntLinkedOpenHashSet fields, BufferAllocator allocator) {
     BigIntVector keyVectorReplicate = copy(keyVector, allocator);
-    ImmutableList<FieldVector> splitVector = fields.intStream()
-        .mapToObj(fieldVectors::get)
-        .map(v -> {
-          FieldVector sv = transfer(v, allocator);
-          v.close();
-          return sv;
-        })
-        .collect(ImmutableList.toImmutableList());
-    this.fieldVectors = IntStream.range(0, fieldVectors.size())
-        .filter(i -> !fields.contains(i))
-        .mapToObj(fieldVectors::get)
-        .map(v -> transfer(v, v.getAllocator()))
-        .collect(ImmutableList.toImmutableList());
+    ImmutableList<FieldVector> splitVector =
+        fields
+            .intStream()
+            .mapToObj(fieldVectors::get)
+            .map(
+                v -> {
+                  FieldVector sv = transfer(v, allocator);
+                  v.close();
+                  return sv;
+                })
+            .collect(ImmutableList.toImmutableList());
+    this.fieldVectors =
+        IntStream.range(0, fieldVectors.size())
+            .filter(i -> !fields.contains(i))
+            .mapToObj(fieldVectors::get)
+            .map(v -> transfer(v, v.getAllocator()))
+            .collect(ImmutableList.toImmutableList());
     return new MemBatch(keyVectorReplicate, splitVector);
   }
 
   public synchronized Snapshot snapshot(BufferAllocator allocator) {
-    return new Snapshot(keyVector, fieldVectors, IntStream.range(0, fieldVectors.size()).toArray(), 0, keyVector.getValueCount(), allocator);
+    return new Snapshot(
+        keyVector,
+        fieldVectors,
+        IntStream.range(0, fieldVectors.size()).toArray(),
+        0,
+        keyVector.getValueCount(),
+        allocator);
   }
 
   @SuppressWarnings("unchecked")
@@ -127,12 +142,14 @@ public final class MemBatch implements NoexceptAutoCloseable {
   }
 
   @Immutable
-  public final static class Snapshot implements NoexceptAutoCloseable {
+  public static final class Snapshot implements NoexceptAutoCloseable {
 
     private final BigIntVector keyVector;
     private final ImmutableList<FieldVector> fieldVectors;
 
-    public Snapshot(@WillCloseWhenClosed BigIntVector keyVector, @WillCloseWhenClosed ImmutableList<FieldVector> fieldVectors) {
+    public Snapshot(
+        @WillCloseWhenClosed BigIntVector keyVector,
+        @WillCloseWhenClosed ImmutableList<FieldVector> fieldVectors) {
       for (FieldVector fieldVector : fieldVectors) {
         Preconditions.checkArgument(keyVector.getValueCount() == fieldVector.getValueCount());
       }
@@ -149,13 +166,15 @@ public final class MemBatch implements NoexceptAutoCloseable {
         BufferAllocator allocator) {
       this(
           slice(keyVector, startIndex, length, allocator),
-          Arrays.stream(fields).mapToObj(fieldVectors::get)
+          Arrays.stream(fields)
+              .mapToObj(fieldVectors::get)
               .map(v -> slice(v, startIndex, length, allocator))
               .collect(ImmutableList.toImmutableList()));
     }
 
     @SuppressWarnings("unchecked")
-    private static <V extends ValueVector> V slice(V vector, int startIndex, int length, BufferAllocator allocator) {
+    private static <V extends ValueVector> V slice(
+        V vector, int startIndex, int length, BufferAllocator allocator) {
       TransferPair transferPair = vector.getTransferPair(allocator);
       transferPair.splitAndTransfer(startIndex, length);
       return (V) transferPair.getTo();
@@ -178,7 +197,8 @@ public final class MemBatch implements NoexceptAutoCloseable {
     }
 
     public Snapshot slice(int startIndex, int length, BufferAllocator allocator) {
-      return slice(IntStream.range(0, getFieldVectors().size()).toArray(), startIndex, length, allocator);
+      return slice(
+          IntStream.range(0, getFieldVectors().size()).toArray(), startIndex, length, allocator);
     }
 
     public Snapshot slice(int[] fields, int startIndex, int length, BufferAllocator allocator) {

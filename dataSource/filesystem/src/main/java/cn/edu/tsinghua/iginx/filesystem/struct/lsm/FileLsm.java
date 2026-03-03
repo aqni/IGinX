@@ -24,12 +24,11 @@ import cn.edu.tsinghua.iginx.filesystem.struct.FileStructure;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
 import com.google.auto.service.AutoService;
 import com.typesafe.config.Config;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @AutoService(FileStructure.class)
 public class FileLsm implements FileStructure {

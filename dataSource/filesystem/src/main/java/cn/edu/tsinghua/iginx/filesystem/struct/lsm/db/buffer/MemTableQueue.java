@@ -19,20 +19,12 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.InMemoryTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Awaitable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.InMemoryTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.RangeSet;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.util.Preconditions;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.annotation.WillCloseWhenClosed;
-import javax.annotation.concurrent.ThreadSafe;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
@@ -40,6 +32,13 @@ import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.LongConsumer;
+import javax.annotation.WillCloseWhenClosed;
+import javax.annotation.concurrent.ThreadSafe;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.util.Preconditions;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @ThreadSafe
 public class MemTableQueue implements NoexceptAutoCloseable {
@@ -52,8 +51,10 @@ public class MemTableQueue implements NoexceptAutoCloseable {
   private final BufferAllocator allocator;
   private final ActiveMemTable active;
 
-  public MemTableQueue(MemTableConfig config, Semaphore memTablePermits, BufferAllocator allocator) {
-    String allocatorName = String.join("-", allocator.getName(), MemTableQueue.class.getSimpleName());
+  public MemTableQueue(
+      MemTableConfig config, Semaphore memTablePermits, BufferAllocator allocator) {
+    String allocatorName =
+        String.join("-", allocator.getName(), MemTableQueue.class.getSimpleName());
     this.allocator = allocator.newChildAllocator(allocatorName, 0, Long.MAX_VALUE);
     this.active = new ActiveMemTable(config, this.allocator, memTablePermits);
   }
@@ -101,7 +102,12 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     try {
       ArchivedMemTable archivedMemTable = archives.get(id);
       MemTable.Snapshot snapshot = archivedMemTable.getMemTable().snapshot(allocator);
-      return new TookTable(id, new InMemoryTable(snapshot), archivedMemTable.isOwnTable(), toFlushIds::add, this::remove);
+      return new TookTable(
+          id,
+          new InMemoryTable(snapshot),
+          archivedMemTable.isOwnTable(),
+          toFlushIds::add,
+          this::remove);
     } finally {
       queueLock.writeLock().unlock();
     }
@@ -120,7 +126,8 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     return active.takeToDelete();
   }
 
-  public List<InMemoryTable> snapshot(List<Field> fields, RangeSet<Long> ranges, BufferAllocator allocator) {
+  public List<InMemoryTable> snapshot(
+      List<Field> fields, RangeSet<Long> ranges, BufferAllocator allocator) {
     List<MemTable.Snapshot> snapshots = new ArrayList<>();
     queueLock.readLock().lock();
     try {
@@ -165,7 +172,11 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     private final boolean ownTable;
     private final CountDownLatch latch = new CountDownLatch(1);
 
-    public ArchivedMemTable(@WillCloseWhenClosed MemTable memTable, @WillCloseWhenClosed BufferAllocator allocator, boolean ownTable, @WillCloseWhenClosed NoexceptAutoCloseable onClose) {
+    public ArchivedMemTable(
+        @WillCloseWhenClosed MemTable memTable,
+        @WillCloseWhenClosed BufferAllocator allocator,
+        boolean ownTable,
+        @WillCloseWhenClosed NoexceptAutoCloseable onClose) {
       this.memTable = Preconditions.checkNotNull(memTable);
       this.allocator = Preconditions.checkNotNull(allocator);
       this.ownTable = ownTable;
@@ -209,7 +220,8 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     private final NavigableSet<Long> uncommittedIds = new TreeSet<>();
     private final BlockingQueue<Long> toDeleteIds = new PriorityBlockingQueue<>();
 
-    public ActiveMemTable(MemTableConfig config, BufferAllocator allocator, Semaphore memTablePermits) {
+    public ActiveMemTable(
+        MemTableConfig config, BufferAllocator allocator, Semaphore memTablePermits) {
       this.config = Preconditions.checkNotNull(config);
       this.allocator = Preconditions.checkNotNull(allocator);
       this.memTablePermits = Preconditions.checkNotNull(memTablePermits);
@@ -217,7 +229,9 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     }
 
     private void createNewMemtable() {
-      String name = String.join("-", allocator.getName(), MemTable.class.getSimpleName(), String.valueOf(currentId));
+      String name =
+          String.join(
+              "-", allocator.getName(), MemTable.class.getSimpleName(), String.valueOf(currentId));
       activeAllocator = allocator.newChildAllocator(name, 0, Long.MAX_VALUE);
       activeTable = new MemTable(activeAllocator, config.getChunkValues());
       activeTableWritten = false;
@@ -254,7 +268,10 @@ public class MemTableQueue implements NoexceptAutoCloseable {
 
         Map<Long, ArchivedMemTable> result = new HashMap<>();
         long archiveId = currentId++;
-        result.put(archiveId, new ArchivedMemTable(activeTable, activeAllocator, createNewTable, memTablePermits::release));
+        result.put(
+            archiveId,
+            new ArchivedMemTable(
+                activeTable, activeAllocator, createNewTable, memTablePermits::release));
 
         if (createNewTable) {
           createNewMemtable();
@@ -326,7 +343,12 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     private final LongConsumer onSuccess;
     private boolean failed = false;
 
-    TookTable(long id, @WillCloseWhenClosed InMemoryTable memTable, boolean finalTable, LongConsumer onFailure, LongConsumer onSuccess) {
+    TookTable(
+        long id,
+        @WillCloseWhenClosed InMemoryTable memTable,
+        boolean finalTable,
+        LongConsumer onFailure,
+        LongConsumer onSuccess) {
       this.id = id;
       this.table = memTable;
       this.finalTable = finalTable;

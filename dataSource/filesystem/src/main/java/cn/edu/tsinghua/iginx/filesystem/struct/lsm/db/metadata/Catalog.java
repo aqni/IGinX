@@ -21,19 +21,18 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata;
 
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field.FieldIndex;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.RangeSet;
+import java.util.*;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.*;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Catalog {
 
@@ -82,7 +81,8 @@ public class Catalog {
         }
         schema.insert(toInsert);
         for (Field field : toInsert) {
-          index.computeIfAbsent(field, f -> new ColumnTableIndex(Types.getMinorTypeForArrowType(f.getType())));
+          index.computeIfAbsent(
+              field, f -> new ColumnTableIndex(Types.getMinorTypeForArrowType(f.getType())));
         }
       } finally {
         schemaLock.writeLock().unlock();

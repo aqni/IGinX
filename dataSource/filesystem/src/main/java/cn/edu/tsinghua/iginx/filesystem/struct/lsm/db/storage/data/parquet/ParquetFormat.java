@@ -25,18 +25,16 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.DenseImmutabl
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.typesafe.config.Config;
-import org.apache.arrow.vector.types.pojo.Field;
-
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import org.apache.arrow.vector.types.pojo.Field;
 
 public class ParquetFormat extends DenseImmutableFileFormat {
 
   public ParquetFormat(Config fileConfig, CachePool cachePool) {
     super("parquet", cachePool);
   }
-
 
   @Override
   protected void flush(Path dst, Table.SubTable subTable) throws IOException {
@@ -54,7 +52,7 @@ public class ParquetFormat extends DenseImmutableFileFormat {
   }
 }
 
-//public class ArrowFileStorageManager
+// public class ArrowFileStorageManager
 //    extends ImmutableFileStorageManager<ArrowFileStorageManager.ArrowFileTableMeta> {
 //
 //  private static final Logger LOGGER = LoggerFactory.getLogger(ArrowFileStorageManager.class);
@@ -119,7 +117,8 @@ public class ParquetFormat extends DenseImmutableFileFormat {
 //    throw new UnsupportedOperationException("unimplemented");
 //  }
 //
-//  protected static class ArrowFileTableMeta implements ImmutableFileStorageManager.CacheableTableMeta {
+//  protected static class ArrowFileTableMeta implements
+// ImmutableFileStorageManager.CacheableTableMeta {
 //    private final TableMeta meta;
 //
 //    protected ArrowFileTableMeta(TableMeta meta) {
@@ -154,7 +153,8 @@ public class ParquetFormat extends DenseImmutableFileFormat {
 //      }
 //    }
 //
-//    public CompressionCodec createCodec(CompressionUtil.CodecType codecType, int compressionLevel) {
+//    public CompressionCodec createCodec(CompressionUtil.CodecType codecType, int compressionLevel)
+// {
 //      switch (codecType) {
 //        case LZ4_FRAME:
 //          return new FastestLz4CompressionCodec();
@@ -204,8 +204,8 @@ public class ParquetFormat extends DenseImmutableFileFormat {
 //      return CompressionUtil.CodecType.LZ4_FRAME;
 //    }
 //  }
-//}
-///*
+// }
+/// *
 // * IGinX - the polystore system with high performance
 // * Copyright (C) Tsinghua University
 // * TSIGinX@gmail.com
@@ -224,34 +224,34 @@ public class ParquetFormat extends DenseImmutableFileFormat {
 // * along with this program; if not, write to the Free Software Foundation,
 // * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 // */
-//package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
+// package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
 //
-//import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-//import cn.edu.tsinghua.iginx.filesystem.format.parquet.IParquetReader;
-//import cn.edu.tsinghua.iginx.filesystem.format.parquet.IParquetWriter;
-//import cn.edu.tsinghua.iginx.filesystem.format.parquet.IRecord;
-//import cn.edu.tsinghua.iginx.filesystem.struct.legacy.parquet.manager.dummy.Storer;
-//import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.ImmutableFileStorageManager;
-//import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.IteratorScanner;
-//import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
-//import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Constants;
-//import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
-//import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
-//import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
-//import cn.edu.tsinghua.iginx.thrift.DataType;
-//import com.google.common.collect.Range;
-//import java.io.IOException;
-//import java.nio.file.*;
-//import java.util.*;
-//import javax.annotation.Nullable;
-//import org.slf4j.Logger;
-//import org.slf4j.LoggerFactory;
-//import shaded.iginx.org.apache.parquet.hadoop.metadata.ColumnPath;
-//import shaded.iginx.org.apache.parquet.hadoop.metadata.ParquetMetadata;
-//import shaded.iginx.org.apache.parquet.schema.MessageType;
-//import shaded.iginx.org.apache.parquet.schema.Type;
+// import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+// import cn.edu.tsinghua.iginx.filesystem.format.parquet.IParquetReader;
+// import cn.edu.tsinghua.iginx.filesystem.format.parquet.IParquetWriter;
+// import cn.edu.tsinghua.iginx.filesystem.format.parquet.IRecord;
+// import cn.edu.tsinghua.iginx.filesystem.struct.legacy.parquet.manager.dummy.Storer;
+// import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.ImmutableFileStorageManager;
+// import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.IteratorScanner;
+// import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.scanner.Scanner;
+// import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Constants;
+// import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
+// import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
+// import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
+// import cn.edu.tsinghua.iginx.thrift.DataType;
+// import com.google.common.collect.Range;
+// import java.io.IOException;
+// import java.nio.file.*;
+// import java.util.*;
+// import javax.annotation.Nullable;
+// import org.slf4j.Logger;
+// import org.slf4j.LoggerFactory;
+// import shaded.iginx.org.apache.parquet.hadoop.metadata.ColumnPath;
+// import shaded.iginx.org.apache.parquet.hadoop.metadata.ParquetMetadata;
+// import shaded.iginx.org.apache.parquet.schema.MessageType;
+// import shaded.iginx.org.apache.parquet.schema.Type;
 //
-//public class ParquetFileStorageManager
+// public class ParquetFileStorageManager
 //    extends ImmutableFileStorageManager<ParquetFileStorageManager.ParquetTableMeta> {
 //
 //  private static final Logger LOGGER = LoggerFactory.getLogger(ParquetFileStorageManager.class);
@@ -417,7 +417,8 @@ public class ParquetFormat extends DenseImmutableFileFormat {
 //    }
 //  }
 //
-//  protected static class ParquetTableMeta implements ImmutableFileStorageManager.CacheableTableMeta {
+//  protected static class ParquetTableMeta implements
+// ImmutableFileStorageManager.CacheableTableMeta {
 //    private final Map<String, DataType> schemaDst;
 //    private final Map<String, Range<Long>> rangeMap;
 //    private final Map<String, Long> countMap;
@@ -492,7 +493,7 @@ public class ParquetFormat extends DenseImmutableFileFormat {
 //      return meta;
 //    }
 //  }
-//}
+// }
 
 //  private void cleanTempFiles() {
 //    try (DirectoryStream<Path> stream =
@@ -580,7 +581,8 @@ public class ParquetFormat extends DenseImmutableFileFormat {
 //
 //  @Override
 //  public Scanner<Long, Scanner<String, Object>> scanData(
-//      String name, Set<String> fields, RangeSet<Long> ranges, Filter predicate) throws IOException {
+//      String name, Set<String> fields, RangeSet<Long> ranges, Filter predicate) throws IOException
+// {
 //    Path path = getPath(name);
 //
 //    Filter rangeFilter = FilterRangeUtils.filterOf(ranges);

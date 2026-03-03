@@ -1,15 +1,30 @@
+/*
+ * IGinX - the polystore system with high performance
+ * Copyright (C) Tsinghua University
+ * TSIGinX@gmail.com
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
 
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.io.MoreFiles;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -20,6 +35,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class DenseImmutableFileFormat extends ImmutableFileFormat {
 
@@ -35,7 +53,8 @@ public abstract class DenseImmutableFileFormat extends ImmutableFileFormat {
 
   protected abstract Table.Meta loadMeta(Path src) throws IOException;
 
-  protected abstract RowStream scan(Path src, List<Field> fields, Filter predicate) throws IOException;
+  protected abstract RowStream scan(Path src, List<Field> fields, Filter predicate)
+      throws IOException;
 
   @Override
   public void flush(Path dst, Table table) throws IOException {
@@ -69,13 +88,18 @@ public abstract class DenseImmutableFileFormat extends ImmutableFileFormat {
 
   protected Table.Meta getOrLoadMeta(Path src) throws IOException {
     try {
-      return (Table.Meta) cachePool.asMap().computeIfAbsent(src, key -> {
-        try {
-          return loadMeta(src);
-        } catch (IOException e) {
-          throw new StorageRuntimeException(e);
-        }
-      });
+      return (Table.Meta)
+          cachePool
+              .asMap()
+              .computeIfAbsent(
+                  src,
+                  key -> {
+                    try {
+                      return loadMeta(src);
+                    } catch (IOException e) {
+                      throw new StorageRuntimeException(e);
+                    }
+                  });
     } catch (StorageRuntimeException e) {
       throw (IOException) e.getCause();
     }
@@ -99,5 +123,4 @@ public abstract class DenseImmutableFileFormat extends ImmutableFileFormat {
       return DenseImmutableFileFormat.this.scan(path, fields, predicate);
     }
   }
-
 }

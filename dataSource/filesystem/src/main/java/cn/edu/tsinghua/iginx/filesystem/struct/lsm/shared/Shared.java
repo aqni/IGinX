@@ -19,13 +19,12 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.concurrent.Semaphore;
-
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.FileLsmConfig;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.DBConfig;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.concurrent.Semaphore;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 

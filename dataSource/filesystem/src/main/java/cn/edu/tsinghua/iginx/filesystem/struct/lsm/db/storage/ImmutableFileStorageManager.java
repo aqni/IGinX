@@ -28,10 +28,6 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.RangeSet;
 import com.google.common.io.MoreFiles;
 import com.google.common.io.RecursiveDeleteOption;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -41,9 +37,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class ImmutableFileStorageManager
-    implements StorageManager {
+public class ImmutableFileStorageManager implements StorageManager {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ImmutableFileStorageManager.class);
 
@@ -142,7 +140,8 @@ public class ImmutableFileStorageManager
   }
 
   @Override
-  public void delete(long tableId, List<Field> fields, RangeSet<Long> keyRangeSet) throws IOException {
+  public void delete(long tableId, List<Field> fields, RangeSet<Long> keyRangeSet)
+      throws IOException {
     Path tombstonePath = getTombstonePath(tableId);
     Tombstone tombstone = new Tombstone();
     fields.forEach(f -> tombstone.add(f, keyRangeSet));

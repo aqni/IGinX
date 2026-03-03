@@ -22,14 +22,13 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.apache.arrow.util.Preconditions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.*;
+import javax.annotation.concurrent.NotThreadSafe;
+import org.apache.arrow.util.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @NotThreadSafe
 public class Compactor {
@@ -141,18 +140,19 @@ public class Compactor {
       }
       long tableId = idBase + table.getId();
       MemTableQueue.TookTable finalTable = table;
-      flusher.submit(() -> {
-        try (MemTableQueue.TookTable ignored = finalTable) {
-          LOGGER.debug("start to flush table {}", tableId);
-          tableStorage.flush(tableId, finalTable.getMemTable(), finalTable.isFinalTable());
-        } catch (IOException | StorageException e) {
-          finalTable.fail();
-          LOGGER.error("flush memtable {} failed", tableId, e);
-        } finally {
-          flusherPermits.release();
-          LOGGER.debug("end to flush table {}", tableId);
-        }
-      });
+      flusher.submit(
+          () -> {
+            try (MemTableQueue.TookTable ignored = finalTable) {
+              LOGGER.debug("start to flush table {}", tableId);
+              tableStorage.flush(tableId, finalTable.getMemTable(), finalTable.isFinalTable());
+            } catch (IOException | StorageException e) {
+              finalTable.fail();
+              LOGGER.error("flush memtable {} failed", tableId, e);
+            } finally {
+              flusherPermits.release();
+              LOGGER.debug("end to flush table {}", tableId);
+            }
+          });
       LOGGER.debug("memtable {} is submit to flush", tableId);
     }
     LOGGER.info("flusher {} dispatch loop is exited", name);
@@ -188,5 +188,4 @@ public class Compactor {
   private void handleUncaughtException(Thread t, Throwable e) {
     LOGGER.error("flusher {} thread {} is error", name, t, e);
   }
-
 }

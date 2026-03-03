@@ -25,18 +25,17 @@ import com.google.common.collect.Range;
 import it.unimi.dsi.fastutil.ints.IntLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.shorts.ShortArrays;
 import it.unimi.dsi.fastutil.shorts.ShortComparator;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.util.Preconditions;
-import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.types.pojo.Field;
-
-import javax.annotation.WillCloseWhenClosed;
-import javax.annotation.concurrent.ThreadSafe;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.IntStream;
+import javax.annotation.WillCloseWhenClosed;
+import javax.annotation.concurrent.ThreadSafe;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.util.Preconditions;
+import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.types.pojo.Field;
 
 @ThreadSafe
 public class MemSubTable implements NoexceptAutoCloseable {
@@ -48,11 +47,18 @@ public class MemSubTable implements NoexceptAutoCloseable {
   private MemBatch active;
   private SortedChunkSnapshot activeChunkSnapshot;
 
-  public MemSubTable(ImmutableList<Field> fields, BufferAllocator allocator, int maxChunkValueCount) {
+  public MemSubTable(
+      ImmutableList<Field> fields, BufferAllocator allocator, int maxChunkValueCount) {
     this(fields, allocator, maxChunkValueCount, new ArrayList<>(), null, null);
   }
 
-  private MemSubTable(ImmutableList<Field> fields, BufferAllocator allocator, int maxChunkValueCount, List<SortedChunkSnapshot> snapshots, MemBatch active, SortedChunkSnapshot activeChunkSnapshot) {
+  private MemSubTable(
+      ImmutableList<Field> fields,
+      BufferAllocator allocator,
+      int maxChunkValueCount,
+      List<SortedChunkSnapshot> snapshots,
+      MemBatch active,
+      SortedChunkSnapshot activeChunkSnapshot) {
     Preconditions.checkNotNull(fields);
     Preconditions.checkNotNull(allocator);
     Preconditions.checkArgument(maxChunkValueCount > 0);
@@ -69,9 +75,14 @@ public class MemSubTable implements NoexceptAutoCloseable {
   }
 
   public synchronized MemSubTable split(IntLinkedOpenHashSet fields, BufferAllocator allocator) {
-    int[] remainingFields = IntStream.range(0, this.fields.size()).filter(i -> !fields.contains(i)).toArray();
-    ImmutableList<Field> splitFields = fields.intStream().mapToObj(this.fields::get).collect(ImmutableList.toImmutableList());
-    this.fields = Arrays.stream(remainingFields).mapToObj(this.fields::get).collect(ImmutableList.toImmutableList());
+    int[] remainingFields =
+        IntStream.range(0, this.fields.size()).filter(i -> !fields.contains(i)).toArray();
+    ImmutableList<Field> splitFields =
+        fields.intStream().mapToObj(this.fields::get).collect(ImmutableList.toImmutableList());
+    this.fields =
+        Arrays.stream(remainingFields)
+            .mapToObj(this.fields::get)
+            .collect(ImmutableList.toImmutableList());
 
     int[] fieldsArray = fields.toIntArray();
     List<SortedChunkSnapshot> splitSnapshots = new ArrayList<>();
@@ -86,7 +97,8 @@ public class MemSubTable implements NoexceptAutoCloseable {
     SortedChunkSnapshot splitActiveChunkSnapshot = null;
     if (this.activeChunkSnapshot != null) {
       splitActiveChunkSnapshot = this.activeChunkSnapshot.slice(fieldsArray, allocator);
-      SortedChunkSnapshot remainingActiveChunkSnapshot = this.activeChunkSnapshot.slice(remainingFields, this.allocator);
+      SortedChunkSnapshot remainingActiveChunkSnapshot =
+          this.activeChunkSnapshot.slice(remainingFields, this.allocator);
       this.activeChunkSnapshot.close();
       this.activeChunkSnapshot = remainingActiveChunkSnapshot;
     }
@@ -176,7 +188,9 @@ public class MemSubTable implements NoexceptAutoCloseable {
     private final ImmutableList<Field> fields;
     private final ImmutableList<SortedChunkSnapshot> chunks;
 
-    Snapshot(ImmutableList<Field> fields, @WillCloseWhenClosed ImmutableList<SortedChunkSnapshot> chunks) {
+    Snapshot(
+        ImmutableList<Field> fields,
+        @WillCloseWhenClosed ImmutableList<SortedChunkSnapshot> chunks) {
       this.fields = Objects.requireNonNull(fields);
       this.chunks = Objects.requireNonNull(chunks);
     }
@@ -200,7 +214,8 @@ public class MemSubTable implements NoexceptAutoCloseable {
     private final MemBatch.Snapshot snapshot;
     private final ShareMeta shareMeta;
 
-    private SortedChunkSnapshot(MemBatch.Snapshot snapshot, int[] fields, BufferAllocator allocator, ShareMeta shareMeta) {
+    private SortedChunkSnapshot(
+        MemBatch.Snapshot snapshot, int[] fields, BufferAllocator allocator, ShareMeta shareMeta) {
       Preconditions.checkArgument(snapshot.getValueCount() > 0);
       Preconditions.checkArgument(snapshot.getValueCount() <= Short.MAX_VALUE);
       this.snapshot = snapshot.slice(fields, allocator);
@@ -208,7 +223,11 @@ public class MemSubTable implements NoexceptAutoCloseable {
     }
 
     SortedChunkSnapshot(MemBatch.Snapshot snapshot, BufferAllocator allocator) {
-      this(snapshot, IntStream.range(0, snapshot.getFieldVectors().size()).toArray(), allocator, new ShareMeta());
+      this(
+          snapshot,
+          IntStream.range(0, snapshot.getFieldVectors().size()).toArray(),
+          allocator,
+          new ShareMeta());
     }
 
     public SortedChunkSnapshot slice(int[] fields, BufferAllocator allocator) {

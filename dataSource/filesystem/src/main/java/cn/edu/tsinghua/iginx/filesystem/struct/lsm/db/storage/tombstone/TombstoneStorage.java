@@ -22,16 +22,15 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.io.MoreFiles;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import javax.annotation.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TombstoneStorage {
   private static final Logger LOGGER = LoggerFactory.getLogger(TombstoneStorage.class);
@@ -46,22 +45,32 @@ public class TombstoneStorage {
   }
 
   public void delete(Path path, Tombstone tombstone) {
-    cachePool.asMap().compute(path, (key, value) -> {
-      Tombstone newValue;
-      if (value != null) {
-        newValue = Tombstone.merge((Tombstone) value, tombstone);
-      } else {
-        newValue = tombstone;
-      }
-      flushCache(path, newValue);
-      return newValue;
-    });
+    cachePool
+        .asMap()
+        .compute(
+            path,
+            (key, value) -> {
+              Tombstone newValue;
+              if (value != null) {
+                newValue = Tombstone.merge((Tombstone) value, tombstone);
+              } else {
+                newValue = tombstone;
+              }
+              flushCache(path, newValue);
+              return newValue;
+            });
   }
 
   private void flushCache(Path path, Tombstone tombstone) {
     try {
       MoreFiles.createParentDirectories(path);
-      try (ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))) {
+      try (ObjectOutputStream oos =
+          new ObjectOutputStream(
+              Files.newOutputStream(
+                  path,
+                  StandardOpenOption.CREATE,
+                  StandardOpenOption.WRITE,
+                  StandardOpenOption.TRUNCATE_EXISTING))) {
         oos.writeObject(tombstone);
       }
     } catch (IOException e) {

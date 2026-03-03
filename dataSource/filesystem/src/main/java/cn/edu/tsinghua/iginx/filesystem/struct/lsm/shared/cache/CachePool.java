@@ -22,11 +22,10 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Scheduler;
-import org.ehcache.sizeof.SizeOf;
-
 import java.util.Optional;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
+import org.ehcache.sizeof.SizeOf;
 
 public class CachePool {
 
@@ -34,7 +33,8 @@ public class CachePool {
 
   public CachePool(CacheConfig config) {
     Caffeine<Object, Object> cacheBuilder = Caffeine.newBuilder();
-    cacheBuilder.weigher((Object key, Object value) -> Math.toIntExact(bytesOf(key) + bytesOf(value)));
+    cacheBuilder.weigher(
+        (Object key, Object value) -> Math.toIntExact(bytesOf(key) + bytesOf(value)));
     cacheBuilder.maximumWeight(config.getCapacity().toBytes());
     Optional.ofNullable(config.getTimeout()).ifPresent(cacheBuilder::expireAfterAccess);
     cacheBuilder.scheduler(

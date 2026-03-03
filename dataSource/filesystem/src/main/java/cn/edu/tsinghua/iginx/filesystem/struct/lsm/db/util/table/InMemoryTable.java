@@ -27,22 +27,21 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemSubTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
 import com.google.common.collect.*;
 import it.unimi.dsi.fastutil.ints.IntHeapPriorityQueue;
 import it.unimi.dsi.fastutil.ints.IntPriorityQueue;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import javax.annotation.WillCloseWhenClosed;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.annotation.WillCloseWhenClosed;
-import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(InMemoryTable.class);
@@ -52,10 +51,11 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
 
   public InMemoryTable(@WillCloseWhenClosed MemTable.Snapshot snapshot) {
     this.snapshot = snapshot;
-    this.subTables = IntStream.range(0, snapshot.getSubTableCount())
-        .mapToObj(snapshot::getSubTable)
-        .map(InMemorySubTable::new)
-        .collect(ImmutableList.toImmutableList());
+    this.subTables =
+        IntStream.range(0, snapshot.getSubTableCount())
+            .mapToObj(snapshot::getSubTable)
+            .map(InMemorySubTable::new)
+            .collect(ImmutableList.toImmutableList());
   }
 
   @Override
@@ -80,11 +80,9 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
         rangeSet.add(chunk.getKeyRange());
       }
       Range<Long> range = rangeSet.isEmpty() ? Range.closedOpen(0L, 0L) : rangeSet.span();
-      ImmutableMap<Field, Statistic> fieldStats = snapshot.getFields().stream()
-          .collect(ImmutableMap.toImmutableMap(
-              field -> field,
-              field -> new Statistic(range)
-          ));
+      ImmutableMap<Field, Statistic> fieldStats =
+          snapshot.getFields().stream()
+              .collect(ImmutableMap.toImmutableMap(field -> field, field -> new Statistic(range)));
       this.meta = new Meta(fieldStats);
     }
 
@@ -125,10 +123,7 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
     }
   }
 
-  /**
-   * 多路归并RowStream实现
-   * 使用最小堆对多个已排序的chunk进行归并去重
-   */
+  /** 多路归并RowStream实现 使用最小堆对多个已排序的chunk进行归并去重 */
   private static class MergedRowStream implements RowStream {
 
     private final Header header;
@@ -137,11 +132,16 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
     private final IntPriorityQueue heap;
     private Row nextRow;
 
-    MergedRowStream(MemSubTable.Snapshot snapshot, RangeSet<Long> keyRangeSet, int[] fieldIndexMapping) {
+    MergedRowStream(
+        MemSubTable.Snapshot snapshot, RangeSet<Long> keyRangeSet, int[] fieldIndexMapping) {
       List<Field> snapshotFields = snapshot.getFields();
-      this.header = new Header(cn.edu.tsinghua.iginx.engine.shared.data.read.Field.KEY,
-          Arrays.stream(fieldIndexMapping).mapToObj(snapshotFields::get).map(ArrowFields::toIginxField).collect(Collectors.toList())
-      );
+      this.header =
+          new Header(
+              cn.edu.tsinghua.iginx.engine.shared.data.read.Field.KEY,
+              Arrays.stream(fieldIndexMapping)
+                  .mapToObj(snapshotFields::get)
+                  .map(ArrowFields::toIginxField)
+                  .collect(Collectors.toList()));
       this.fieldIndexMapping = fieldIndexMapping;
 
       List<ChunkIterator> validIterators = new ArrayList<>();
@@ -152,10 +152,10 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
       }
 
       this.iterators = validIterators.toArray(new ChunkIterator[0]);
-      this.heap = new IntHeapPriorityQueue(
-          iterators.length,
-          (i1, i2) -> Long.compare(iterators[i1].currentKey, iterators[i2].currentKey)
-      );
+      this.heap =
+          new IntHeapPriorityQueue(
+              iterators.length,
+              (i1, i2) -> Long.compare(iterators[i1].currentKey, iterators[i2].currentKey));
       for (int i = 0; i < iterators.length; i++) {
         if (iterators[i].advance()) {
           heap.enqueue(i);
@@ -212,8 +212,7 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
     }
 
     @Override
-    public void close() {
-    }
+    public void close() {}
 
     private static class ChunkIterator {
       private final BigIntVector keyVector;
@@ -253,5 +252,4 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
       }
     }
   }
-
 }

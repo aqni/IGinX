@@ -21,10 +21,9 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import com.google.common.collect.RangeSet;
-import org.apache.arrow.vector.types.pojo.Field;
-
 import java.io.IOException;
 import java.util.List;
+import org.apache.arrow.vector.types.pojo.Field;
 
 public interface StorageManager {
 
