@@ -19,11 +19,13 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage;
 
+import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.ImmutableFileFormat;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.Tombstone;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.TombstoneStorage;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.TombstoneTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.TombstoneTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.RangeSet;
 import com.google.common.io.MoreFiles;
@@ -35,9 +37,9 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -105,7 +107,7 @@ public class ImmutableFileStorageManager implements StorageManager {
   }
 
   @Override
-  public void flush(long tableId, Table table) throws IOException {
+  public void flush(long tableId, Table table) throws IOException, PhysicalException {
     Path dst = getDataPath(tableId);
     immutableFileFormat.flush(dst, table);
   }
@@ -132,7 +134,7 @@ public class ImmutableFileStorageManager implements StorageManager {
   }
 
   @Override
-  public void delete(long tableId, List<Field> fields) throws IOException {
+  public void delete(long tableId, Set<Field> fields) throws IOException {
     Path tombstonePath = getTombstonePath(tableId);
     Tombstone tombstone = new Tombstone();
     fields.forEach(tombstone::add);
@@ -140,7 +142,7 @@ public class ImmutableFileStorageManager implements StorageManager {
   }
 
   @Override
-  public void delete(long tableId, List<Field> fields, RangeSet<Long> keyRangeSet)
+  public void delete(long tableId, Set<Field> fields, RangeSet<Long> keyRangeSet)
       throws IOException {
     Path tombstonePath = getTombstonePath(tableId);
     Tombstone tombstone = new Tombstone();

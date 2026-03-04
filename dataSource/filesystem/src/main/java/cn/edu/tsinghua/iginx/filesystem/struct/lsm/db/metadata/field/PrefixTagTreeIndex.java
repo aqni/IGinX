@@ -19,20 +19,21 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field;
 
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field.tagkv.CompactInvertedTagsSet;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field.tagkv.TypedCompactInvertedTagsSet;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
+import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import lombok.Value;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 import java.util.*;
 import java.util.function.Consumer;
-import lombok.Value;
-import org.apache.arrow.vector.types.Types;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 public class PrefixTagTreeIndex implements FieldIndex {
 
@@ -48,25 +49,19 @@ public class PrefixTagTreeIndex implements FieldIndex {
   }
 
   @Override
-  public List<Boolean> contain(List<Field> fields) throws TypeConflictedException {
-    List<Boolean> results = new ArrayList<>();
-    for (Field field : fields) {
-      try {
-        NodeListField nodeListField = NodeListField.of(field);
-        boolean result =
-            root.contain(
-                nodeListField.getNodes(), nodeListField.getTags(), nodeListField.getType());
-        results.add(result);
-      } catch (TypeConflictedException e) {
-        throw new TypeConflictedException(
-            field.getName() + field.getMetadata(), e.getType(), e.getOldType());
-      }
+  public boolean contain(Field field) throws TypeConflictedException {
+    try {
+      NodeListField nodeListField = NodeListField.of(field);
+      return root.contain(
+          nodeListField.getNodes(), nodeListField.getTags(), nodeListField.getType());
+    } catch (TypeConflictedException e) {
+      throw new TypeConflictedException(
+          field.getName() + field.getTags(), e.getType(), e.getOldType());
     }
-    return results;
   }
 
   @Override
-  public List<Field> find(List<String> patterns, @Nullable TagFilter filter) {
+  public Set<Field> find(List<String> patterns, @Nullable TagFilter filter) {
     List<List<String>> patternNodes = new ArrayList<>();
     for (String pattern : patterns) {
       List<String> nodes = Arrays.asList(pattern.split("\\."));
@@ -74,18 +69,18 @@ public class PrefixTagTreeIndex implements FieldIndex {
     }
     List<Field> fields = new ArrayList<>();
     root.find(patternNodes, filter, new ArrayList<>(), fields::add);
-    return fields;
+    return ImmutableSet.copyOf(fields);
   }
 
   @Override
-  public void insert(List<Field> fields) throws TypeConflictedException {
+  public void insert(Set<Field> fields) throws TypeConflictedException {
     List<NodeListField> nodeListFields =
         fields.stream().map(NodeListField::of).collect(ImmutableList.toImmutableList());
     root.add(nodeListFields, enableChildrenSharedTagsSet);
   }
 
   @Override
-  public void remove(List<Field> fields) throws TypeConflictedException {
+  public void remove(Set<Field> fields) throws TypeConflictedException {
     List<NodeListField> nodeListFields =
         fields.stream().map(NodeListField::of).collect(ImmutableList.toImmutableList());
     root.remove(nodeListFields);
@@ -100,13 +95,11 @@ public class PrefixTagTreeIndex implements FieldIndex {
   private static class NodeListField {
     List<String> nodes;
     Map<String, String> tags;
-    Types.MinorType type;
+    DataType type;
 
     public static NodeListField of(Field field) {
       List<String> nodes = Arrays.asList(field.getName().split("\\."));
-      Map<String, String> tags = field.getMetadata();
-      Types.MinorType type = Types.getMinorTypeForArrowType(field.getType());
-      return new NodeListField(nodes, tags, type);
+      return new NodeListField(nodes, field.getTags(), field.getType());
     }
   }
 
@@ -120,7 +113,7 @@ public class PrefixTagTreeIndex implements FieldIndex {
       return pathEnd == null && children.isEmpty();
     }
 
-    public boolean contain(List<String> nodes, Map<String, String> tags, Types.MinorType type)
+    public boolean contain(List<String> nodes, Map<String, String> tags, DataType type)
         throws TypeConflictedException {
       if (nodes.isEmpty()) {
         if (pathEnd == null) {
@@ -162,7 +155,7 @@ public class PrefixTagTreeIndex implements FieldIndex {
         if (pathEnd != null) {
           Set<Map<String, String>> tagsSet = pathEnd.find(filter);
           for (Map<String, String> tags : tagsSet) {
-            Field field = ArrowFields.of(String.join(".", prefix), tags, pathEnd.getType());
+            Field field = new Field(String.join(".", prefix), pathEnd.getType(), tags);
             fieldConsumer.accept(field);
           }
         }
@@ -180,9 +173,7 @@ public class PrefixTagTreeIndex implements FieldIndex {
         fieldConsumer =
             field -> {
               for (Map<String, String> tags : sharedTagsSet) {
-                Field newField =
-                    ArrowFields.of(
-                        field.getName(), tags, Types.getMinorTypeForArrowType(field.getType()));
+                Field newField = new Field(field.getName(), field.getType(), tags);
                 finalFieldConsumer.accept(newField);
               }
             };

@@ -32,18 +32,19 @@ import cn.edu.tsinghua.iginx.filesystem.common.Patterns;
 import cn.edu.tsinghua.iginx.filesystem.struct.DataTarget;
 import cn.edu.tsinghua.iginx.filesystem.struct.FileManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.OneTierDB;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
 import cn.edu.tsinghua.iginx.filesystem.thrift.DataBoundary;
 import cn.edu.tsinghua.iginx.thrift.AggregateType;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.RangeSet;
+
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
-import javax.annotation.Nullable;
+import java.util.Set;
 
 public class FileLsmManager implements FileManager {
 
@@ -81,11 +82,8 @@ public class FileLsmManager implements FileManager {
       TagFilter tagFilter = target.getTagFilter();
 
       if (Filters.isFalse(target.getFilter())) {
-        List<Field> fields =
-            db.schema(patterns, tagFilter).stream()
-                .map(ArrowFields::toIginxField)
-                .collect(Collectors.toList());
-        Header header = new Header(Field.KEY, fields);
+        Set<Field> fields = db.schema(patterns, tagFilter);
+        Header header = new Header(Field.KEY, ImmutableList.copyOf(fields));
         return new Table(header, Collections.emptyList());
       }
 

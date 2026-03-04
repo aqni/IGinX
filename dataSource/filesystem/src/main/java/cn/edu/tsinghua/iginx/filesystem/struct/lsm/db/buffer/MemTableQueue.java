@@ -19,12 +19,17 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Awaitable;
+import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.InMemoryTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.RangeSet;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.util.Preconditions;
+import org.apache.arrow.vector.types.pojo.Field;
+
+import javax.annotation.WillCloseWhenClosed;
+import javax.annotation.concurrent.ThreadSafe;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
@@ -32,18 +37,9 @@ import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.LongConsumer;
-import javax.annotation.WillCloseWhenClosed;
-import javax.annotation.concurrent.ThreadSafe;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.util.Preconditions;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @ThreadSafe
 public class MemTableQueue implements NoexceptAutoCloseable {
-  private final Logger LOGGER = LoggerFactory.getLogger(MemTableQueue.class);
-
   private final ReentrantReadWriteLock queueLock = new ReentrantReadWriteLock();
 
   private final BlockingQueue<Long> toFlushIds = new PriorityBlockingQueue<>();
@@ -52,14 +48,17 @@ public class MemTableQueue implements NoexceptAutoCloseable {
   private final ActiveMemTable active;
 
   public MemTableQueue(
+      String name,
       MemTableConfig config, Semaphore memTablePermits, BufferAllocator allocator) {
-    String allocatorName =
-        String.join("-", allocator.getName(), MemTableQueue.class.getSimpleName());
-    this.allocator = allocator.newChildAllocator(allocatorName, 0, Long.MAX_VALUE);
+    this.allocator = allocator.newChildAllocator(name, 0, Long.MAX_VALUE);
     this.active = new ActiveMemTable(config, this.allocator, memTablePermits);
   }
 
-  public void store(Iterable<MemBatch.Snapshot> data) throws InterruptedException {
+  public WriteBatch prepare(DataView data) {
+    return new WriteBatch(WriteBatches.of(data, allocator));
+  }
+
+  public void store(WriteBatch data) throws InterruptedException {
     queueLock.writeLock().lock();
     try {
       if (active.isOverloaded()) {
@@ -127,7 +126,8 @@ public class MemTableQueue implements NoexceptAutoCloseable {
   }
 
   public List<InMemoryTable> snapshot(
-      List<Field> fields, RangeSet<Long> ranges, BufferAllocator allocator) {
+      List<cn.edu.tsinghua.iginx.engine.shared.data.read.Field> iginxFields) {
+    List<Field> fields = ArrowFields.of(iginxFields);
     List<MemTable.Snapshot> snapshots = new ArrayList<>();
     queueLock.readLock().lock();
     try {
@@ -148,6 +148,9 @@ public class MemTableQueue implements NoexceptAutoCloseable {
       archives.values().forEach(ArchivedMemTable::close);
       archives.clear();
       active.clear();
+      if (allocator.getAllocatedMemory() > 0) {
+        throw new IllegalStateException("allocator is not empty: " + allocator.toVerboseString());
+      }
     } finally {
       queueLock.writeLock().unlock();
     }

@@ -17,14 +17,14 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import java.util.Objects;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 
-public class ArrowTypes {
+class ArrowTypes {
   public static ArrowType of(DataType dataType) {
     return minorTypeOf(dataType).getType();
   }

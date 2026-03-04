@@ -19,20 +19,20 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata;
 
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field.FieldIndex;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.RangeSet;
-import java.util.*;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import org.apache.arrow.vector.types.Types;
-import org.apache.arrow.vector.types.pojo.Field;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.*;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Catalog {
 
@@ -47,7 +47,7 @@ public class Catalog {
     this.schema = config.getSchemaIndexType().create();
   }
 
-  public List<Field> find(List<String> patterns, TagFilter tagFilter) {
+  public Set<Field> find(List<String> patterns, TagFilter tagFilter) {
     deleteLock.readLock().lock();
     schemaLock.readLock().lock();
     try {
@@ -58,13 +58,19 @@ public class Catalog {
     }
   }
 
-  public void verifyAndInsertFields(List<Field> fields) throws TypeConflictedException {
+  public void verifyAndInsertFields(Set<Field> fields) throws TypeConflictedException {
     deleteLock.readLock().lock();
     try {
       schemaLock.readLock().lock();
       try {
-        List<Boolean> contains = schema.contain(fields);
-        if (contains.stream().allMatch(Boolean::booleanValue)) {
+        boolean allMatch = true;
+        for (Field field : fields) {
+          if (!schema.contain(field)) {
+            allMatch = false;
+            break;
+          }
+        }
+        if (allMatch) {
           return;
         }
       } finally {
@@ -72,17 +78,20 @@ public class Catalog {
       }
       schemaLock.writeLock().lock();
       try {
-        List<Boolean> contains = schema.contain(fields);
-        List<Field> toInsert = new ArrayList<>();
-        for (int i = 0; i < fields.size(); i++) {
-          if (!contains.get(i)) {
-            toInsert.add(fields.get(i));
+        Set<Field> toInserted = new HashSet<>();
+        for (Field field : fields) {
+          if (!schema.contain(field)) {
+            Field compactField = new Field(
+                field.getName(),
+                field.getType(),
+                ImmutableSortedMap.copyOf(field.getTags()));
+            toInserted.add(compactField);
           }
         }
-        schema.insert(toInsert);
-        for (Field field : toInsert) {
+        schema.insert(toInserted);
+        for (Field field : toInserted) {
           index.computeIfAbsent(
-              field, f -> new ColumnTableIndex(Types.getMinorTypeForArrowType(f.getType())));
+              field, f -> new ColumnTableIndex(f.getType()));
         }
       } finally {
         schemaLock.writeLock().unlock();
@@ -92,7 +101,7 @@ public class Catalog {
     }
   }
 
-  public List<Field> findFields(List<String> patterns, @Nullable TagFilter tagFilter) {
+  public Set<Field> findFields(List<String> patterns, @Nullable TagFilter tagFilter) {
     deleteLock.readLock().lock();
     schemaLock.readLock().lock();
     try {
@@ -107,7 +116,7 @@ public class Catalog {
     Map<Field, Table.Statistic> fieldStats = meta.getFieldStats();
     deleteLock.readLock().lock();
     try {
-      verifyAndInsertFields(ImmutableList.copyOf(fieldStats.keySet()));
+      verifyAndInsertFields(fieldStats.keySet());
       schemaLock.readLock().lock();
       try {
         for (Map.Entry<Field, Table.Statistic> entry : fieldStats.entrySet()) {
@@ -124,7 +133,7 @@ public class Catalog {
     }
   }
 
-  public Set<Long> findTable(List<Field> fields, RangeSet<Long> keyRangeSet) {
+  public Set<Long> findTable(Set<Field> fields, RangeSet<Long> keyRangeSet) {
     Set<Long> result = new HashSet<>();
     deleteLock.readLock().lock();
     schemaLock.readLock().lock();
@@ -144,7 +153,7 @@ public class Catalog {
     return result;
   }
 
-  public void delete(List<Field> fields) throws TypeConflictedException {
+  public void delete(Set<Field> fields) throws TypeConflictedException {
     deleteLock.writeLock().lock();
     try {
       schema.remove(fields);
@@ -156,7 +165,7 @@ public class Catalog {
     }
   }
 
-  public void delete(List<Field> fields, RangeSet<Long> keyRangeSet) {
+  public void delete(Set<Field> fields, RangeSet<Long> keyRangeSet) {
     deleteLock.writeLock().lock();
     try {
       for (Field field : fields) {

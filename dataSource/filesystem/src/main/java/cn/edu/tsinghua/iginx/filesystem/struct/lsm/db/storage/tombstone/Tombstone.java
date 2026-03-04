@@ -19,24 +19,17 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
-import com.google.common.collect.ImmutableSortedMap;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeRangeSet;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.arrow.util.Preconditions;
-import org.apache.arrow.vector.types.Types;
-import org.apache.arrow.vector.types.pojo.Field;
 
 /** Tombstone 用于记录被删除的数据范围。 实现了 Serializable 接口，支持标准的 Java 序列化。 */
 public class Tombstone implements Serializable {
 
-  private transient HashMap<Field, TreeRangeSet<Long>> keyRanges = new HashMap<>();
+  private final HashMap<Field, TreeRangeSet<Long>> keyRanges = new HashMap<>();
 
   public void add(Field field, RangeSet<Long> ranges) {
     if (!keyRanges.containsKey(field)) {
@@ -75,37 +68,5 @@ public class Tombstone implements Serializable {
   @Override
   public String toString() {
     return "Tombstone{" + "keyRanges=" + keyRanges + '}';
-  }
-
-  private void writeObject(ObjectOutputStream oos) throws IOException {
-    oos.defaultWriteObject();
-    oos.writeInt(keyRanges.size());
-    for (Map.Entry<Field, TreeRangeSet<Long>> entry : keyRanges.entrySet()) {
-      Field field = entry.getKey();
-      Preconditions.checkState(field.isNullable());
-      Preconditions.checkState(field.getChildren().isEmpty());
-      Preconditions.checkState(field.getDictionary() == null);
-      oos.writeObject(field.getName());
-      oos.writeObject(ImmutableSortedMap.copyOf(field.getMetadata()));
-      oos.writeObject(Types.getMinorTypeForArrowType(field.getType()));
-      oos.writeObject(entry.getValue());
-    }
-  }
-
-  private void readObject(ObjectInputStream ois) throws IOException, ClassNotFoundException {
-    ois.defaultReadObject();
-    keyRanges = new HashMap<>();
-    int size = ois.readInt();
-    for (int i = 0; i < size; i++) {
-      String name = (String) ois.readObject();
-      @SuppressWarnings("unchecked")
-      ImmutableSortedMap<String, String> metadata =
-          (ImmutableSortedMap<String, String>) ois.readObject();
-      Types.MinorType minorType = (Types.MinorType) ois.readObject();
-      Field field = ArrowFields.of(name, metadata, minorType);
-      @SuppressWarnings("unchecked")
-      TreeRangeSet<Long> rangeSet = (TreeRangeSet<Long>) ois.readObject();
-      keyRanges.put(field, rangeSet);
-    }
   }
 }

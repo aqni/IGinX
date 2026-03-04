@@ -19,21 +19,22 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field;
 
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
 import java.util.List;
+import java.util.Set;
 import javax.annotation.Nullable;
-import org.apache.arrow.vector.types.pojo.Field;
 
 public interface FieldIndex {
 
-  List<Boolean> contain(List<Field> fields) throws TypeConflictedException;
+  boolean contain(Field field) throws TypeConflictedException;
 
-  List<Field> find(List<String> patterns, @Nullable TagFilter filter);
+  Set<Field> find(List<String> patterns, @Nullable TagFilter filter);
 
-  void insert(List<Field> fields) throws TypeConflictedException;
+  void insert(Set<Field> fields) throws TypeConflictedException;
 
-  void remove(List<Field> fields) throws TypeConflictedException;
+  void remove(Set<Field> fields) throws TypeConflictedException;
 
   void clear();
 }

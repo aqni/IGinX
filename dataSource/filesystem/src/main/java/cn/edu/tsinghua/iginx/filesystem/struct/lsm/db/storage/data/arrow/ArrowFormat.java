@@ -22,17 +22,12 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.arrow;
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.physical.memory.execute.compute.util.VectorSchemaRoots;
 import cn.edu.tsinghua.iginx.engine.physical.memory.execute.executor.util.Batch;
-import cn.edu.tsinghua.iginx.engine.physical.memory.execute.naive.NaiveOperatorMemoryExecutor;
-import cn.edu.tsinghua.iginx.engine.physical.task.memory.row.BatchStreamToRowStreamWrapper;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
-import cn.edu.tsinghua.iginx.engine.shared.operator.filter.BoolFilter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.DenseImmutableFileFormat;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.typesafe.config.Config;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
@@ -43,10 +38,6 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowFileReader;
 import org.apache.arrow.vector.ipc.ArrowFileWriter;
 import org.apache.arrow.vector.ipc.message.IpcOption;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.apache.arrow.vector.types.pojo.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -57,15 +48,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 public class ArrowFormat extends DenseImmutableFileFormat {
 
-  private final Logger LOGGER = LoggerFactory.getLogger(ArrowFormat.class);
   private final ArrowConfig config;
 
   public ArrowFormat(Config config, CachePool cachePool) {
@@ -74,19 +61,15 @@ public class ArrowFormat extends DenseImmutableFileFormat {
   }
 
   @Override
-  protected void flush(Path path, Table.SubTable subTable) throws IOException {
-    Table.Meta meta = subTable.getMeta();
-    List<Field> fields = new ArrayList<>(meta.getFieldStats().keySet());
-    try (RowStream rowStream = subTable.scan(fields, new BoolFilter(true))) {
-      RowStream toRead = NaiveOperatorMemoryExecutor.transformToTable(rowStream);
-      long startTime = System.currentTimeMillis();
+  protected void flush(Path dst, Table.SubTable subTable) throws IOException, PhysicalException {
+    try (RowStream rowStream = scanAll(subTable)) {
       try (BufferAllocator allocator = new RootAllocator();
            BatchStream batchStream =
-               BatchStreams.wrap(allocator, toRead, BaseValueVector.INITIAL_VALUE_ALLOCATION);
+               BatchStreams.wrap(allocator, rowStream, BaseValueVector.INITIAL_VALUE_ALLOCATION);
            VectorSchemaRoot root =
                VectorSchemaRoot.create(batchStream.getSchema().raw(), allocator);
            WritableByteChannel channel =
-               Files.newByteChannel(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+               Files.newByteChannel(dst, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
            ArrowFileWriter writer =
                new ArrowFileWriter(
                    root,
@@ -106,12 +89,8 @@ public class ArrowFormat extends DenseImmutableFileFormat {
         }
         writer.end();
       }
-      long endTime = System.currentTimeMillis();
-      LOGGER.debug("write arrow file {} takes {} ms", path, (endTime - startTime));
-    } catch (PhysicalException e) {
-      throw new IOException(e);
     }
-    flushMeta(getMetaPath(path), meta);
+    flushMeta(getMetaPath(dst), subTable.getMeta());
   }
 
   private Path getMetaPath(Path path) {
@@ -119,36 +98,18 @@ public class ArrowFormat extends DenseImmutableFileFormat {
   }
 
   private void flushMeta(Path path, Table.Meta meta) throws IOException {
-    List<Table.Statistic> stats = new ArrayList<>(meta.getFieldStats().values());
     try (ObjectOutputStream oos =
              new ObjectOutputStream(
                  Files.newOutputStream(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE))) {
-      oos.writeObject(stats);
+      oos.writeObject(meta);
     }
   }
 
   @Override
   protected Table.Meta loadMeta(Path src) throws IOException {
-    List<Field> originFields;
-    try (BufferAllocator allocator = new RootAllocator();
-         SeekableByteChannel channel = Files.newByteChannel(src, StandardOpenOption.READ);
-         ArrowFileReader reader = new ArrowFileReader(channel, allocator)) {
-      originFields = reader.getVectorSchemaRoot().getSchema().getFields();
-    }
-    List<Field> fields =
-        originFields.stream().filter(f -> !BatchSchema.KEY.equals(f)).collect(Collectors.toList());
     try (ObjectInputStream ois =
              new ObjectInputStream(Files.newInputStream(getMetaPath(src), StandardOpenOption.READ))) {
-      @SuppressWarnings("unchecked")
-      List<Table.Statistic> stats = (List<Table.Statistic>) ois.readObject();
-      if (fields.size() != stats.size()) {
-        throw new IOException(
-            "Meta file for " + src + " is corrupted: field count does not match statistic count");
-      }
-      return new Table.Meta(
-          IntStream.range(0, fields.size())
-              .boxed()
-              .collect(ImmutableMap.toImmutableMap(fields::get, stats::get)));
+      return (Table.Meta) ois.readObject();
     } catch (ClassNotFoundException e) {
       throw new IOException("Failed to read meta file for " + src, e);
     }
@@ -156,24 +117,24 @@ public class ArrowFormat extends DenseImmutableFileFormat {
 
   @Override
   protected RowStream scan(Path src, List<Field> fields, Filter predicate) throws IOException {
-    Header header;
+    Header header = new Header(Field.KEY, fields);
+    BatchSchema.Builder schemaBuilder = BatchSchema.builder();
+    for (Field field : header.getFields()) {
+      schemaBuilder.addField(field.getName(), field.getType(), field.getTags());
+    }
+    List<org.apache.arrow.vector.types.pojo.Field> arrowFields = schemaBuilder.build().raw().getFields();
+
     List<Row> rows = new ArrayList<>();
     try (BufferAllocator allocator = new RootAllocator();
          SeekableByteChannel channel = Files.newByteChannel(src, StandardOpenOption.READ);
          ArrowFileReader reader =
              new ArrowFileReader(channel, allocator, FastestCompressionFactory.INSTANCE)) {
-      Schema schema =
-          new Schema(Iterables.concat(Collections.singletonList(BatchSchema.KEY), fields));
-      header = BatchStreamToRowStreamWrapper.getHeader(BatchSchema.of(schema));
-
       while (reader.loadNextBatch()) {
         VectorSchemaRoot root = reader.getVectorSchemaRoot();
-        List<FieldVector> allVectors = root.getFieldVectors();
-
-        BigIntVector keyVector = (BigIntVector) allVectors.get(0);
+        BigIntVector keyVector = (BigIntVector) root.getVector(BatchSchema.KEY);
         FieldVector[] valueVectors = new FieldVector[fields.size()];
         for (int i = 0; i < fields.size(); i++) {
-          Field field = fields.get(i);
+          org.apache.arrow.vector.types.pojo.Field field = arrowFields.get(i);
           FieldVector vector = root.getVector(field);
           if (vector == null) {
             throw new IOException("Field " + field + " does not exist in file " + src);
@@ -199,8 +160,6 @@ public class ArrowFormat extends DenseImmutableFileFormat {
     }
     return result;
   }
-
-
 }
 
 

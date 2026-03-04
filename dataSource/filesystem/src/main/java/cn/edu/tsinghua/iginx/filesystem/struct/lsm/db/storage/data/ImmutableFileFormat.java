@@ -19,19 +19,28 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.AbstractTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
+import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
+import cn.edu.tsinghua.iginx.engine.shared.operator.filter.BoolFilter;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AbstractTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
+
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 public abstract class ImmutableFileFormat {
 
   protected final String name;
+  protected final CachePool cachePool;
 
-  public ImmutableFileFormat(String name) {
+  public ImmutableFileFormat(String name, CachePool cachePool) {
     this.name = Objects.requireNonNull(name);
+    this.cachePool = Objects.requireNonNull(cachePool);
   }
 
   @Override
@@ -39,12 +48,31 @@ public abstract class ImmutableFileFormat {
     return name;
   }
 
-  public abstract void flush(Path dst, Table table) throws IOException;
+  public abstract void flush(Path dst, Table table) throws IOException, PhysicalException;
 
   protected abstract List<Table.SubTable> readSubTables(Path src) throws IOException;
 
   public Table read(Path src) throws IOException {
     return new ImmutableFileFormatTable(src);
+  }
+
+  protected Object getOrLoad(Object key, Loader loader) throws IOException {
+    Object cached = cachePool.asMap().get(key);
+    if (cached != null) {
+      return cached;
+    }
+    Object loaded = loader.load();
+    cachePool.asMap().put(key, loaded);
+    return loaded;
+  }
+
+  protected interface Loader {
+    Object load() throws IOException;
+  }
+
+  protected RowStream scanAll(Table.SubTable subTable) throws IOException {
+    List<Field> fields = new ArrayList<>(subTable.getMeta().getFieldStats().keySet());
+    return subTable.scan(fields, new BoolFilter(true));
   }
 
   private class ImmutableFileFormatTable extends AbstractTable {

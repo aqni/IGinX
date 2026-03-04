@@ -21,28 +21,29 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field.tagkv;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
 import java.util.Map;
-import org.apache.arrow.vector.types.Types;
+
+import cn.edu.tsinghua.iginx.thrift.DataType;
 
 public class TypedCompactInvertedTagsSet extends CompactInvertedTagsSet {
-  private final Types.MinorType type;
+  private final DataType type;
 
-  public TypedCompactInvertedTagsSet(Types.MinorType type, Map<String, String> tags) {
+  public TypedCompactInvertedTagsSet(DataType type, Map<String, String> tags) {
     super(tags);
     this.type = type;
   }
 
-  public Types.MinorType getType() {
+  public DataType getType() {
     return type;
   }
 
-  public void add(Map<String, String> tags, Types.MinorType type) throws TypeConflictedException {
+  public void add(Map<String, String> tags, DataType type) throws TypeConflictedException {
     if (this.type != type) {
       throw new TypeConflictedException(tags.toString(), type.toString(), this.type.toString());
     }
     super.add(tags);
   }
 
-  public boolean contain(Map<String, String> tags, Types.MinorType type)
+  public boolean contain(Map<String, String> tags, DataType type)
       throws TypeConflictedException {
     if (this.type != type) {
       throw new TypeConflictedException(tags.toString(), type.toString(), this.type.toString());
@@ -50,7 +51,7 @@ public class TypedCompactInvertedTagsSet extends CompactInvertedTagsSet {
     return super.contain(tags);
   }
 
-  public void remove(Map<String, String> tags, Types.MinorType type)
+  public void remove(Map<String, String> tags, DataType type)
       throws TypeConflictedException {
     if (this.type != type) {
       throw new TypeConflictedException(tags.toString(), type.toString(), this.type.toString());

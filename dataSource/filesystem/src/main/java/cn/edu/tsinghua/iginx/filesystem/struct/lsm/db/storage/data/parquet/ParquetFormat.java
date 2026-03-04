@@ -19,16 +19,17 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.parquet;
 
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.DenseImmutableFileFormat;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.typesafe.config.Config;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
-import org.apache.arrow.vector.types.pojo.Field;
 
 public class ParquetFormat extends DenseImmutableFileFormat {
 

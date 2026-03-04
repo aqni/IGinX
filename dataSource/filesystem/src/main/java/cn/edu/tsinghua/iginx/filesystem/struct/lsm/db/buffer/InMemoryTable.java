@@ -17,31 +17,26 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
-import cn.edu.tsinghua.iginx.engine.shared.data.read.FilterRowStreamWrapper;
-import cn.edu.tsinghua.iginx.engine.shared.data.read.Header;
-import cn.edu.tsinghua.iginx.engine.shared.data.read.Row;
-import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemSubTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AbstractTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
 import com.google.common.collect.*;
 import it.unimi.dsi.fastutil.ints.IntHeapPriorityQueue;
 import it.unimi.dsi.fastutil.ints.IntPriorityQueue;
+import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.FieldVector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.WillCloseWhenClosed;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import javax.annotation.WillCloseWhenClosed;
-import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.FieldVector;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(InMemoryTable.class);
@@ -81,7 +76,7 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
       }
       Range<Long> range = rangeSet.isEmpty() ? Range.closedOpen(0L, 0L) : rangeSet.span();
       ImmutableMap<Field, Statistic> fieldStats =
-          snapshot.getFields().stream()
+          snapshot.getFields().stream().map(ArrowFields::toIginxField)
               .collect(ImmutableMap.toImmutableMap(field -> field, field -> new Statistic(range)));
       this.meta = new Meta(fieldStats);
     }
@@ -96,26 +91,7 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
       RangeSet<Long> keyRangeSet = FilterRangeUtils.rangeSetOf(predicate);
       Filter remainingFilter = FilterRangeUtils.withoutKeyRangeSet(predicate);
 
-      Map<Field, Integer> snapshotFieldIndexMap = new HashMap<>();
-      List<Field> snapshotFields = snapshot.getFields();
-      for (int i = 0; i < snapshotFields.size(); i++) {
-        snapshotFieldIndexMap.put(snapshotFields.get(i), i);
-      }
-
-      int[] fieldIndexMapping = new int[fields.size()];
-      for (int i = 0; i < fields.size(); i++) {
-        Field requestedField = fields.get(i);
-        Integer fieldIndex = snapshotFieldIndexMap.get(requestedField);
-
-        // 检查字段是否存在
-        if (fieldIndex == null) {
-          throw new IllegalArgumentException("Requested field not found: " + requestedField);
-        }
-
-        fieldIndexMapping[i] = fieldIndex;
-      }
-
-      RowStream rowStream = new MergedRowStream(snapshot, keyRangeSet, fieldIndexMapping);
+      RowStream rowStream = new MergedRowStream(snapshot, fields, keyRangeSet);
       if (!Filters.isTrue(remainingFilter)) {
         rowStream = new FilterRowStreamWrapper(rowStream, remainingFilter);
       }
@@ -123,7 +99,9 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
     }
   }
 
-  /** 多路归并RowStream实现 使用最小堆对多个已排序的chunk进行归并去重 */
+  /**
+   * 多路归并RowStream实现 使用最小堆对多个已排序的chunk进行归并去重
+   */
   private static class MergedRowStream implements RowStream {
 
     private final Header header;
@@ -133,15 +111,24 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
     private Row nextRow;
 
     MergedRowStream(
-        MemSubTable.Snapshot snapshot, RangeSet<Long> keyRangeSet, int[] fieldIndexMapping) {
-      List<Field> snapshotFields = snapshot.getFields();
-      this.header =
-          new Header(
-              cn.edu.tsinghua.iginx.engine.shared.data.read.Field.KEY,
-              Arrays.stream(fieldIndexMapping)
-                  .mapToObj(snapshotFields::get)
-                  .map(ArrowFields::toIginxField)
-                  .collect(Collectors.toList()));
+        MemSubTable.Snapshot snapshot, List<Field> fields, RangeSet<Long> keyRangeSet) {
+      List<Field> snapshotFields = snapshot.getFields().stream().map(ArrowFields::toIginxField).collect(Collectors.toList());
+
+      Map<Field, Integer> snapshotFieldIndexMap = new HashMap<>();
+      for (int i = 0; i < snapshotFields.size(); i++) {
+        snapshotFieldIndexMap.put(snapshotFields.get(i), i);
+      }
+      int[] fieldIndexMapping = new int[fields.size()];
+      for (int i = 0; i < fields.size(); i++) {
+        Field requestedField = fields.get(i);
+        Integer fieldIndex = snapshotFieldIndexMap.get(requestedField);
+        // 检查字段是否存在
+        if (fieldIndex == null) {
+          throw new IllegalArgumentException("Requested field not found: " + requestedField);
+        }
+        fieldIndexMapping[i] = fieldIndex;
+      }
+      this.header = new Header(Field.KEY, fields);
       this.fieldIndexMapping = fieldIndexMapping;
 
       List<ChunkIterator> validIterators = new ArrayList<>();
@@ -212,7 +199,8 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
     }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 
     private static class ChunkIterator {
       private final BigIntVector keyVector;
@@ -247,7 +235,10 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
       void fillValues(Object[] orderedValues, int[] fieldIndexMapping) {
         int idx = sortedIndex[position - 1];
         for (int i = 0; i < fieldIndexMapping.length; i++) {
-          orderedValues[i] = fieldVectors[fieldIndexMapping[i]].getObject(idx);
+          Object value = fieldVectors[fieldIndexMapping[i]].getObject(idx);
+          if (value != null) {
+            orderedValues[i] = value;
+          }
         }
       }
     }

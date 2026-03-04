@@ -19,16 +19,17 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 
+import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import java.io.IOException;
-import java.time.Duration;
-import java.util.concurrent.*;
-import javax.annotation.concurrent.NotThreadSafe;
 import org.apache.arrow.util.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.concurrent.NotThreadSafe;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.concurrent.*;
 
 @NotThreadSafe
 public class Compactor {
@@ -145,7 +146,7 @@ public class Compactor {
             try (MemTableQueue.TookTable ignored = finalTable) {
               LOGGER.debug("start to flush table {}", tableId);
               tableStorage.flush(tableId, finalTable.getMemTable(), finalTable.isFinalTable());
-            } catch (IOException | StorageException e) {
+            } catch (IOException | PhysicalException e) {
               finalTable.fail();
               LOGGER.error("flush memtable {} failed", tableId, e);
             } finally {

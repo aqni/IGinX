@@ -19,12 +19,14 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
 
+import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.io.MoreFiles;
+
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -35,21 +37,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public abstract class DenseImmutableFileFormat extends ImmutableFileFormat {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(DenseImmutableFileFormat.class);
-  protected final CachePool cachePool;
-
   public DenseImmutableFileFormat(String name, CachePool cachePool) {
-    super(name);
-    this.cachePool = Objects.requireNonNull(cachePool);
+    super(name, cachePool);
   }
 
-  protected abstract void flush(Path dst, Table.SubTable subTable) throws IOException;
+  protected abstract void flush(Path dst, Table.SubTable subTable) throws IOException, PhysicalException;
 
   protected abstract Table.Meta loadMeta(Path src) throws IOException;
 
@@ -57,7 +52,7 @@ public abstract class DenseImmutableFileFormat extends ImmutableFileFormat {
       throws IOException;
 
   @Override
-  public void flush(Path dst, Table table) throws IOException {
+  public void flush(Path dst, Table table) throws IOException, PhysicalException {
     List<Table.SubTable> subTableList = table.getSubTables();
     for (int i = 0; i < subTableList.size(); i++) {
       Path subTablePath = dst.resolve(String.format("subtable%010d", i) + "." + name);
@@ -80,29 +75,13 @@ public abstract class DenseImmutableFileFormat extends ImmutableFileFormat {
         }
       }
     } catch (NoSuchFileException e) {
-      LOGGER.debug("Directory {} does not exist, returning empty list", dir);
       return subTables;
     }
     return subTables;
   }
 
   protected Table.Meta getOrLoadMeta(Path src) throws IOException {
-    try {
-      return (Table.Meta)
-          cachePool
-              .asMap()
-              .computeIfAbsent(
-                  src,
-                  key -> {
-                    try {
-                      return loadMeta(src);
-                    } catch (IOException e) {
-                      throw new StorageRuntimeException(e);
-                    }
-                  });
-    } catch (StorageRuntimeException e) {
-      throw (IOException) e.getCause();
-    }
+    return (Table.Meta) getOrLoad(src, () -> loadMeta(src));
   }
 
   private class DenseSubTable implements Table.SubTable {

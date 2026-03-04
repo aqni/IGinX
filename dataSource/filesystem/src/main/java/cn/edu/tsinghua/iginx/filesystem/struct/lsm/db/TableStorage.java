@@ -19,18 +19,18 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 
+import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.Catalog;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.ImmutableFileStorageManager;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageConfig;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.StorageManager;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
-import com.google.common.collect.ImmutableRangeSet;
-import com.google.common.collect.Range;
-import com.google.common.collect.RangeSet;
+import com.google.common.collect.*;
+
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -38,7 +38,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
-import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +62,7 @@ public class TableStorage {
     }
   }
 
-  public void flush(long id, Table table, boolean commit) throws IOException, StorageException {
+  public void flush(long id, Table table, boolean commit) throws IOException, PhysicalException {
     storageManager.flush(id, table);
     if (commit) {
       catalog.addTable(id, table.getMeta());
@@ -74,14 +73,14 @@ public class TableStorage {
     storageManager.delete(tableId);
   }
 
-  public void delete(List<Field> fields) throws IOException {
+  public void delete(Set<Field> fields) throws IOException {
     Set<Long> tableIds = catalog.findTable(fields, ImmutableRangeSet.of(Range.all()));
     for (long tableId : tableIds) {
       storageManager.delete(tableId, fields);
     }
   }
 
-  public void delete(List<Field> fields, RangeSet<Long> keyRangeSet) throws IOException {
+  public void delete(Set<Field> fields, RangeSet<Long> keyRangeSet) throws IOException {
     Set<Long> tableIds = catalog.findTable(fields, keyRangeSet);
     for (long tableId : tableIds) {
       storageManager.delete(tableId, fields, keyRangeSet);
@@ -89,7 +88,7 @@ public class TableStorage {
   }
 
   public List<Table> load(List<Field> fields, RangeSet<Long> keyRangeSet) throws IOException {
-    Set<Long> tableIds = catalog.findTable(fields, keyRangeSet);
+    Set<Long> tableIds = catalog.findTable(ImmutableSet.copyOf(fields), keyRangeSet);
     List<Long> sortedTableIds = new ArrayList<>(tableIds);
     sortedTableIds.sort(Comparator.naturalOrder());
 

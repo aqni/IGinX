@@ -20,19 +20,19 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageRuntimeException;
+import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import java.util.*;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import org.apache.arrow.vector.types.Types;
 
 public class ColumnTableIndex {
   private final ReadWriteLock lock = new ReentrantReadWriteLock();
   private final Map<Long, Range<Long>> tableRange = new HashMap<>();
-  private final Types.MinorType type;
+  private final DataType type;
 
-  public ColumnTableIndex(Types.MinorType type) {
+  public ColumnTableIndex(DataType type) {
     this.type = type;
   }
 

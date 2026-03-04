@@ -17,13 +17,14 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone;
 
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.BoolFilter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.Tombstone;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AbstractTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Range;
@@ -32,7 +33,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import org.apache.arrow.vector.types.pojo.Field;
 
 public class TombstoneTable extends AbstractTable {
 

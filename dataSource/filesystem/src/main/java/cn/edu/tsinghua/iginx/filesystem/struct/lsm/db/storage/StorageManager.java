@@ -19,23 +19,25 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage;
 
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
+import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import com.google.common.collect.RangeSet;
 import java.io.IOException;
 import java.util.List;
-import org.apache.arrow.vector.types.pojo.Field;
+import java.util.Set;
 
 public interface StorageManager {
 
-  void flush(long tableId, Table table) throws IOException;
+  void flush(long tableId, Table table) throws IOException, PhysicalException;
 
   Table read(long tableId) throws IOException;
 
   void delete(long tableId) throws IOException;
 
-  void delete(long tableId, List<Field> fields) throws IOException;
+  void delete(long tableId, Set<Field> fields) throws IOException;
 
-  void delete(long tableId, List<Field> fields, RangeSet<Long> keyRangeSet) throws IOException;
+  void delete(long tableId, Set<Field> fields, RangeSet<Long> keyRangeSet) throws IOException;
 
   Iterable<Long> list() throws IOException;
 

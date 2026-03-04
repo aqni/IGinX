@@ -20,14 +20,10 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
-import cn.edu.tsinghua.iginx.engine.shared.data.read.FilterRowStreamWrapper;
-import cn.edu.tsinghua.iginx.engine.shared.data.read.Header;
-import cn.edu.tsinghua.iginx.engine.shared.data.read.Row;
-import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.ArrowFields;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import com.google.common.collect.RangeSet;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -39,7 +35,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.arrow.util.Preconditions;
-import org.apache.arrow.vector.types.pojo.Field;
 
 public class ScanExecutor {
 
@@ -69,10 +64,7 @@ public class ScanExecutor {
     private final Long2ObjectOpenHashMap<Object[]> keyToValues = new Long2ObjectOpenHashMap<>();
 
     public ResultTableBuilder(List<Field> fields) {
-      this.header =
-          new Header(
-              cn.edu.tsinghua.iginx.engine.shared.data.read.Field.KEY,
-              fields.stream().map(ArrowFields::toIginxField).collect(Collectors.toList()));
+      this.header = new Header(Field.KEY,fields);
       IntStream.range(0, fields.size()).forEach(i -> indexOfField.put(header.getField(i), i));
       Preconditions.checkArgument(indexOfField.size() == fields.size());
     }

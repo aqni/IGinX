@@ -17,13 +17,12 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 
 import cn.edu.tsinghua.iginx.engine.shared.data.write.BitmapView;
 import cn.edu.tsinghua.iginx.engine.shared.data.write.ColumnDataView;
 import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
 import cn.edu.tsinghua.iginx.engine.shared.data.write.RowDataView;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemBatch;
 import com.google.common.collect.ImmutableList;
 import java.util.*;
 import java.util.function.BiConsumer;
@@ -34,7 +33,7 @@ import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.*;
 import org.apache.arrow.vector.types.pojo.Field;
 
-public class WriteBatches {
+class WriteBatches {
 
   public static Collection<MemBatch.Snapshot> of(DataView data, BufferAllocator allocator) {
     switch (data.getRawDataType()) {

@@ -20,38 +20,37 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
+import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.common.Patterns;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemBatch;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.InMemoryTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.MemTableQueue;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer.WriteBatch;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.Catalog;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseables;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.WriteBatches;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.StorageException;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.InMemoryTable;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.Shared;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.Streams;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import javax.annotation.Nullable;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.vector.FieldVector;
-import org.apache.arrow.vector.types.pojo.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.stream.Collectors;
 
 public class OneTierDB implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(OneTierDB.class);
@@ -61,7 +60,6 @@ public class OneTierDB implements AutoCloseable {
   private final Path path;
   private final Shared shared;
 
-  private final BufferAllocator allocator;
   private final Catalog catalog;
   private final TableStorage tableStorage;
   private final MemTableQueue memTableQueue;
@@ -72,10 +70,17 @@ public class OneTierDB implements AutoCloseable {
     this.shared = shared;
     this.catalog = new Catalog(shared.getConfig().getCatalog());
     this.tableStorage =
-        new TableStorage(path, shared.getConfig().getStorage(), catalog, shared.getCachePool());
-    this.allocator = shared.getAllocator().newChildAllocator(path.toString(), 0, Long.MAX_VALUE);
+        new TableStorage(
+            path,
+            shared.getConfig().getStorage(),
+            catalog,
+            shared.getCachePool());
     this.memTableQueue =
-        new MemTableQueue(shared.getConfig().getMemtable(), shared.getMemTablePermits(), allocator);
+        new MemTableQueue(
+            path.toString(),
+            shared.getConfig().getMemtable(),
+            shared.getMemTablePermits(),
+            shared.getAllocator());
     this.flusher =
         new Compactor(
             path.toString(),
@@ -90,9 +95,9 @@ public class OneTierDB implements AutoCloseable {
       throws StorageException {
     deleteLock.readLock().lock();
     try {
-      List<Field> fields = catalog.find(patterns, tagFilter);
+      List<Field> fields = ImmutableList.copyOf(catalog.find(patterns, tagFilter));
       RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(filter);
-      List<InMemoryTable> inMemoryTables = memTableQueue.snapshot(fields, rangeSet, allocator);
+      List<InMemoryTable> inMemoryTables = memTableQueue.snapshot(fields);
       try (NoexceptAutoCloseable ignored = NoexceptAutoCloseables.all(inMemoryTables)) {
         List<Table> fileTables = tableStorage.load(fields, rangeSet);
         List<Table> allHitTables =
@@ -109,7 +114,7 @@ public class OneTierDB implements AutoCloseable {
     }
   }
 
-  public List<Field> schema(List<String> patterns, @Nullable TagFilter tagFilter)
+  public Set<Field> schema(List<String> patterns, @Nullable TagFilter tagFilter)
       throws StorageException {
     deleteLock.readLock().lock();
     try {
@@ -120,21 +125,12 @@ public class OneTierDB implements AutoCloseable {
   }
 
   public void insert(DataView data) throws StorageException, InterruptedException {
-    List<MemBatch.Snapshot> batches = new ArrayList<>();
-    try (NoexceptAutoCloseable ignored = NoexceptAutoCloseables.all(batches)) {
-      batches.addAll(WriteBatches.of(data, allocator));
-
+    try (WriteBatch batch = memTableQueue.prepare(data)) {
       deleteLock.readLock().lock();
       try {
-        List<Field> fields =
-            batches.stream()
-                .map(MemBatch.Snapshot::getFieldVectors)
-                .flatMap(List::stream)
-                .map(FieldVector::getField)
-                .distinct()
-                .collect(ImmutableList.toImmutableList());
+        Set<Field> fields = batch.getFields();
         catalog.verifyAndInsertFields(fields);
-        memTableQueue.store(batches);
+        memTableQueue.store(batch);
         if (shared.getConfig().getMemtable().getTimeout().toMillis() <= 0) {
           memTableQueue.flushAll(false);
         }
@@ -148,7 +144,7 @@ public class OneTierDB implements AutoCloseable {
       throws StorageException, InterruptedException {
     deleteLock.writeLock().lock();
     try {
-      List<Field> fields = catalog.findFields(patterns, tagFilter);
+      Set<Field> fields = catalog.findFields(patterns, tagFilter);
       if (ranges.encloses(Range.all())) {
         if (Patterns.isAll(patterns) && tagFilter == null) {
           clear();
@@ -165,7 +161,7 @@ public class OneTierDB implements AutoCloseable {
     }
   }
 
-  private void deleteRanges(List<Field> fields, RangeSet<Long> keyRangeSet)
+  private void deleteRanges(Set<Field> fields, RangeSet<Long> keyRangeSet)
       throws InterruptedException, IOException {
     deleteLock.writeLock().lock();
     try {
@@ -178,7 +174,7 @@ public class OneTierDB implements AutoCloseable {
     }
   }
 
-  private void deleteFields(List<Field> fields)
+  private void deleteFields(Set<Field> fields)
       throws StorageException, IOException, InterruptedException {
     deleteLock.writeLock().lock();
     try {
@@ -199,12 +195,6 @@ public class OneTierDB implements AutoCloseable {
       catalog.clear();
       memTableQueue.clear();
       tableStorage.clear();
-      if (allocator.getAllocatedMemory() > 0) {
-        throw new IllegalStateException("allocator is not empty: " + allocator.toVerboseString());
-      }
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("cleared {}, allocator: {}", path, allocator);
-      }
       flusher.start();
     } finally {
       deleteLock.writeLock().unlock();
@@ -220,7 +210,6 @@ public class OneTierDB implements AutoCloseable {
       }
       flusher.stop();
       memTableQueue.close();
-      allocator.close();
     } finally {
       deleteLock.writeLock().unlock();
     }
