@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.arrow;
 
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.physical.memory.execute.compute.util.VectorSchemaRoots;
@@ -28,11 +28,26 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.BoolFilter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.DenseImmutableFileFormat;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.table.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.typesafe.config.Config;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.BaseValueVector;
+import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.FieldVector;
+import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.ipc.ArrowFileReader;
+import org.apache.arrow.vector.ipc.ArrowFileWriter;
+import org.apache.arrow.vector.ipc.message.IpcOption;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.apache.arrow.vector.types.pojo.Schema;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -44,30 +59,18 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.arrow.compression.CommonsCompressionFactory;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.memory.RootAllocator;
-import org.apache.arrow.vector.BaseValueVector;
-import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.FieldVector;
-import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.compression.CompressionUtil;
-import org.apache.arrow.vector.ipc.ArrowFileReader;
-import org.apache.arrow.vector.ipc.ArrowFileWriter;
-import org.apache.arrow.vector.ipc.message.IpcOption;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.apache.arrow.vector.types.pojo.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ArrowFormat extends DenseImmutableFileFormat {
 
   private final Logger LOGGER = LoggerFactory.getLogger(ArrowFormat.class);
+  private final ArrowConfig config;
 
-  public ArrowFormat(Config fileConfig, CachePool cachePool) {
+  public ArrowFormat(Config config, CachePool cachePool) {
     super("arrow", cachePool);
+    this.config = ArrowConfig.of(config);
   }
 
   @Override
@@ -78,21 +81,22 @@ public class ArrowFormat extends DenseImmutableFileFormat {
       RowStream toRead = NaiveOperatorMemoryExecutor.transformToTable(rowStream);
       long startTime = System.currentTimeMillis();
       try (BufferAllocator allocator = new RootAllocator();
-          BatchStream batchStream =
-              BatchStreams.wrap(allocator, toRead, BaseValueVector.INITIAL_VALUE_ALLOCATION);
-          VectorSchemaRoot root =
-              VectorSchemaRoot.create(batchStream.getSchema().raw(), allocator);
-          WritableByteChannel channel =
-              Files.newByteChannel(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-          ArrowFileWriter writer =
-              new ArrowFileWriter(
-                  root,
-                  null,
-                  channel,
-                  null,
-                  IpcOption.DEFAULT,
-                  CommonsCompressionFactory.INSTANCE,
-                  CompressionUtil.CodecType.LZ4_FRAME)) {
+           BatchStream batchStream =
+               BatchStreams.wrap(allocator, toRead, BaseValueVector.INITIAL_VALUE_ALLOCATION);
+           VectorSchemaRoot root =
+               VectorSchemaRoot.create(batchStream.getSchema().raw(), allocator);
+           WritableByteChannel channel =
+               Files.newByteChannel(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+           ArrowFileWriter writer =
+               new ArrowFileWriter(
+                   root,
+                   null,
+                   channel,
+                   null,
+                   IpcOption.DEFAULT,
+                   FastestCompressionFactory.INSTANCE,
+                   config.getCodec(),
+                   Optional.ofNullable(config.getCompressionLevel()))) {
         writer.start();
         while (batchStream.hasNext()) {
           try (Batch batch = batchStream.getNext()) {
@@ -117,8 +121,8 @@ public class ArrowFormat extends DenseImmutableFileFormat {
   private void flushMeta(Path path, Table.Meta meta) throws IOException {
     List<Table.Statistic> stats = new ArrayList<>(meta.getFieldStats().values());
     try (ObjectOutputStream oos =
-        new ObjectOutputStream(
-            Files.newOutputStream(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE))) {
+             new ObjectOutputStream(
+                 Files.newOutputStream(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE))) {
       oos.writeObject(stats);
     }
   }
@@ -127,14 +131,14 @@ public class ArrowFormat extends DenseImmutableFileFormat {
   protected Table.Meta loadMeta(Path src) throws IOException {
     List<Field> originFields;
     try (BufferAllocator allocator = new RootAllocator();
-        SeekableByteChannel channel = Files.newByteChannel(src, StandardOpenOption.READ);
-        ArrowFileReader reader = new ArrowFileReader(channel, allocator)) {
+         SeekableByteChannel channel = Files.newByteChannel(src, StandardOpenOption.READ);
+         ArrowFileReader reader = new ArrowFileReader(channel, allocator)) {
       originFields = reader.getVectorSchemaRoot().getSchema().getFields();
     }
     List<Field> fields =
         originFields.stream().filter(f -> !BatchSchema.KEY.equals(f)).collect(Collectors.toList());
     try (ObjectInputStream ois =
-        new ObjectInputStream(Files.newInputStream(getMetaPath(src), StandardOpenOption.READ))) {
+             new ObjectInputStream(Files.newInputStream(getMetaPath(src), StandardOpenOption.READ))) {
       @SuppressWarnings("unchecked")
       List<Table.Statistic> stats = (List<Table.Statistic>) ois.readObject();
       if (fields.size() != stats.size()) {
@@ -155,9 +159,9 @@ public class ArrowFormat extends DenseImmutableFileFormat {
     Header header;
     List<Row> rows = new ArrayList<>();
     try (BufferAllocator allocator = new RootAllocator();
-        SeekableByteChannel channel = Files.newByteChannel(src, StandardOpenOption.READ);
-        ArrowFileReader reader =
-            new ArrowFileReader(channel, allocator, CommonsCompressionFactory.INSTANCE)) {
+         SeekableByteChannel channel = Files.newByteChannel(src, StandardOpenOption.READ);
+         ArrowFileReader reader =
+             new ArrowFileReader(channel, allocator, FastestCompressionFactory.INSTANCE)) {
       Schema schema =
           new Schema(Iterables.concat(Collections.singletonList(BatchSchema.KEY), fields));
       header = BatchStreamToRowStreamWrapper.getHeader(BatchSchema.of(schema));
@@ -195,69 +199,8 @@ public class ArrowFormat extends DenseImmutableFileFormat {
     }
     return result;
   }
+
+
 }
 
-//
-//  public static class FastestCompressionFactory implements CompressionCodec.Factory {
-//
-//    public CompressionCodec createCodec(CompressionUtil.CodecType codecType) {
-//      switch (codecType) {
-//        case LZ4_FRAME:
-//          return new FastestLz4CompressionCodec();
-//        default:
-//          return CommonsCompressionFactory.INSTANCE.createCodec(codecType);
-//      }
-//    }
-//
-//    public CompressionCodec createCodec(CompressionUtil.CodecType codecType, int compressionLevel)
-// {
-//      switch (codecType) {
-//        case LZ4_FRAME:
-//          return new FastestLz4CompressionCodec();
-//        default:
-//          return CommonsCompressionFactory.INSTANCE.createCodec(codecType, compressionLevel);
-//      }
-//    }
-//  }
-//
-//  public static class FastestLz4CompressionCodec extends AbstractCompressionCodec {
-//
-//    protected ArrowBuf doCompress(BufferAllocator allocator, ArrowBuf uncompressedBuffer) {
-//      Preconditions.checkArgument(
-//          uncompressedBuffer.writerIndex() <= 2147483647L,
-//          "The uncompressed buffer size exceeds the integer limit %s.",
-//          Integer.MAX_VALUE);
-//
-//      LZ4Compressor compressor = LZ4Factory.fastestInstance().fastCompressor();
-//
-//      int uncompressedLength = (int) uncompressedBuffer.writerIndex();
-//      int maxCompressedLength = compressor.maxCompressedLength(uncompressedLength) + 100;
-//      ArrowBuf compressedBuffer = allocator.buffer(8L + maxCompressedLength);
-//
-//      ByteBuffer nioUncompressedBuffer = uncompressedBuffer.nioBuffer(0, uncompressedLength);
-//      ByteBuffer nioCompressedBuffer = compressedBuffer.nioBuffer(8L, maxCompressedLength);
-//
-//      // TODO: make it compatible with LZ4FrameOutputStream
-//      compressor.compress(nioUncompressedBuffer, nioCompressedBuffer);
-//      //      try(LZ4FrameOutputStream lz4FrameOutputStream = new LZ4FrameOutputStream(new
-//      // ByteBufferOutputStream(nioCompressedBuffer))) {
-//      //        IOUtils.copy(new ByteBufferInputStream(nioUncompressedBuffer),
-//      // lz4FrameOutputStream);
-//      //      } catch (IOException e) {
-//      //        throw new RuntimeException(e);
-//      //      }
-//
-//      int compressedLength = nioCompressedBuffer.position();
-//      compressedBuffer.writerIndex(8L + compressedLength);
-//      return compressedBuffer;
-//    }
-//
-//    protected ArrowBuf doDecompress(BufferAllocator allocator, ArrowBuf compressedBuffer) {
-//      throw new UnsupportedOperationException("unimplemented");
-//    }
-//
-//    public CompressionUtil.CodecType getCodecType() {
-//      return CompressionUtil.CodecType.LZ4_FRAME;
-//    }
-//  }
-// }
+

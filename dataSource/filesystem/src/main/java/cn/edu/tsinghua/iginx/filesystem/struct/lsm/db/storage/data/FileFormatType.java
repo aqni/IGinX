@@ -19,6 +19,7 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
 
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.arrow.ArrowFormat;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.parquet.ParquetFormat;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.typesafe.config.Config;
