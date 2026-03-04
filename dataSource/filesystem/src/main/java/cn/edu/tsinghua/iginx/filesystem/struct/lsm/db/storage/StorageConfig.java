@@ -35,7 +35,7 @@ import lombok.experimental.FieldNameConstants;
 @FieldNameConstants
 public class StorageConfig extends AbstractConfig {
 
-  @Optional FileFormatType fileFormat = FileFormatType.ARROW;
+  @Optional FileFormatType fileFormat = FileFormatType.TSFILE;
 
   @Optional Config fileConfig = ConfigFactory.empty();
 

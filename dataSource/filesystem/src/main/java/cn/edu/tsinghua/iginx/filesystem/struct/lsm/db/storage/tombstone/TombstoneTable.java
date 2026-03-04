@@ -21,14 +21,16 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone;
 
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
-import cn.edu.tsinghua.iginx.engine.shared.operator.filter.BoolFilter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+import cn.edu.tsinghua.iginx.filesystem.common.Filters;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AbstractTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -99,11 +101,19 @@ public class TombstoneTable extends AbstractTable {
           tombstoneKeyRangeSets.add(null);
         }
       }
-      return new FilterRowStreamWrapper(
-          new ClearEmptyRowStreamWrapper(
-              new TombstoneRowStream(
-                  subTable.scan(fields, new BoolFilter(true)), tombstoneKeyRangeSets)),
-          predicate);
+
+      RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(predicate);
+      Filter rangeFilter = FilterRangeUtils.filterOf(rangeSet);
+
+      RowStream rowStream = subTable.scan(fields, rangeFilter);
+      rowStream = new TombstoneRowStream(rowStream, tombstoneKeyRangeSets);
+      rowStream = new ClearEmptyRowStreamWrapper(rowStream);
+
+      Filter predicateWithoutRange = FilterRangeUtils.withoutKeyRangeSet(predicate);
+      if (!Filters.isTrue(predicateWithoutRange)) {
+        rowStream = new FilterRowStreamWrapper(rowStream, predicateWithoutRange);
+      }
+      return rowStream;
     }
   }
 

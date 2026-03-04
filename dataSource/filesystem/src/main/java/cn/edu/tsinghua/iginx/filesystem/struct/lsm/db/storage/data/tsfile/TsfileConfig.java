@@ -6,7 +6,7 @@ import com.typesafe.config.Optional;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.FieldNameConstants;
-import org.apache.arrow.vector.compression.CompressionUtil;
+import org.apache.tsfile.file.metadata.enums.CompressionType;
 
 import java.util.Collections;
 import java.util.List;
@@ -16,8 +16,8 @@ import java.util.List;
 @FieldNameConstants
 public class TsfileConfig extends AbstractConfig {
 
-//  @Optional
-//  CompressionUtil.CodecType codec = CompressionUtil.CodecType.NO_COMPRESSION;
+  @Optional
+  CompressionType compressor = CompressionType.LZ4;
 
   @Override
   public List<ValidationProblem> validate() {

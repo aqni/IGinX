@@ -22,19 +22,21 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db;
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+import cn.edu.tsinghua.iginx.filesystem.common.Filters;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import com.google.common.collect.RangeSet;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+import org.apache.arrow.util.Preconditions;
+
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.arrow.util.Preconditions;
 
 public class ScanExecutor {
 
@@ -43,6 +45,8 @@ public class ScanExecutor {
     ResultTableBuilder builder = new ResultTableBuilder(fields);
     RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(filter);
     Filter rangeFilter = FilterRangeUtils.filterOf(rangeSet);
+    Filter filterWithoutRange = FilterRangeUtils.withoutKeyRangeSet(filter);
+
     for (Table table : allHitTables) {
       for (Table.SubTable subTable : table.getSubTables()) {
         Set<Field> subTableFields = subTable.getMeta().getFieldStats().keySet();
@@ -53,7 +57,12 @@ public class ScanExecutor {
         }
       }
     }
-    return new FilterRowStreamWrapper(builder.build(), filter);
+
+    RowStream result = builder.build();
+    if (!Filters.isTrue(filterWithoutRange)) {
+      result = new FilterRowStreamWrapper(result, filterWithoutRange);
+    }
+    return result;
   }
 
   private static class ResultTableBuilder {
@@ -64,7 +73,7 @@ public class ScanExecutor {
     private final Long2ObjectOpenHashMap<Object[]> keyToValues = new Long2ObjectOpenHashMap<>();
 
     public ResultTableBuilder(List<Field> fields) {
-      this.header = new Header(Field.KEY,fields);
+      this.header = new Header(Field.KEY, fields);
       IntStream.range(0, fields.size()).forEach(i -> indexOfField.put(header.getField(i), i));
       Preconditions.checkArgument(indexOfField.size() == fields.size());
     }
