@@ -20,7 +20,7 @@ public class ArrowConfig extends AbstractConfig {
   Integer compressionLevel = null;
 
   @Optional
-  CompressionUtil.CodecType codec = CompressionUtil.CodecType.NO_COMPRESSION;
+  CompressionUtil.CodecType codec = CompressionUtil.CodecType.LZ4_FRAME;
 
   @Override
   public List<ValidationProblem> validate() {

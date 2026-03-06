@@ -28,7 +28,7 @@ public class FilterUtils {
         ranges.add(filter);
       }
     }
-    Filter filter = toTsfileAndFilter(ranges);
+    Filter filter = toTsfileOrFilter(ranges);
     if (filter == null) {
       return null;
     }
@@ -63,13 +63,13 @@ public class FilterUtils {
   }
 
   @Nullable
-  public static Filter toTsfileAndFilter(List<Filter> filters) {
+  public static Filter toTsfileOrFilter(List<Filter> filters) {
     if (filters.isEmpty()) {
       return null;
     } else if (filters.size() == 1) {
       return filters.get(0);
     } else {
-      return FilterFactory.and(filters);
+      return FilterFactory.or(filters);
     }
   }
 

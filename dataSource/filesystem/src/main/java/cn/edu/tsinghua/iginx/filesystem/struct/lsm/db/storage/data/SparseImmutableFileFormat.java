@@ -53,7 +53,6 @@ public abstract class SparseImmutableFileFormat extends ImmutableFileFormat {
   @Override
   public void flush(Path dst, Table table) throws IOException, PhysicalException  {
     Path dstWithSuffix = getWithSuffixPath(dst);
-    MoreFiles.createParentDirectories(dstWithSuffix);
     flush(dstWithSuffix, table.getSubTables());
   }
 

@@ -1,0 +1,14 @@
+package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event;
+
+import jdk.jfr.*;
+
+@SuppressWarnings("Since15")
+@Name("iginx.filesystem.filelsm.tableflush")
+@StackTrace(false)
+public class TableFlushEvent extends Event {
+
+  public long tableId;
+
+  @DataAmount
+  public long spaceUsed;
+}

@@ -24,12 +24,17 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.ImmutableFileFormat;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.Tombstone;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.TombstoneStorage;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.TombstoneTable;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.TableFlushEvent;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.RangeSet;
 import com.google.common.io.MoreFiles;
 import com.google.common.io.RecursiveDeleteOption;
+import org.apache.commons.io.file.PathUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -40,8 +45,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ImmutableFileStorageManager implements StorageManager {
 
@@ -108,8 +111,20 @@ public class ImmutableFileStorageManager implements StorageManager {
 
   @Override
   public void flush(long tableId, Table table) throws IOException, PhysicalException {
+    Path tableDir = getTableDir(tableId);
+    Files.createDirectories(tableDir);
+
     Path dst = getDataPath(tableId);
-    immutableFileFormat.flush(dst, table);
+    TableFlushEvent event = new TableFlushEvent();
+    event.tableId = tableId;
+    try {
+      event.begin();
+      immutableFileFormat.flush(dst, table);
+      event.end();
+      event.spaceUsed = PathUtils.sizeOfDirectory(tableDir);
+    } finally {
+      event.commit();
+    }
   }
 
   @Override

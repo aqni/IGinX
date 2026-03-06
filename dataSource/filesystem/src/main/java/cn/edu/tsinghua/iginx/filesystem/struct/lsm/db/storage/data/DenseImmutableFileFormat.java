@@ -53,10 +53,10 @@ public abstract class DenseImmutableFileFormat extends ImmutableFileFormat {
 
   @Override
   public void flush(Path dst, Table table) throws IOException, PhysicalException {
+    Files.createDirectories(dst);
     List<Table.SubTable> subTableList = table.getSubTables();
     for (int i = 0; i < subTableList.size(); i++) {
       Path subTablePath = dst.resolve(String.format("subtable%010d", i) + "." + name);
-      MoreFiles.createParentDirectories(subTablePath);
       flush(subTablePath, subTableList.get(i));
     }
   }
