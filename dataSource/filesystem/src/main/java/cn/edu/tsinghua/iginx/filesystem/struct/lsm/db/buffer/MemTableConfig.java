@@ -40,7 +40,7 @@ public class MemTableConfig extends AbstractConfig {
 
   @Optional int chunkValues = BaseValueVector.INITIAL_VALUE_ALLOCATION;
 
-  @Optional Duration timeout = Duration.ofSeconds(0);
+  @Optional Duration timeout = Duration.ZERO;
 
   @Override
   public List<ValidationProblem> validate() {

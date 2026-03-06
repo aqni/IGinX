@@ -36,9 +36,9 @@ public class SharedConfig extends AbstractConfig {
 
   @Optional CacheConfig cache = new CacheConfig();
 
-  @Optional int writers = 2;
+  @Optional int writers = 4;
 
-  @Optional int memtableQueue = 2;
+  @Optional int memtableQueue = 4;
 
   @Override
   public List<ValidationProblem> validate() {
