@@ -93,7 +93,7 @@ public class ImmutableFileStorageManager implements StorageManager {
 
   @Override
   public void clear() throws IOException {
-    MoreFiles.deleteRecursively(dir, RecursiveDeleteOption.ALLOW_INSECURE);
+    PathUtils.delete(dir);
   }
 
   private Path getTableDir(long tableId) {
@@ -101,27 +101,29 @@ public class ImmutableFileStorageManager implements StorageManager {
     return dir.resolve(fileName);
   }
 
-  private Path getDataPath(long tableId) {
-    return getTableDir(tableId).resolve("data");
+  private Path getDataPath(Path tableDir) {
+    return tableDir.resolve("data");
   }
 
-  private Path getTombstonePath(long tableId) {
-    return getTableDir(tableId).resolve("tombstone");
+  private Path getTombstonePath(Path tableDir) {
+    return tableDir.resolve("tombstone");
   }
 
   @Override
   public void flush(long tableId, Table table) throws IOException, PhysicalException {
     Path tableDir = getTableDir(tableId);
-    Files.createDirectories(tableDir);
-
-    Path dst = getDataPath(tableId);
     TableFlushEvent event = new TableFlushEvent();
     event.tableId = tableId;
     try {
       event.begin();
-      immutableFileFormat.flush(dst, table);
+      try (AtomFlushPathWrapper wrapper = new AtomFlushPathWrapper(tableDir)) {
+        Path dst = getDataPath(wrapper.getTmpPath());
+        MoreFiles.createParentDirectories(dst);
+        immutableFileFormat.flush(dst, table);
+        wrapper.commit();
+      }
       event.end();
-      event.spaceUsed = PathUtils.sizeOfDirectory(tableDir);
+      event.spaceUsed = PathUtils.sizeOf(tableDir);
     } finally {
       event.commit();
     }
@@ -129,9 +131,10 @@ public class ImmutableFileStorageManager implements StorageManager {
 
   @Override
   public Table read(long tableId) throws IOException {
-    Path src = getDataPath(tableId);
+    Path tableDir = getTableDir(tableId);
+    Path src = getDataPath(tableDir);
     Table table = immutableFileFormat.read(src);
-    Path tombstonePath = getTombstonePath(tableId);
+    Path tombstonePath = getTombstonePath(tableDir);
     Tombstone tombstone = tombstoneStorage.get(tombstonePath);
     if (tombstone != null) {
       table = new TombstoneTable(table, tombstone);
@@ -142,15 +145,13 @@ public class ImmutableFileStorageManager implements StorageManager {
   @Override
   public void delete(long tableId) throws IOException {
     Path tableDir = getTableDir(tableId);
-    try {
-      MoreFiles.deleteRecursively(tableDir, RecursiveDeleteOption.ALLOW_INSECURE);
-    } catch (NoSuchFileException ignored) {
-    }
+    PathUtils.delete(tableDir);
   }
 
   @Override
   public void delete(long tableId, Set<Field> fields) throws IOException {
-    Path tombstonePath = getTombstonePath(tableId);
+    Path tableDir = getTableDir(tableId);
+    Path tombstonePath = getTombstonePath(tableDir);
     Tombstone tombstone = new Tombstone();
     fields.forEach(tombstone::add);
     tombstoneStorage.delete(tombstonePath, tombstone);
@@ -159,7 +160,8 @@ public class ImmutableFileStorageManager implements StorageManager {
   @Override
   public void delete(long tableId, Set<Field> fields, RangeSet<Long> keyRangeSet)
       throws IOException {
-    Path tombstonePath = getTombstonePath(tableId);
+    Path tableDir = getTableDir(tableId);
+    Path tombstonePath = getTombstonePath(tableDir);
     Tombstone tombstone = new Tombstone();
     fields.forEach(f -> tombstone.add(f, keyRangeSet));
     tombstoneStorage.delete(tombstonePath, tombstone);

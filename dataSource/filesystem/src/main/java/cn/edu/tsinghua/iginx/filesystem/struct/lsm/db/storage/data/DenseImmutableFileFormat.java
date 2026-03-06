@@ -25,7 +25,6 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
-import com.google.common.io.MoreFiles;
 
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
@@ -53,7 +52,7 @@ public abstract class DenseImmutableFileFormat extends ImmutableFileFormat {
 
   @Override
   public void flush(Path dst, Table table) throws IOException, PhysicalException {
-    Files.createDirectories(dst);
+    Files.createDirectory(dst);
     List<Table.SubTable> subTableList = table.getSubTables();
     for (int i = 0; i < subTableList.size(); i++) {
       Path subTablePath = dst.resolve(String.format("subtable%010d", i) + "." + name);
