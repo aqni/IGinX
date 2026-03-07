@@ -52,8 +52,10 @@ public class ScanExecutor {
         Set<Field> subTableFields = subTable.getMeta().getFieldStats().keySet();
         List<Field> hitFields =
             fields.stream().filter(subTableFields::contains).collect(Collectors.toList());
-        try (RowStream rowStream = subTable.scan(hitFields, rangeFilter)) {
-          builder.put(rowStream);
+        if(!hitFields.isEmpty()){
+          try (RowStream rowStream = subTable.scan(hitFields, rangeFilter)) {
+            builder.put(rowStream);
+          }
         }
       }
     }
