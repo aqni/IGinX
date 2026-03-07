@@ -179,12 +179,8 @@ class WriteBatches {
   private static FieldVector buildFieldVector(
       Field field, Object[] values, BufferAllocator allocator) {
     FieldVector valueVector = field.createVector(allocator);
-    valueVector.setInitialCapacity(values.length);
-    if (valueVector instanceof FixedWidthVector) {
-      ((FixedWidthVector) valueVector).allocateNew(values.length);
-    }
 
-    BiConsumer<Integer, Object> appender = createValueAppender(valueVector);
+    BiConsumer<Integer, Object> appender = allocateAndCreateValueAppender(valueVector, values);
     for (int i = 0; i < values.length; i++) {
       Object value = values[i];
       if (value != null) {
@@ -196,37 +192,49 @@ class WriteBatches {
     return valueVector;
   }
 
-  private static BiConsumer<Integer, Object> createValueAppender(FieldVector valueVector) {
+  private static BiConsumer<Integer, Object> allocateAndCreateValueAppender(FieldVector valueVector, Object[] values) {
     switch (valueVector.getMinorType()) {
       case BIT:
         {
           BitVector vector = (BitVector) valueVector;
+          vector.allocateNew(values.length);
           return (index, value) -> vector.set(index, (Boolean) value ? 1 : 0);
         }
       case INT:
         {
           IntVector vector = (IntVector) valueVector;
+          vector.allocateNew(values.length);
           return (index, value) -> vector.set(index, (Integer) value);
         }
       case BIGINT:
         {
           BigIntVector vector = (BigIntVector) valueVector;
+          vector.allocateNew(values.length);
           return (index, value) -> vector.set(index, (Long) value);
         }
       case FLOAT4:
         {
           Float4Vector vector = (Float4Vector) valueVector;
+          vector.allocateNew(values.length);
           return (index, value) -> vector.set(index, (Float) value);
         }
       case FLOAT8:
         {
           Float8Vector vector = (Float8Vector) valueVector;
+          vector.allocateNew(values.length);
           return (index, value) -> vector.set(index, (Double) value);
         }
       case VARBINARY:
         {
           VarBinaryVector vector = (VarBinaryVector) valueVector;
-          return (index, value) -> vector.setSafe(index, (byte[]) value);
+          long total = 0L;
+          for (Object value : values) {
+            if (value != null) {
+              total += ((byte[]) value).length;
+            }
+          }
+          vector.allocateNew(total, values.length);
+          return (index, value) -> vector.set(index, (byte[]) value);
         }
       default:
         throw new IllegalArgumentException("Unsupported data type: " + valueVector.getMinorType());
