@@ -89,6 +89,15 @@ public class OneTierDB implements AutoCloseable {
             memTableQueue,
             tableStorage);
     flusher.start();
+    if (shared.getConfig().isFlushOnClose()) {
+      Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        try {
+          close();
+        } catch (Throwable e) {
+          LOGGER.error("failed to closing db {} in shutdown hook", path, e);
+        }
+      }, OneTierDB.class.getSimpleName()+"(" + path + ")-ShutdownHook"));
+    }
   }
 
   public RowStream scan(List<String> patterns, @Nullable TagFilter tagFilter, Filter filter)
@@ -205,9 +214,8 @@ public class OneTierDB implements AutoCloseable {
   public void close() throws InterruptedException {
     deleteLock.writeLock().lock();
     try {
-      if (shared.getConfig().isFlushOnClose()) {
-        memTableQueue.flushAll(true);
-      }
+      LOGGER.info("flushing {}", path);
+      memTableQueue.flushAll(true);
       flusher.stop();
       memTableQueue.close();
     } finally {
