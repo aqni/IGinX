@@ -30,6 +30,9 @@ import java.util.Map;
 public abstract class AbstractTable implements Table {
 
   @Override
+  public abstract String toString();
+
+  @Override
   public Meta getMeta() throws IOException {
     List<Meta> subMetas = new ArrayList<>();
     for (SubTable subTable : getSubTables()) {

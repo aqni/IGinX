@@ -53,11 +53,11 @@ import java.util.Optional;
 
 public class ArrowFormat extends DenseImmutableFileFormat {
 
-  private final ArrowConfig config;
+  private final ArrowConfig arrowConfig;
 
   public ArrowFormat(Config config, CachePool cachePool) {
-    super("arrow", cachePool);
-    this.config = ArrowConfig.of(config);
+    super("arrow", ArrowConfig.of(config), cachePool);
+    this.arrowConfig = (ArrowConfig) this.config;
   }
 
   @Override
@@ -78,8 +78,8 @@ public class ArrowFormat extends DenseImmutableFileFormat {
                    null,
                    IpcOption.DEFAULT,
                    FastestCompressionFactory.INSTANCE,
-                   config.getCodec(),
-                   Optional.ofNullable(config.getCompressionLevel()))) {
+                   arrowConfig.getCompression(),
+                   Optional.ofNullable(arrowConfig.getCompressionLevel()))) {
         writer.start();
         while (batchStream.hasNext()) {
           try (Batch batch = batchStream.getNext()) {

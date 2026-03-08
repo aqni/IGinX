@@ -4,9 +4,12 @@ import org.apache.commons.io.file.PathUtils;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -27,11 +30,13 @@ public class AtomFlushPathWrapper implements Closeable {
 
   private final Path path;
   private final Path tmpPath;
+  private final boolean overwrite;
   private boolean committed = false;
 
-  public AtomFlushPathWrapper(Path path) {
+  public AtomFlushPathWrapper(Path path,boolean overwrite) throws IOException {
     this.path = Objects.requireNonNull(path);
     this.tmpPath = path.resolveSibling(path.getFileName() + ".tmp");
+    this.overwrite = overwrite;
   }
 
   public Path getTmpPath() {
@@ -43,7 +48,11 @@ public class AtomFlushPathWrapper implements Closeable {
    * successfully written to {@link #getTmpPath()}.
    */
   public void commit() throws IOException {
-    Files.move(tmpPath, path);
+    List<CopyOption> options = new ArrayList<>();
+    if(overwrite) {
+      options.add(StandardCopyOption.REPLACE_EXISTING);
+    }
+    Files.move(tmpPath, path, options.toArray(new CopyOption[0]));
     committed = true;
   }
 

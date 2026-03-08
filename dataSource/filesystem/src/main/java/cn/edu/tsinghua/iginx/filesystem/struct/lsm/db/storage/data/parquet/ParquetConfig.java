@@ -32,7 +32,7 @@ public class ParquetConfig extends AbstractConfig {
   CompressionCodec compression = CompressionCodec.LZ4_RAW;
 
   @Optional
-  int zstdLevel = 1;
+  int zstdLevel = Zstd.maxCompressionLevel();
 
 
   @Override

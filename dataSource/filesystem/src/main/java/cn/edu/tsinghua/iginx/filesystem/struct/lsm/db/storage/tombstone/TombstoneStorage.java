@@ -64,7 +64,7 @@ public class TombstoneStorage {
   }
 
   private void flushCache(Path path, Tombstone tombstone) {
-    try (AtomFlushPathWrapper wrapper = new AtomFlushPathWrapper(path)) {
+    try (AtomFlushPathWrapper wrapper = new AtomFlushPathWrapper(path, true)) {
       MoreFiles.createParentDirectories(wrapper.getTmpPath());
       try (ObjectOutputStream oos =
                new ObjectOutputStream(

@@ -23,11 +23,12 @@ import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.RangeSet;
+import it.unimi.dsi.fastutil.longs.LongObjectPair;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.types.pojo.Field;
 
+import javax.annotation.Nullable;
 import javax.annotation.WillCloseWhenClosed;
 import javax.annotation.concurrent.ThreadSafe;
 import java.util.*;
@@ -103,7 +104,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
       MemTable.Snapshot snapshot = archivedMemTable.getMemTable().snapshot(allocator);
       return new TookTable(
           id,
-          new InMemoryTable(snapshot),
+          new InMemoryTable(id, snapshot),
           archivedMemTable.isOwnTable(),
           toFlushIds::add,
           this::remove);
@@ -128,17 +129,25 @@ public class MemTableQueue implements NoexceptAutoCloseable {
   public List<InMemoryTable> snapshot(
       List<cn.edu.tsinghua.iginx.engine.shared.data.read.Field> iginxFields) {
     List<Field> fields = ArrowFields.of(iginxFields);
-    List<MemTable.Snapshot> snapshots = new ArrayList<>();
+    List<InMemoryTable> result = new ArrayList<>();
     queueLock.readLock().lock();
     try {
-      for (ArchivedMemTable archivedMemTable : archives.values()) {
-        snapshots.add(archivedMemTable.getMemTable().snapshot(fields, allocator));
+      for(Map.Entry<Long, ArchivedMemTable> entry : archives.entrySet()){
+        long id = entry.getKey();
+        ArchivedMemTable archivedMemTable = entry.getValue();
+        MemTable.Snapshot snapshot = archivedMemTable.getMemTable().snapshot(fields, allocator);
+        result.add(new InMemoryTable(id, snapshot));
       }
-      snapshots.add(active.snapshot(fields, allocator));
+      LongObjectPair<MemTable.Snapshot> activeSnapshot = active.snapshot(fields, allocator);
+      if(activeSnapshot != null) {
+        long id = activeSnapshot.leftLong();
+        MemTable.Snapshot snapshot = activeSnapshot.right();
+        result.add(new InMemoryTable(id, snapshot));
+      }
     } finally {
       queueLock.readLock().unlock();
     }
-    return snapshots.stream().map(InMemoryTable::new).collect(ImmutableList.toImmutableList());
+    return result;
   }
 
   public void clear() {
@@ -287,10 +296,14 @@ public class MemTableQueue implements NoexceptAutoCloseable {
       }
     }
 
-    public MemTable.Snapshot snapshot(List<Field> fields, BufferAllocator allocator) {
+    @Nullable
+    public LongObjectPair<MemTable.Snapshot> snapshot(List<Field> fields, BufferAllocator allocator) {
       switchTableLock.readLock().lock();
       try {
-        return activeTable.snapshot(fields, allocator);
+        if(activeTableWritten) {
+          return LongObjectPair.of(currentId, activeTable.snapshot(fields, allocator));
+        }
+        return null;
       } finally {
         switchTableLock.readLock().unlock();
       }

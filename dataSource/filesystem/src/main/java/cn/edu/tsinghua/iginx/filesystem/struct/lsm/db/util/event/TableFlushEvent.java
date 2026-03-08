@@ -9,6 +9,8 @@ public class TableFlushEvent extends Event {
 
   public long tableId;
 
+  public String format;
+
   @DataAmount
   public long spaceUsed;
 }

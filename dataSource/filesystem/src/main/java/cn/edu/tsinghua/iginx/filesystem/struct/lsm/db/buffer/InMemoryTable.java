@@ -41,10 +41,12 @@ import java.util.stream.IntStream;
 public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(InMemoryTable.class);
 
+  private final long id;
   private final MemTable.Snapshot snapshot;
   private final ImmutableList<SubTable> subTables;
 
-  public InMemoryTable(@WillCloseWhenClosed MemTable.Snapshot snapshot) {
+  public InMemoryTable(long id, @WillCloseWhenClosed MemTable.Snapshot snapshot) {
+    this.id = id;
     this.snapshot = snapshot;
     this.subTables =
         IntStream.range(0, snapshot.getSubTableCount())
@@ -61,6 +63,11 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
   @Override
   public List<SubTable> getSubTables() {
     return subTables;
+  }
+
+  @Override
+  public String toString() {
+    return "InMemoryTable{" +  "id=" + id + '}';
   }
 
   private static class InMemorySubTable implements SubTable {

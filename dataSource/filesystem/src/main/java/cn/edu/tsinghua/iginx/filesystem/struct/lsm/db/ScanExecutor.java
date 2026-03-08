@@ -25,6 +25,7 @@ import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.TableReadEvent;
 import com.google.common.collect.RangeSet;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -48,13 +49,24 @@ public class ScanExecutor {
     Filter filterWithoutRange = FilterRangeUtils.withoutKeyRangeSet(filter);
 
     for (Table table : allHitTables) {
-      for (Table.SubTable subTable : table.getSubTables()) {
+      List<Table.SubTable> subTables = table.getSubTables();
+      for(int i=0; i<subTables.size(); i++){
+        Table.SubTable subTable = subTables.get(i);
         Set<Field> subTableFields = subTable.getMeta().getFieldStats().keySet();
         List<Field> hitFields =
             fields.stream().filter(subTableFields::contains).collect(Collectors.toList());
         if(!hitFields.isEmpty()){
+          TableReadEvent event = new TableReadEvent();
+          event.tableName = table.toString();
+          event.subTableId = i;
+          event.begin();
           try (RowStream rowStream = subTable.scan(hitFields, rangeFilter)) {
-            builder.put(rowStream);
+            int rows = builder.put(rowStream);
+            event.end();
+            event.projectedSchema = rowStream.getHeader().toString();
+            event.numRows=rows;
+          }finally {
+            event.commit();
           }
         }
       }
@@ -80,7 +92,7 @@ public class ScanExecutor {
       Preconditions.checkArgument(indexOfField.size() == fields.size());
     }
 
-    public void put(RowStream rowStream) throws PhysicalException {
+    public int put(RowStream rowStream) throws PhysicalException {
       Header header = rowStream.getHeader();
       Preconditions.checkArgument(header.hasKey());
       int[] dstIndex = new int[header.getFieldSize()];
@@ -88,6 +100,7 @@ public class ScanExecutor {
         Preconditions.checkArgument(indexOfField.containsKey(header.getField(i)));
         dstIndex[i] = indexOfField.getInt(header.getField(i));
       }
+      int count = 0;
       while (rowStream.hasNext()) {
         Row row = rowStream.next();
         long key = row.getKey();
@@ -99,7 +112,9 @@ public class ScanExecutor {
             dstValues[dstIndex[i]] = value;
           }
         }
+        count++;
       }
+      return count;
     }
 
     public cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table build() {

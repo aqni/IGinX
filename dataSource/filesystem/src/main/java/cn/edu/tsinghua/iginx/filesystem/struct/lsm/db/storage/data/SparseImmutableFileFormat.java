@@ -23,6 +23,7 @@ import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+import cn.edu.tsinghua.iginx.filesystem.common.AbstractConfig;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.ImmutableList;
@@ -35,8 +36,8 @@ import java.util.Objects;
 
 public abstract class SparseImmutableFileFormat extends ImmutableFileFormat {
 
-  public SparseImmutableFileFormat(String name, CachePool cachePool) {
-    super(name, cachePool);
+  public SparseImmutableFileFormat(String name, AbstractConfig config, CachePool cachePool) {
+    super(name, config, cachePool);
   }
 
   protected abstract void flush(Path dstWithSuffix, List<Table.SubTable> subTables) throws IOException, PhysicalException;

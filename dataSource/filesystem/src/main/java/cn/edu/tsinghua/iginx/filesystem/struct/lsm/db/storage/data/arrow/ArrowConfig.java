@@ -1,6 +1,7 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.arrow;
 
 import cn.edu.tsinghua.iginx.filesystem.common.AbstractConfig;
+import com.github.luben.zstd.Zstd;
 import com.typesafe.config.Config;
 import com.typesafe.config.Optional;
 import lombok.Data;
@@ -17,10 +18,10 @@ import java.util.List;
 public class ArrowConfig extends AbstractConfig {
 
   @Optional
-  Integer compressionLevel = null;
+  Integer compressionLevel = Zstd.maxCompressionLevel();
 
   @Optional
-  CompressionUtil.CodecType codec = CompressionUtil.CodecType.LZ4_FRAME;
+  CompressionUtil.CodecType compression = CompressionUtil.CodecType.LZ4_FRAME;
 
   @Override
   public List<ValidationProblem> validate() {

@@ -54,6 +54,14 @@ public class TombstoneTable extends AbstractTable {
         .collect(ImmutableList.toImmutableList());
   }
 
+  @Override
+  public String toString() {
+    return "TombstoneTable{" +
+            "table=" + table +
+            ", tombstone=" + tombstone +
+            '}';
+  }
+
   private static class TombstoneSubTable implements SubTable {
     private final SubTable subTable;
     private final Tombstone tombstone;

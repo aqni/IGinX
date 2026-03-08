@@ -58,18 +58,18 @@ import java.util.stream.IntStream;
 
 public class ParquetFormat extends DenseImmutableFileFormat {
 
-  private final ParquetConfig config;
+  private final ParquetConfig parquetConfig;
   private final ParquetFileFormat format;
 
-  public ParquetFormat(Config fileConfig, CachePool cachePool) {
-    super("parquet", cachePool);
-    this.config = ParquetConfig.of(fileConfig);
+  public ParquetFormat(Config config, CachePool cachePool) {
+    super("parquet", ParquetConfig.of(config), cachePool);
+    this.parquetConfig = (ParquetConfig) this.config;
     this.format = new ParquetFileFormat(new FileFormatFactory.FormatContext(
         new Options(),
-        config.readBatchSize,
-        config.writeBatchSize,
-        MemorySize.ofBytes(config.writeBatchMemory.toBytes()),
-        config.getZstdLevel(),
+        parquetConfig.readBatchSize,
+        parquetConfig.writeBatchSize,
+        MemorySize.ofBytes(parquetConfig.writeBatchMemory.toBytes()),
+        parquetConfig.getZstdLevel(),
         null
     ));
   }
@@ -82,7 +82,7 @@ public class ParquetFormat extends DenseImmutableFileFormat {
       FormatWriterFactory writerFactory = format.createWriterFactory(schema);
       try (LocalFileIO localFileIO = LocalFileIO.create();
            PositionOutputStream outputStream = localFileIO.newOutputStream(paimonDst, false);
-           FormatWriter writer = writerFactory.create(outputStream, config.getCompression().name())) {
+           FormatWriter writer = writerFactory.create(outputStream, parquetConfig.getCompression().name())) {
         while (rowStream.hasNext()) {
           Row row = rowStream.next();
           InternalRow paimonRow = TypeUtils.toInternalRow(row);

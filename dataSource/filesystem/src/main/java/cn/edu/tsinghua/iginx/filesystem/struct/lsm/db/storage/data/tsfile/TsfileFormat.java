@@ -57,17 +57,17 @@ import java.util.Map;
 
 public class TsfileFormat extends SparseImmutableFileFormat {
 
-  private final TsfileConfig config;
+  private final TsfileConfig tsfileConfig;
 
   public TsfileFormat(Config config, CachePool cachePool) {
-    super("tsfile", cachePool);
-    this.config = TsfileConfig.of(config);
+    super("tsfile", TsfileConfig.of(config), cachePool);
+    this.tsfileConfig = (TsfileConfig) this.config;
   }
 
   @Override
   protected void flush(Path dstWithSuffix, List<Table.SubTable> subTables) throws IOException, PhysicalException {
     TSFileConfig tsFileConfig = new TSFileConfig();
-    tsFileConfig.setCompressor(config.getCompressor().name());
+    tsFileConfig.setCompressor(tsfileConfig.getCompression().name());
 
     try (TsFileWriter tsFileWriter = new TsFileWriter(dstWithSuffix.toFile(), new Schema(), tsFileConfig)) {
       for (int subTableIndex = 0; subTableIndex < subTables.size(); subTableIndex++) {

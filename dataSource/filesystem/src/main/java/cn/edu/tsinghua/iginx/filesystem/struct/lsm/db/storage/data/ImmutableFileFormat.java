@@ -23,6 +23,7 @@ import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.BoolFilter;
+import cn.edu.tsinghua.iginx.filesystem.common.AbstractConfig;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AbstractTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
@@ -36,16 +37,21 @@ import java.util.Objects;
 public abstract class ImmutableFileFormat {
 
   protected final String name;
+  protected final AbstractConfig config;
   protected final CachePool cachePool;
 
-  public ImmutableFileFormat(String name, CachePool cachePool) {
+  public ImmutableFileFormat(String name, AbstractConfig config, CachePool cachePool) {
     this.name = Objects.requireNonNull(name);
+    this.config = Objects.requireNonNull(config);
     this.cachePool = Objects.requireNonNull(cachePool);
   }
 
   @Override
   public String toString() {
-    return name;
+    return "ImmutableFileFormat{" +
+            "name='" + name + '\'' +
+            ", config=" + config +
+            '}';
   }
 
   public abstract void flush(Path dst, Table table) throws IOException, PhysicalException;
@@ -86,6 +92,14 @@ public abstract class ImmutableFileFormat {
     @Override
     public List<SubTable> getSubTables() throws IOException {
       return readSubTables(path);
+    }
+
+    @Override
+    public String toString() {
+      return "ImmutableFileFormatTable{" +
+              "path=" + path + "," +
+              "format=" + ImmutableFileFormat.this.name +
+              '}';
     }
   }
 }

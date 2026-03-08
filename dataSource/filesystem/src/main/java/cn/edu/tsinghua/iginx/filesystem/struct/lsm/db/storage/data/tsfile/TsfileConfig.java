@@ -17,7 +17,7 @@ import java.util.List;
 public class TsfileConfig extends AbstractConfig {
 
   @Optional
-  CompressionType compressor = CompressionType.LZ4;
+  CompressionType compression = CompressionType.LZ4;
 
   @Override
   public List<ValidationProblem> validate() {

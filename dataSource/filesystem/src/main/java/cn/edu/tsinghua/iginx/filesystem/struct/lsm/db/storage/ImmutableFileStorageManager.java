@@ -30,7 +30,6 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.TableFlushEvent
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.RangeSet;
 import com.google.common.io.MoreFiles;
-import com.google.common.io.RecursiveDeleteOption;
 import org.apache.commons.io.file.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -114,9 +113,10 @@ public class ImmutableFileStorageManager implements StorageManager {
     Path tableDir = getTableDir(tableId);
     TableFlushEvent event = new TableFlushEvent();
     event.tableId = tableId;
+    event.format = immutableFileFormat.toString();
+    event.begin();
     try {
-      event.begin();
-      try (AtomFlushPathWrapper wrapper = new AtomFlushPathWrapper(tableDir)) {
+      try (AtomFlushPathWrapper wrapper = new AtomFlushPathWrapper(tableDir, false)) {
         Path dst = getDataPath(wrapper.getTmpPath());
         MoreFiles.createParentDirectories(dst);
         immutableFileFormat.flush(dst, table);

@@ -23,6 +23,7 @@ import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.RowStream;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
+import cn.edu.tsinghua.iginx.filesystem.common.AbstractConfig;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 
@@ -39,8 +40,8 @@ import java.util.regex.Pattern;
 
 public abstract class DenseImmutableFileFormat extends ImmutableFileFormat {
 
-  public DenseImmutableFileFormat(String name, CachePool cachePool) {
-    super(name, cachePool);
+  public DenseImmutableFileFormat(String name, AbstractConfig config, CachePool cachePool) {
+    super(name, config, cachePool);
   }
 
   protected abstract void flush(Path dst, Table.SubTable subTable) throws IOException, PhysicalException;
