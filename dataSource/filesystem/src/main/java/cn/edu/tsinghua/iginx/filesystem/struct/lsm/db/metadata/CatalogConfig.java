@@ -33,7 +33,7 @@ import lombok.experimental.FieldNameConstants;
 @FieldNameConstants
 public class CatalogConfig extends AbstractConfig {
 
-  @Optional FieldIndexType schemaIndexType = FieldIndexType.FLAT;
+  @Optional FieldIndexType schemaIndexType = FieldIndexType.PREFIX_TAG_TREE;
 
   @Override
   public List<ValidationProblem> validate() {
