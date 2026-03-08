@@ -34,6 +34,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class PrefixTagTreeIndex implements FieldIndex {
 
@@ -241,23 +242,20 @@ public class PrefixTagTreeIndex implements FieldIndex {
       }
 
       if (childrenSharedTagsSet != null || (useChildrenSharedTagsSet && children.isEmpty())) {
-        List<Map<String, String>> distinctTags =
+        Map<Map<String,String>, List<NodeListField>> fieldGroups =
             childrenFields.stream()
-                .map(NodeListField::getTags)
-                .distinct()
-                .collect(ImmutableList.toImmutableList());
-        if (distinctTags.size() == 1) {
-          Map<String, String> tags = distinctTags.get(0);
+                    .collect(Collectors.groupingBy(NodeListField::getTags));
+        if (fieldGroups.values().stream().distinct().count() == 1) {
           Map<String, List<NodeListField>> groupedChildFieldsWithoutTags =
-              groupByFirstNode(childrenFields, false);
+                  groupByFirstNode(fieldGroups.values().iterator().next(), false);
           if (children.isEmpty()) {
             add(groupedChildFieldsWithoutTags, false);
-            addChildrenSharedTags(tags);
+            fieldGroups.keySet().forEach(this::addChildrenSharedTags);
             return;
           }
           if (childrenSharedTagsSet != null
-              && this.treeEqualsWithoutTags(groupedChildFieldsWithoutTags)) {
-            addChildrenSharedTags(tags);
+                  && this.treeEqualsWithoutTags(groupedChildFieldsWithoutTags)) {
+            fieldGroups.keySet().forEach(this::addChildrenSharedTags);
             return;
           }
         }
@@ -270,6 +268,7 @@ public class PrefixTagTreeIndex implements FieldIndex {
         }
         childrenSharedTagsSet = null;
       }
+
       Map<String, List<NodeListField>> groupedChildFields = groupByFirstNode(childrenFields, true);
       add(groupedChildFields, useChildrenSharedTagsSet);
     }
