@@ -22,7 +22,7 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
-import com.google.common.collect.ImmutableList;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.MemeTableQueueClearEvent;
 import it.unimi.dsi.fastutil.longs.LongObjectPair;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.Preconditions;
@@ -43,6 +43,7 @@ import java.util.function.LongConsumer;
 public class MemTableQueue implements NoexceptAutoCloseable {
   private final ReentrantReadWriteLock queueLock = new ReentrantReadWriteLock();
 
+  private final MemTableConfig config;
   private final BlockingQueue<Long> toFlushIds = new PriorityBlockingQueue<>();
   private final NavigableMap<Long, ArchivedMemTable> archives = new TreeMap<>();
   private final BufferAllocator allocator;
@@ -51,12 +52,13 @@ public class MemTableQueue implements NoexceptAutoCloseable {
   public MemTableQueue(
       String name,
       MemTableConfig config, Semaphore memTablePermits, BufferAllocator allocator) {
+    this.config = Preconditions.checkNotNull(config);
     this.allocator = allocator.newChildAllocator(name, 0, Long.MAX_VALUE);
     this.active = new ActiveMemTable(config, this.allocator, memTablePermits);
   }
 
   public WriteBatch prepare(DataView data) {
-    return new WriteBatch(WriteBatches.of(data, allocator));
+    return new WriteBatch(WriteBatches.of(data, allocator, config.isEnableAlignInsert()));
   }
 
   public void store(WriteBatch data) throws InterruptedException {
@@ -151,8 +153,11 @@ public class MemTableQueue implements NoexceptAutoCloseable {
   }
 
   public void clear() {
+    MemeTableQueueClearEvent event = new MemeTableQueueClearEvent();
     queueLock.writeLock().lock();
     try {
+      event.allocatedMemory = allocator.getAllocatedMemory();
+      event.begin();
       toFlushIds.clear();
       archives.values().forEach(ArchivedMemTable::close);
       archives.clear();
@@ -160,8 +165,10 @@ public class MemTableQueue implements NoexceptAutoCloseable {
       if (allocator.getAllocatedMemory() > 0) {
         throw new IllegalStateException("allocator is not empty: " + allocator.toVerboseString());
       }
+      event.end();
     } finally {
       queueLock.writeLock().unlock();
+      event.commit();
     }
   }
 

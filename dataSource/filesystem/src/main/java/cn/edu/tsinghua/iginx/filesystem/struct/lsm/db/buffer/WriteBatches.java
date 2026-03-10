@@ -35,14 +35,14 @@ import org.apache.arrow.vector.types.pojo.Field;
 
 class WriteBatches {
 
-  public static Collection<MemBatch.Snapshot> of(DataView data, BufferAllocator allocator) {
+  public static Collection<MemBatch.Snapshot> of(DataView data, BufferAllocator allocator, boolean enableAlignInsert) {
     switch (data.getRawDataType()) {
       case Column:
-        return of((ColumnDataView) data, allocator, true);
+        return of((ColumnDataView) data, allocator, enableAlignInsert);
       case NonAlignedColumn:
         return of((ColumnDataView) data, allocator, false);
       case Row:
-        return of((RowDataView) data, allocator, true);
+        return of((RowDataView) data, allocator, enableAlignInsert);
       case NonAlignedRow:
         return of((RowDataView) data, allocator, false);
       default:

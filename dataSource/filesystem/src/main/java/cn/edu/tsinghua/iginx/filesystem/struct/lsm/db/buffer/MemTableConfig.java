@@ -42,6 +42,8 @@ public class MemTableConfig extends AbstractConfig {
 
   @Optional Duration timeout = Duration.ZERO;
 
+  @Optional boolean enableAlignInsert = true;
+
   @Override
   public List<ValidationProblem> validate() {
     List<ValidationProblem> problems = new ArrayList<>();
