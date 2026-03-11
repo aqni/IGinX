@@ -26,6 +26,7 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.AbstractTable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
 import com.google.common.collect.*;
+import it.unimi.dsi.fastutil.ints.IntComparator;
 import it.unimi.dsi.fastutil.ints.IntHeapPriorityQueue;
 import it.unimi.dsi.fastutil.ints.IntPriorityQueue;
 import org.apache.arrow.vector.BigIntVector;
@@ -114,11 +115,24 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
     private final Header header;
     private final int[] fieldIndexMapping;
     private final ChunkIterator[] iterators;
-    private final IntPriorityQueue heap;
+    private final MergeCursor cursor;
     private Row nextRow;
 
     MergedRowStream(
-        MemSubTable.Snapshot snapshot, List<Field> fields, RangeSet<Long> keyRangeSet) {
+            MemSubTable.Snapshot snapshot, List<Field> fields, RangeSet<Long> keyRangeSet) {
+      this.header = new Header(Field.KEY, fields);
+      this.fieldIndexMapping = buildFieldIndexMapping(snapshot, fields);
+      this.iterators = collectEligibleIterators(snapshot, keyRangeSet);
+      this.cursor = new MergeCursor(new IntHeapPriorityQueue(iterators.length, this::compareIterators));
+      for (int i = 0; i < iterators.length; i++) {
+        if (iterators[i].advance()) {
+          cursor.enqueue(i);
+        }
+      }
+      advance();
+    }
+
+    private static int[] buildFieldIndexMapping(MemSubTable.Snapshot snapshot, List<Field> fields) {
       List<Field> snapshotFields = snapshot.getFields().stream().map(ArrowFields::toIginxField).collect(Collectors.toList());
 
       Map<Field, Integer> snapshotFieldIndexMap = new HashMap<>();
@@ -129,60 +143,52 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
       for (int i = 0; i < fields.size(); i++) {
         Field requestedField = fields.get(i);
         Integer fieldIndex = snapshotFieldIndexMap.get(requestedField);
-        // 检查字段是否存在
         if (fieldIndex == null) {
           throw new IllegalArgumentException("Requested field not found: " + requestedField);
         }
         fieldIndexMapping[i] = fieldIndex;
       }
-      this.header = new Header(Field.KEY, fields);
-      this.fieldIndexMapping = fieldIndexMapping;
+      return fieldIndexMapping;
+    }
 
+    private static ChunkIterator[] collectEligibleIterators(
+            MemSubTable.Snapshot snapshot, RangeSet<Long> keyRangeSet) {
       List<ChunkIterator> validIterators = new ArrayList<>();
       for (MemSubTable.SortedChunkSnapshot chunk : snapshot.getChunks()) {
         if (keyRangeSet.intersects(chunk.getKeyRange())) {
           validIterators.add(new ChunkIterator(chunk, keyRangeSet));
         }
       }
+      return validIterators.toArray(new ChunkIterator[0]);
+    }
 
-      this.iterators = validIterators.toArray(new ChunkIterator[0]);
-      this.heap =
-          new IntHeapPriorityQueue(
-              iterators.length,
-              (i1, i2) -> Long.compare(iterators[i1].currentKey, iterators[i2].currentKey));
-      for (int i = 0; i < iterators.length; i++) {
-        if (iterators[i].advance()) {
-          heap.enqueue(i);
-        }
+    private int compareIterators(int i1, int i2) {
+      int keyCompare = Long.compare(iterators[i1].currentKey, iterators[i2].currentKey);
+      if (keyCompare != 0) {
+        return keyCompare;
       }
-
-      advance();
+      // key 相同场景使用固定顺序，保证行为稳定
+      return Integer.compare(i1, i2);
     }
 
     private void advance() {
-      if (heap.isEmpty()) {
+      if (cursor.isEmpty()) {
         nextRow = null;
         return;
       }
 
-      int minIdx = heap.dequeueInt();
-      long minKey = iterators[minIdx].currentKey;
+      long winnerKey = iterators[cursor.firstInt()].currentKey;
+      Object[] rowValues = new Object[fieldIndexMapping.length];
 
-      Object[] orderedValues = new Object[fieldIndexMapping.length];
-      iterators[minIdx].fillValues(orderedValues, fieldIndexMapping);
-
-      if (iterators[minIdx].advance()) {
-        heap.enqueue(minIdx);
-      }
-
-      while (!heap.isEmpty() && iterators[heap.firstInt()].currentKey == minKey) {
-        int idx = heap.dequeueInt();
-        if (iterators[idx].advance()) {
-          heap.enqueue(idx);
+      while (!cursor.isEmpty() && iterators[cursor.firstInt()].currentKey == winnerKey) {
+        int duplicateIndex = cursor.dequeueInt();
+        iterators[duplicateIndex].fillValues(rowValues, fieldIndexMapping);
+        if (iterators[duplicateIndex].advance()) {
+          cursor.enqueue(duplicateIndex);
         }
       }
 
-      nextRow = new Row(header, minKey, orderedValues);
+      nextRow = new Row(header, winnerKey, rowValues);
     }
 
     @Override
@@ -214,6 +220,8 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
       private final FieldVector[] fieldVectors;
       private final short[] sortedIndex;
       private final RangeSet<Long> keyRangeSet;
+      private final boolean scanAllKeys;
+
       private int position;
       long currentKey;
 
@@ -222,11 +230,26 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
         this.fieldVectors = chunk.getSnapshot().getFieldVectors().toArray(new FieldVector[0]);
         this.sortedIndex = chunk.getIndex();
         this.keyRangeSet = keyRangeSet;
+        this.scanAllKeys = keyRangeSet.encloses(chunk.getKeyRange());
         this.position = 0;
         this.currentKey = Long.MAX_VALUE;
       }
 
       boolean advance() {
+        return scanAllKeys ? advanceWithoutRangeCheck() : advanceWithRangeCheck();
+      }
+
+      private boolean advanceWithoutRangeCheck() {
+        if (position >= sortedIndex.length) {
+          currentKey = Long.MAX_VALUE;
+          return false;
+        }
+        int rowIndex = sortedIndex[position++];
+        currentKey = keyVector.get(rowIndex);
+        return true;
+      }
+
+      private boolean advanceWithRangeCheck() {
         while (position < sortedIndex.length) {
           int idx = sortedIndex[position++];
           long key = keyVector.get(idx);
@@ -247,6 +270,81 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
             orderedValues[i] = value;
           }
         }
+      }
+    }
+
+    // MergeCursor维护当前活跃的最小元素和一个堆，堆中元素都大于活跃元素
+    private static final class MergeCursor implements IntPriorityQueue {
+      private final IntPriorityQueue heap;
+      private final IntComparator comparator;
+      private int active = -1;
+
+      MergeCursor(IntPriorityQueue heap) {
+        this.heap = Objects.requireNonNull(heap);
+        this.comparator = heap.comparator() == null ? Integer::compare : heap.comparator();
+      }
+
+      @Override
+      public void enqueue(int x) {
+        if (active < 0 && heap.isEmpty()) {
+          active = x;
+          return;
+        }
+
+        if (comparator.compare(x, firstInt()) > 0) {
+          heap.enqueue(x);
+          return;
+        }
+
+        if (active >= 0) {
+          heap.enqueue(active);
+        }
+        active = x;
+      }
+
+      @Override
+      public int dequeueInt() {
+        if (active >= 0) {
+          int result = active;
+          active = -1;
+          return result;
+        }
+        if (!heap.isEmpty()) {
+          return heap.dequeueInt();
+        }
+        throw new NoSuchElementException();
+      }
+
+      @Override
+      public int firstInt() {
+        if (active >= 0) {
+          return active;
+        }
+        if (!heap.isEmpty()) {
+          return heap.firstInt();
+        }
+        throw new NoSuchElementException();
+      }
+
+      @Override
+      public IntComparator comparator() {
+        return comparator;
+      }
+
+      @Override
+      public int size() {
+        return heap.size() + (active >= 0 ? 1 : 0);
+      }
+
+      @Override
+      public void clear() {
+        heap.clear();
+        active = -1;
+      }
+
+      @Override
+      public boolean isEmpty() {
+        return active < 0 && heap.isEmpty();
       }
     }
   }
