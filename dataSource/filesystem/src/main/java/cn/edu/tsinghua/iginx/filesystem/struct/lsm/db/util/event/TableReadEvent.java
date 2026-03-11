@@ -4,7 +4,7 @@ import jdk.jfr.Event;
 import jdk.jfr.Name;
 import jdk.jfr.StackTrace;
 @SuppressWarnings("Since15")
-@Name("iginx.filesystem.filelsm.tableread")
+@Name("iginx.filesystem.filelsm.table.read")
 @StackTrace(false)
 public class TableReadEvent extends Event {
 

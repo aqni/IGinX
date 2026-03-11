@@ -6,7 +6,7 @@ import jdk.jfr.Name;
 import jdk.jfr.StackTrace;
 
 @SuppressWarnings("Since15")
-@Name("iginx.filesystem.filelsm.memtable-queue-clear")
+@Name("iginx.filesystem.filelsm.memtable.queue.clear")
 @StackTrace(false)
 public class MemeTableQueueClearEvent extends Event {
     @DataAmount
