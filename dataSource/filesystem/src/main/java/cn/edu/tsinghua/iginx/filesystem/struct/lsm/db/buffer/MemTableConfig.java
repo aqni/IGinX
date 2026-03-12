@@ -36,7 +36,7 @@ import org.apache.arrow.vector.BaseValueVector;
 @FieldNameConstants
 public class MemTableConfig extends AbstractConfig {
 
-  @Optional ConfigMemorySize capacity = ConfigMemorySize.ofBytes(128 * 1024 * 1024);
+  @Optional ConfigMemorySize capacity = ConfigMemorySize.ofBytes(512 * 1024 * 1024);
 
   @Optional int chunkValues = BaseValueVector.INITIAL_VALUE_ALLOCATION;
 
