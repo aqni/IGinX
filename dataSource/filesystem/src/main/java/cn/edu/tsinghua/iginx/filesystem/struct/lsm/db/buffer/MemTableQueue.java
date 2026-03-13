@@ -32,10 +32,7 @@ import javax.annotation.Nullable;
 import javax.annotation.WillCloseWhenClosed;
 import javax.annotation.concurrent.ThreadSafe;
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.Semaphore;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.LongConsumer;
 
@@ -45,7 +42,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
 
   private final MemTableConfig config;
   private final BlockingQueue<Long> toFlushIds = new PriorityBlockingQueue<>();
-  private final NavigableMap<Long, ArchivedMemTable> archives = new TreeMap<>();
+  private final ConcurrentNavigableMap<Long, ArchivedMemTable> archives = new ConcurrentSkipListMap<>();
   private final BufferAllocator allocator;
   private final ActiveMemTable active;
 
@@ -116,12 +113,11 @@ public class MemTableQueue implements NoexceptAutoCloseable {
   }
 
   private void remove(long id) {
-    queueLock.writeLock().lock();
-    try (ArchivedMemTable ignored = archives.remove(id)) {
-      active.onTableFlushed(id);
-    } finally {
-      queueLock.writeLock().unlock();
+    ArchivedMemTable removed = archives.remove(id);
+    if( removed!=null){
+      removed.close();
     }
+    active.onTableFlushed(id);
   }
 
   public long takeToDelete() throws InterruptedException {
