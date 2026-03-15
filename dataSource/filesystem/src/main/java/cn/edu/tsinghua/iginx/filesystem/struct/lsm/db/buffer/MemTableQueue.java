@@ -23,6 +23,7 @@ import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.MemeTableQueueClearEvent;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.TableAppendEvent;
 import it.unimi.dsi.fastutil.longs.LongObjectPair;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.Preconditions;
@@ -51,7 +52,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
       MemTableConfig config, Semaphore memTablePermits, BufferAllocator allocator) {
     this.config = Preconditions.checkNotNull(config);
     this.allocator = allocator.newChildAllocator(name, 0, Long.MAX_VALUE);
-    this.active = new ActiveMemTable(config, this.allocator, memTablePermits);
+    this.active = new ActiveMemTable(name, config, this.allocator, memTablePermits);
   }
 
   public WriteBatch prepare(DataView data) {
@@ -224,6 +225,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
   static class ActiveMemTable {
     private final ReentrantReadWriteLock switchTableLock = new ReentrantReadWriteLock(true);
 
+    private final String name;
     private final MemTableConfig config;
     private final Semaphore memTablePermits;
     private final BufferAllocator allocator;
@@ -236,7 +238,8 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     private final BlockingQueue<Long> toDeleteIds = new PriorityBlockingQueue<>();
 
     public ActiveMemTable(
-        MemTableConfig config, BufferAllocator allocator, Semaphore memTablePermits) {
+            String name, MemTableConfig config, BufferAllocator allocator, Semaphore memTablePermits) {
+      this.name = Preconditions.checkNotNull(name);
       this.config = Preconditions.checkNotNull(config);
       this.allocator = Preconditions.checkNotNull(allocator);
       this.memTablePermits = Preconditions.checkNotNull(memTablePermits);
@@ -262,14 +265,20 @@ public class MemTableQueue implements NoexceptAutoCloseable {
     }
 
     public void store(Iterable<MemBatch.Snapshot> data) {
+      TableAppendEvent event = new TableAppendEvent();
       switchTableLock.readLock().lock();
       try {
+        event.activeMemTableName=name;
+        event.memTableId=currentId;
+        event.begin();
         for (MemBatch.Snapshot snapshot : data) {
           activeTable.append(snapshot);
         }
+        event.end();
         activeTableWritten = true;
       } finally {
         switchTableLock.readLock().unlock();
+        event.commit();
       }
     }
 
