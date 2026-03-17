@@ -433,6 +433,7 @@ public class PrefixTagTreeIndex implements FieldIndex {
 
     public void clear() {
       pathEnd = null;
+      childrenSharedTagsSet = null;
       children.clear();
     }
   }
