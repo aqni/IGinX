@@ -20,6 +20,8 @@
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field.tagkv;
 
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
+
+import java.util.Collection;
 import java.util.Map;
 
 import cn.edu.tsinghua.iginx.thrift.DataType;
@@ -31,6 +33,12 @@ public class TypedCompactInvertedTagsSet extends CompactInvertedTagsSet {
     super(tags);
     this.type = type;
   }
+
+  public TypedCompactInvertedTagsSet(DataType type, Collection<Map<String, String>> tagsCollection) {
+    super(tagsCollection);
+    this.type = type;
+  }
+
 
   public DataType getType() {
     return type;
