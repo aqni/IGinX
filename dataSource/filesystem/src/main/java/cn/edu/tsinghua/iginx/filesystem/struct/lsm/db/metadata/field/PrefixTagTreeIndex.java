@@ -30,6 +30,7 @@ import com.google.common.collect.ImmutableSet;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import lombok.Value;
+import org.apache.arrow.util.Preconditions;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.*;
@@ -297,11 +298,14 @@ public class PrefixTagTreeIndex implements FieldIndex {
       }
     }
 
-    private void pushDownSharedTags(Collection<Map<String, String>> tagsCollection)
-        throws TypeConflictedException {
+    private void pushDownSharedTags(Collection<Map<String, String>> tagsCollection) {
+      Preconditions.checkArgument(tagsCollection != null && !tagsCollection.isEmpty());
+
+      // TODO: 验证此处是否需要修改
       if (pathEnd != null) {
+        pathEnd.remove(Collections.emptyMap());
         for (Map<String, String> tags : tagsCollection) {
-          pathEnd.add(tags, pathEnd.getType());
+          pathEnd.add(tags);
         }
       }
       if (!children.isEmpty()) {
@@ -383,6 +387,7 @@ public class PrefixTagTreeIndex implements FieldIndex {
       }
 
       if (childrenSharedTagsSet != null) {
+        // TODO: 改为上面基于分组的判定方式
         List<Map<String, String>> distinctTags =
             childrenFields.stream()
                 .map(NodeListField::getTags)
