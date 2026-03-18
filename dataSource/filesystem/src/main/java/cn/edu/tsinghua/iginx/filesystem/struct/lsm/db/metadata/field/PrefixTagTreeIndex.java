@@ -301,12 +301,9 @@ public class PrefixTagTreeIndex implements FieldIndex {
     private void pushDownSharedTags(Collection<Map<String, String>> tagsCollection) {
       Preconditions.checkArgument(tagsCollection != null && !tagsCollection.isEmpty());
 
-      // TODO: 验证此处是否需要修改
       if (pathEnd != null) {
-        pathEnd.remove(Collections.emptyMap());
-        for (Map<String, String> tags : tagsCollection) {
-          pathEnd.add(tags);
-        }
+        Preconditions.checkState(pathEnd.size()==1 && pathEnd.contain(Collections.emptyMap()));
+        pathEnd = new TypedCompactInvertedTagsSet(pathEnd.getType(), tagsCollection);
       }
       if (!children.isEmpty()) {
         for (Map<String, String> tags : tagsCollection) {
@@ -387,18 +384,14 @@ public class PrefixTagTreeIndex implements FieldIndex {
       }
 
       if (childrenSharedTagsSet != null) {
-        // TODO: 改为上面基于分组的判定方式
-        List<Map<String, String>> distinctTags =
-            childrenFields.stream()
-                .map(NodeListField::getTags)
-                .distinct()
-                .collect(ImmutableList.toImmutableList());
-        if (distinctTags.size() == 1) {
-          Map<String, String> tags = distinctTags.get(0);
+        Map<Map<String,String>, List<NodeListField>> fieldGroups =
+                childrenFields.stream()
+                        .collect(Collectors.groupingBy(NodeListField::getTags));
+        if (fieldGroups.values().stream().distinct().count() == 1) {
           Map<String, List<NodeListField>> groupedChildFieldsWithoutTags =
-              groupByFirstNode(childrenFields, false);
+                  groupByFirstNode(fieldGroups.values().iterator().next(), false);
           if (this.treeEqualsWithoutTags(groupedChildFieldsWithoutTags)) {
-            removeChildrenSharedTags(tags);
+            fieldGroups.keySet().forEach(this::removeChildrenSharedTags);
             return;
           }
         }
