@@ -23,7 +23,12 @@ import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field.FieldIndex;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.SchemaClearEvent;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.SchemaFindEvent;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.SchemaInsertEvent;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.SchemaRemoveEvent;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.RangeSet;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -48,13 +53,20 @@ public class Catalog {
   }
 
   public Set<Field> find(List<String> patterns, TagFilter tagFilter) {
+    SchemaFindEvent event = new SchemaFindEvent();
     deleteLock.readLock().lock();
     schemaLock.readLock().lock();
     try {
-      return schema.find(patterns, tagFilter);
+      event.begin();
+      Set<Field> result = schema.find(patterns, tagFilter);
+      event.end();
+      event.fieldsIndexed = index.size();
+      event.fieldsFound = result.size();
+      return result;
     } finally {
       schemaLock.readLock().unlock();
       deleteLock.readLock().unlock();
+      event.commit();
     }
   }
 
@@ -76,6 +88,7 @@ public class Catalog {
       } finally {
         schemaLock.readLock().unlock();
       }
+      SchemaInsertEvent event = new SchemaInsertEvent();
       schemaLock.writeLock().lock();
       try {
         Set<Field> toInserted = new HashSet<>();
@@ -88,13 +101,18 @@ public class Catalog {
             toInserted.add(compactField);
           }
         }
+        event.fieldsIndexed = index.size();
+        event.fieldsInserted = toInserted.size();
+        event.begin();
         schema.insert(toInserted);
+        event.end();
         for (Field field : toInserted) {
           index.computeIfAbsent(
               field, f -> new ColumnTableIndex(f.getType()));
         }
       } finally {
         schemaLock.writeLock().unlock();
+        event.commit();
       }
     } finally {
       deleteLock.readLock().unlock();
@@ -154,14 +172,20 @@ public class Catalog {
   }
 
   public void delete(Set<Field> fields) throws TypeConflictedException {
+    SchemaRemoveEvent event = new SchemaRemoveEvent();
     deleteLock.writeLock().lock();
     try {
+      event.fieldsIndexed = index.size();
+      event.fieldsRemoved = fields.size();
+      event.begin();
       schema.remove(fields);
+      event.end();
       for (Field field : fields) {
         index.remove(field);
       }
     } finally {
       deleteLock.writeLock().unlock();
+      event.commit();
     }
   }
 
@@ -181,12 +205,18 @@ public class Catalog {
   }
 
   public void clear() {
+    SchemaClearEvent event = new SchemaClearEvent();
     deleteLock.writeLock().lock();
     try {
+      event.allocatedMemory = CachePool.bytesOf(schema);
+      event.fieldsIndexed = index.size();
+      event.begin();
       schema.clear();
+      event.end();
       index.clear();
     } finally {
       deleteLock.writeLock().unlock();
+      event.commit();
     }
   }
 }
