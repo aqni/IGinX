@@ -52,25 +52,6 @@ public class Catalog {
     this.schema = config.getSchemaIndexType().create();
   }
 
-  public Set<Field> find(List<String> patterns, TagFilter tagFilter) {
-    SchemaFindEvent event = new SchemaFindEvent();
-    deleteLock.readLock().lock();
-    schemaLock.readLock().lock();
-    try {
-      event.begin();
-      Set<Field> result = schema.find(patterns, tagFilter);
-      event.end();
-      event.patternNum = patterns.size();
-      event.fieldsIndexed = index.size();
-      event.fieldsFound = result.size();
-      return result;
-    } finally {
-      schemaLock.readLock().unlock();
-      deleteLock.readLock().unlock();
-      event.commit();
-    }
-  }
-
   public void verifyAndInsertFields(Set<Field> fields) throws TypeConflictedException {
     deleteLock.readLock().lock();
     try {
@@ -121,13 +102,21 @@ public class Catalog {
   }
 
   public Set<Field> findFields(List<String> patterns, @Nullable TagFilter tagFilter) {
+    SchemaFindEvent event = new SchemaFindEvent();
     deleteLock.readLock().lock();
     schemaLock.readLock().lock();
     try {
-      return schema.find(patterns, tagFilter);
+      event.begin();
+      Set<Field> result = schema.find(patterns, tagFilter);
+      event.end();
+      event.patternNum = patterns.size();
+      event.fieldsIndexed = index.size();
+      event.fieldsFound = result.size();
+      return result;
     } finally {
       schemaLock.readLock().unlock();
       deleteLock.readLock().unlock();
+      event.commit();
     }
   }
 

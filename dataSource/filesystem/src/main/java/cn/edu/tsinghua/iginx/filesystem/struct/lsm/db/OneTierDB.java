@@ -104,7 +104,7 @@ public class OneTierDB implements AutoCloseable {
       throws StorageException {
     deleteLock.readLock().lock();
     try {
-      List<Field> fields = ImmutableList.copyOf(catalog.find(patterns, tagFilter));
+      List<Field> fields = ImmutableList.copyOf(catalog.findFields(patterns, tagFilter));
       RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(filter);
       List<InMemoryTable> inMemoryTables = memTableQueue.snapshot(fields);
       try (NoexceptAutoCloseable ignored = NoexceptAutoCloseables.all(inMemoryTables)) {
@@ -127,7 +127,7 @@ public class OneTierDB implements AutoCloseable {
       throws StorageException {
     deleteLock.readLock().lock();
     try {
-      return catalog.find(patterns, tagFilter);
+      return catalog.findFields(patterns, tagFilter);
     } finally {
       deleteLock.readLock().unlock();
     }
