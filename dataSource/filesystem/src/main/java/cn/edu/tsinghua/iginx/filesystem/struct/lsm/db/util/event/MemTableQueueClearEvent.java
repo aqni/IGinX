@@ -8,7 +8,7 @@ import jdk.jfr.StackTrace;
 @SuppressWarnings("Since15")
 @Name("iginx.filesystem.filelsm.memtable.queue.clear")
 @StackTrace(false)
-public class MemeTableQueueClearEvent extends Event {
+public class MemTableQueueClearEvent extends Event {
     @DataAmount
     public long allocatedMemory;
 }

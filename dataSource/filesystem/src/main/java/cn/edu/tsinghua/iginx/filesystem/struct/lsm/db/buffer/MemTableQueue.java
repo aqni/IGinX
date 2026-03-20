@@ -22,7 +22,7 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.buffer;
 import cn.edu.tsinghua.iginx.engine.shared.data.write.DataView;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.NoexceptAutoCloseable;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.MemeTableQueueClearEvent;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.MemTableQueueClearEvent;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.TableAppendEvent;
 import it.unimi.dsi.fastutil.longs.LongObjectPair;
 import org.apache.arrow.memory.BufferAllocator;
@@ -150,7 +150,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
   }
 
   public void clear() {
-    MemeTableQueueClearEvent event = new MemeTableQueueClearEvent();
+    MemTableQueueClearEvent event = new MemTableQueueClearEvent();
     queueLock.writeLock().lock();
     try {
       event.allocatedMemory = allocator.getAllocatedMemory();
