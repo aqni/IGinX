@@ -29,6 +29,7 @@ import org.ehcache.sizeof.SizeOf;
 
 public class CachePool {
 
+  private static final SizeOf SIZE_OF = SizeOf.newInstance();
   private final Cache<Object, Object> cache;
 
   public CachePool(CacheConfig config) {
@@ -46,7 +47,7 @@ public class CachePool {
     return cache.asMap();
   }
 
-  private static long bytesOf(Object value) {
-    return SizeOf.newInstance().deepSizeOf(value);
+  public static long bytesOf(Object value) {
+    return SIZE_OF.deepSizeOf(value);
   }
 }
