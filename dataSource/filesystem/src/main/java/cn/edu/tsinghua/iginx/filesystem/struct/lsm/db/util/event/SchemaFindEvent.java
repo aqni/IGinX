@@ -8,6 +8,7 @@ import jdk.jfr.StackTrace;
 @Name("iginx.filesystem.filelsm.schema.find")
 @StackTrace(false)
 public class SchemaFindEvent extends Event {
+    public int patternNum;
     public int fieldsIndexed;
     public int fieldsFound;
 }

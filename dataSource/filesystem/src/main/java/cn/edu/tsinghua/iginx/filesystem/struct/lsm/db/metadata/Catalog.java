@@ -60,6 +60,7 @@ public class Catalog {
       event.begin();
       Set<Field> result = schema.find(patterns, tagFilter);
       event.end();
+      event.patternNum = patterns.size();
       event.fieldsIndexed = index.size();
       event.fieldsFound = result.size();
       return result;
