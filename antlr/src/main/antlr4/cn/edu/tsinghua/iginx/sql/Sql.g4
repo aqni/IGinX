@@ -269,6 +269,7 @@ tagKey
 
 tagValue
    : ID
+   | INT
    | STAR
    ;
 
