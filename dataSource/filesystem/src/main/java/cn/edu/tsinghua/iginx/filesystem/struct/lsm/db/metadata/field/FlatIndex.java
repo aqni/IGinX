@@ -22,21 +22,21 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.metadata.field;
 import cn.edu.tsinghua.iginx.engine.physical.storage.domain.ColumnKey;
 import cn.edu.tsinghua.iginx.engine.physical.storage.utils.TagKVUtils;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
+import cn.edu.tsinghua.iginx.engine.shared.operator.tag.BasePreciseTagFilter;
+import cn.edu.tsinghua.iginx.engine.shared.operator.tag.PreciseTagFilter;
 import cn.edu.tsinghua.iginx.engine.shared.operator.tag.TagFilter;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
 import cn.edu.tsinghua.iginx.thrift.DataType;
 import cn.edu.tsinghua.iginx.utils.StringUtils;
-import com.google.common.collect.ImmutableList;
+
 import com.google.common.collect.ImmutableSet;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import javax.annotation.Nullable;
+import java.util.*;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 public class FlatIndex implements FieldIndex {
 
@@ -59,31 +59,67 @@ public class FlatIndex implements FieldIndex {
     }
   }
 
-
   @Override
   public Set<Field> find(List<String> patterns, @Nullable TagFilter tagFilter) {
-    List<Predicate<String>> matchers =
-        patterns.stream()
-            .map(StringUtils::toColumnMatcher)
-            .collect(ImmutableList.toImmutableList());
-
     List<Field> result = new ArrayList<>();
-    fieldToTypeMap.forEach(
-        (compactFieldFullName, type) -> {
-          String name = compactFieldFullName.getPath();
-          Map<String, String> tags = compactFieldFullName.getTags();
-          boolean patternMatched = matchers.stream().anyMatch(matcher -> matcher.test(name));
-          if (!patternMatched) {
-            return;
+    List<Predicate<String>> matchers = new ArrayList<>();
+    for(String pattern : patterns) {
+      List<ColumnKey> exactKeys = toExactColumnKey(pattern, tagFilter);
+      if(exactKeys.isEmpty()) {
+        matchers.add(StringUtils.toColumnMatcher(pattern));
+      } else {
+        for (ColumnKey key : exactKeys) {
+          DataType type = fieldToTypeMap.get(key);
+          if (type != null) {
+            Field field = new Field(key.getPath(), type, key.getTags());
+            result.add(field);
           }
-          if (tagFilter != null && !TagKVUtils.match(tags, tagFilter)) {
-            return;
-          }
-          Field field = new Field(name, type, tags);
-          result.add(field);
-        });
+        }
+      }
+    }
+
+    if(!matchers.isEmpty()){
+      fieldToTypeMap.forEach(
+              (compactFieldFullName, type) -> {
+                String name = compactFieldFullName.getPath();
+                Map<String, String> tags = compactFieldFullName.getTags();
+                boolean patternMatched = matchers.stream().anyMatch(matcher -> matcher.test(name));
+                if (!patternMatched) {
+                  return;
+                }
+                if (tagFilter != null && !TagKVUtils.match(tags, tagFilter)) {
+                  return;
+                }
+                Field field = new Field(name, type, tags);
+                result.add(field);
+              });
+
+    }
 
     return ImmutableSet.copyOf(result);
+  }
+
+
+  private List<ColumnKey> toExactColumnKey(String pattern, @Nullable TagFilter tagFilter) {
+    if (tagFilter == null) {
+      return Collections.emptyList();
+    }
+    if (StringUtils.isPattern(pattern)) {
+      return Collections.emptyList();
+    }
+    switch (tagFilter.getType()) {
+      case Precise:
+        return ((PreciseTagFilter) tagFilter).getChildren().stream()
+                .map(tf->toExactColumnKey(pattern, tf))
+                .flatMap(Collection::stream)
+                .collect(Collectors.toList());
+      case BasePrecise:
+        return Collections.singletonList(new ColumnKey(pattern, ((BasePreciseTagFilter) tagFilter).getTags()));
+      case WithoutTag:
+        return Collections.singletonList(new ColumnKey(pattern, Collections.emptyMap()));
+      default:
+        return Collections.emptyList();
+    }
   }
 
   @Override
