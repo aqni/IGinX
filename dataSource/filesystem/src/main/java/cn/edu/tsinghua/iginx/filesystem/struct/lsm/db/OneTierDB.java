@@ -153,6 +153,7 @@ public class OneTierDB implements AutoCloseable {
       throws StorageException, InterruptedException {
     deleteLock.writeLock().lock();
     try {
+      LOGGER.debug("request to delete from {} where {} with {} in {}", patterns, ranges, tagFilter, path);
       Set<Field> fields = catalog.findFields(patterns, tagFilter);
       if (ranges.encloses(Range.all())) {
         if (Patterns.isAll(patterns) && tagFilter == null) {
