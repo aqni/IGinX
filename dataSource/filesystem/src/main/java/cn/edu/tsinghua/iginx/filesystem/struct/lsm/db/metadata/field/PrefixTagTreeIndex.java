@@ -171,14 +171,16 @@ public class PrefixTagTreeIndex implements FieldIndex {
         if (filter != null) {
           filter = null;
         }
-        Consumer<Field> finalFieldConsumer = fieldConsumer;
-        fieldConsumer =
-            field -> {
-              for (Map<String, String> tags : sharedTagsSet) {
-                Field newField = new Field(field.getName(), field.getType(), tags);
-                finalFieldConsumer.accept(newField);
-              }
-            };
+        if (!sharedTagsSet.equals(Collections.singleton(Collections.emptyMap()))) {
+          Consumer<Field> finalFieldConsumer = fieldConsumer;
+          fieldConsumer =
+                  field -> {
+                    for (Map<String, String> tags : sharedTagsSet) {
+                      Field newField = new Field(field.getName(), field.getType(), tags);
+                      finalFieldConsumer.accept(newField);
+                    }
+                  };
+        }
       }
 
       List<List<String>> wildcardPatterns = groupedPatterns.remove("*");
