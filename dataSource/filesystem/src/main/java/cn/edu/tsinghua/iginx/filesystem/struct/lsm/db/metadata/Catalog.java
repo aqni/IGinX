@@ -29,7 +29,7 @@ import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.SchemaInsertEve
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.SchemaRemoveEvent;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.exception.TypeConflictedException;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
-import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.RangeSet;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
@@ -77,9 +77,12 @@ public class Catalog {
         for (Field field : fields) {
           if (!schema.contain(field)) {
             Field compactField = new Field(
-                field.getName(),
+                field.getName().intern(),
                 field.getType(),
-                ImmutableSortedMap.copyOf(field.getTags()));
+                field.getTags().entrySet().stream().collect(ImmutableMap.toImmutableMap(
+                    e -> e.getKey().intern(),
+                    e -> e.getValue().intern()
+                )));
             toInserted.add(compactField);
           }
         }
