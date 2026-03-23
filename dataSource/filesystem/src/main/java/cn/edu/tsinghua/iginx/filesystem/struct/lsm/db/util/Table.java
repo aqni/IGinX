@@ -44,7 +44,7 @@ public interface Table {
 
   @Value
   class Statistic implements Serializable {
-    Range<Long> keyRange;
+    @NonNull Range<Long> keyRange;
   }
 
   @Value

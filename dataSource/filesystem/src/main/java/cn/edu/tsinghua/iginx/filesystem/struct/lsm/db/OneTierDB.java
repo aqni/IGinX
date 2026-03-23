@@ -50,7 +50,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.stream.Collectors;
 
 public class OneTierDB implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(OneTierDB.class);
@@ -64,17 +63,20 @@ public class OneTierDB implements AutoCloseable {
   private final TableStorage tableStorage;
   private final MemTableQueue memTableQueue;
   private final Compactor flusher;
+  private final Indexer indexer;
 
   public OneTierDB(Shared shared, Path path) {
     this.path = path;
     this.shared = shared;
     this.catalog = new Catalog(shared.getConfig().getCatalog());
+    this.indexer = new Indexer(path.toString(),shared.getFlusherPermits());
     this.tableStorage =
         new TableStorage(
             path,
             shared.getConfig().getStorage(),
             catalog,
-            shared.getCachePool());
+            shared.getCachePool(),
+            indexer);
     this.memTableQueue =
         new MemTableQueue(
             path.toString(),
@@ -88,6 +90,7 @@ public class OneTierDB implements AutoCloseable {
             shared.getConfig().getMemtable().getTimeout(),
             memTableQueue,
             tableStorage);
+    indexer.start();
     flusher.start();
     if (shared.getConfig().isFlushOnClose()) {
       Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -202,9 +205,11 @@ public class OneTierDB implements AutoCloseable {
     try {
       LOGGER.debug("start to clear {}", path);
       flusher.stop();
+      indexer.stop();
       catalog.clear();
       memTableQueue.clear();
       tableStorage.clear();
+      indexer.start();
       flusher.start();
     } finally {
       deleteLock.writeLock().unlock();
@@ -218,6 +223,7 @@ public class OneTierDB implements AutoCloseable {
       LOGGER.info("flushing {}", path);
       memTableQueue.flushAll(true);
       flusher.stop();
+      indexer.stop();
       memTableQueue.close();
     } finally {
       deleteLock.writeLock().unlock();

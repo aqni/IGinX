@@ -37,6 +37,7 @@ public class TagKVUtils {
     replacementMap.put('\\', '\\');
     replacementMap.put(',', ',');
     replacementMap.put('=', '=');
+    replacementMap.put('.', '_');
     return new Escaper('\\', replacementMap);
   }
 

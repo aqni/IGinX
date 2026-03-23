@@ -25,6 +25,7 @@ import cn.edu.tsinghua.iginx.engine.physical.memory.execute.executor.util.Batch;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Indexer;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.DenseImmutableFileFormat;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.shared.cache.CachePool;
@@ -55,7 +56,7 @@ public class ArrowFormat extends DenseImmutableFileFormat {
 
   private final ArrowConfig arrowConfig;
 
-  public ArrowFormat(Config config, CachePool cachePool) {
+  public ArrowFormat(Config config, CachePool cachePool, Indexer indexer) {
     super("arrow", ArrowConfig.of(config), cachePool);
     this.arrowConfig = (ArrowConfig) this.config;
   }

@@ -18,7 +18,7 @@ import java.util.List;
 public class ArrowConfig extends AbstractConfig {
 
   @Optional
-  Integer compressionLevel = Zstd.maxCompressionLevel();
+  Integer compressionLevel = Zstd.defaultCompressionLevel();
 
   @Optional
   CompressionUtil.CodecType compression = CompressionUtil.CodecType.LZ4_FRAME;

@@ -10,6 +10,7 @@ import cn.edu.tsinghua.iginx.thrift.DataType;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Range;
 import org.apache.arrow.util.Preconditions;
+import org.apache.paimon.data.BinaryString;
 import org.apache.paimon.data.GenericRow;
 import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.shade.org.apache.parquet.column.statistics.LongStatistics;
@@ -49,7 +50,7 @@ public class TypeUtils {
       case DOUBLE:
         return DataTypes.DOUBLE();
       case BINARY:
-        return DataTypes.BYTES();
+        return DataTypes.STRING();
       default:
         throw new IllegalArgumentException("Unsupported data type: " + type);
     }
@@ -60,7 +61,11 @@ public class TypeUtils {
     GenericRow genericRow = new GenericRow(values.length + 1);
     genericRow.setField(0, row.getKey());
     for (int i = 0; i < values.length; i++) {
-      genericRow.setField(i + 1, values[i]);
+      Object value = values[i];
+      if(value instanceof byte[]) {
+        value = BinaryString.fromBytes((byte[]) value);
+      }
+      genericRow.setField(i + 1,value);
     }
     return genericRow;
   }
@@ -115,7 +120,11 @@ public class TypeUtils {
     long key = paimonRow.getLong(0);
     Object[] values = new Object[header.getFields().size()];
     for (int i = 0; i < values.length; i++) {
-      values[i] = fieldGetters[i + 1].getFieldOrNull(paimonRow);
+      Object value = fieldGetters[i + 1].getFieldOrNull(paimonRow);
+      if(value instanceof BinaryString) {
+        value = ((BinaryString) value).toBytes();
+      }
+      values[i] = value;
     }
     return new Row(header, key, values);
   }

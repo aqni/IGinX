@@ -28,17 +28,21 @@ public class ParquetConfig extends AbstractConfig {
   @Optional
   ConfigMemorySize writeBatchMemory = ConfigMemorySize.ofBytes(128 * 1024 * 1024);
 
+  // paimon's parquet 读取器在使用 lz4_raw 过滤 blocks 读取字典时会有 BUG，出现崩溃
   @Optional
-  CompressionCodec compression = CompressionCodec.LZ4_RAW;
+  CompressionCodec compression = CompressionCodec.UNCOMPRESSED;
 
   @Optional
-  int zstdLevel = Zstd.maxCompressionLevel();
+  int zstdLevel = Zstd.defaultCompressionLevel();
 
+  @Optional
+  IndexConfig index = new IndexConfig();
 
   @Override
   public List<ValidationProblem> validate() {
     List<ValidationProblem> problems = new ArrayList<>();
     validateInRange(problems, Fields.zstdLevel, Range.closed(Zstd.minCompressionLevel(), Zstd.maxCompressionLevel()), zstdLevel);
+    validateSubConfig(problems, Fields.index, index);
     return problems;
   }
 

@@ -19,6 +19,7 @@
  */
 package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data;
 
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Indexer;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.arrow.ArrowFormat;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.parquet.ParquetFormat;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.tsfile.TsfileFormat;
@@ -32,13 +33,17 @@ public enum FileFormatType {
   TSFILE(TsfileFormat::new),
   ARROW(ArrowFormat::new);
 
-  private final BiFunction<Config, CachePool, ImmutableFileFormat> factory;
+  interface FileFormatFactory {
+    ImmutableFileFormat create(Config config, CachePool cachePool, Indexer indexer);
+  }
 
-  FileFormatType(BiFunction<Config, CachePool, ImmutableFileFormat> factory) {
+  private final FileFormatFactory factory;
+
+  FileFormatType(FileFormatFactory factory) {
     this.factory = Objects.requireNonNull(factory);
   }
 
-  public ImmutableFileFormat create(Config config, CachePool cachePool) {
-    return factory.apply(config, cachePool);
+  public ImmutableFileFormat create(Config config, CachePool cachePool, Indexer indexer) {
+    return factory.create(config, cachePool, indexer);
   }
 }

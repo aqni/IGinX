@@ -23,19 +23,19 @@ import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.FileLsm;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.TableReadEvent;
-import com.google.common.collect.RangeSet;
+import com.google.common.collect.*;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+import lombok.Value;
 import org.apache.arrow.util.Preconditions;
 
 import java.io.IOException;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -48,35 +48,89 @@ public class ScanExecutor {
     Filter rangeFilter = FilterRangeUtils.filterOf(rangeSet);
     Filter filterWithoutRange = FilterRangeUtils.withoutKeyRangeSet(filter);
 
-    for (Table table : allHitTables) {
+    List<TablePlan> plans = new ArrayList<>();
+    for(Table table : allHitTables){
+      List<SubTablePlan> subTablePlans = new ArrayList<>();
       List<Table.SubTable> subTables = table.getSubTables();
-      for(int i=0; i<subTables.size(); i++){
-        Table.SubTable subTable = subTables.get(i);
-        Set<Field> subTableFields = subTable.getMeta().getFieldStats().keySet();
+      for(int subTableId=0; subTableId<subTables.size(); subTableId++) {
+        Table.SubTable subTable = subTables.get(subTableId);
+        Table.Meta meta = subTable.getMeta();
+        ImmutableMap<Field, Table.Statistic> fieldStats = meta.getFieldStats();
         List<Field> hitFields =
-            fields.stream().filter(subTableFields::contains).collect(Collectors.toList());
-        if(!hitFields.isEmpty()){
-          TableReadEvent event = new TableReadEvent();
-          event.tableName = table.toString();
-          event.subTableId = i;
-          event.begin();
-          try (RowStream rowStream = subTable.scan(hitFields, rangeFilter)) {
-            int rows = builder.put(rowStream);
-            event.end();
-            event.projectedSchema = rowStream.getHeader().toString();
-            event.numRows=rows;
-          }finally {
-            event.commit();
+                fields.stream().filter(fieldStats::containsKey).collect(Collectors.toList());
+        RangeSet<Long> hitRangeSet = TreeRangeSet.create();
+        fieldStats.entrySet().stream()
+                .filter(e -> hitFields.contains(e.getKey()))
+                .map(Map.Entry::getValue)
+                .map(Table.Statistic::getKeyRange)
+                .forEach(hitRangeSet::add);
+        hitRangeSet.removeAll(rangeSet.complement());
+        if(!hitFields.isEmpty() && !hitRangeSet.isEmpty()){
+          SubTablePlan subTablePlan = new SubTablePlan(subTableId, subTable, hitFields, hitRangeSet);
+          subTablePlans.add(subTablePlan);
+        }
+      }
+      TablePlan plan = new TablePlan(table, subTablePlans);
+      plans.add(plan);
+    }
+
+    IdentityHashMap<SubTablePlan, Boolean> overlapMap = checkSubTablePlanOverlap(plans);
+
+    boolean allPushDown = true;
+    for(TablePlan plan : plans) {
+      for (SubTablePlan subTablePlan : plan.getSubTablePlans()) {
+        boolean hasOverlap = overlapMap.get(subTablePlan);
+        List<Field> hitFields = subTablePlan.getFields();
+        boolean canPushDown = !hasOverlap && hitFields.equals(fields);
+
+        Filter subTableFilter = canPushDown ? filter : rangeFilter;
+        TableReadEvent event = new TableReadEvent();
+        event.tableName = plan.getTable().toString();
+        event.subTableId = subTablePlan.getSubTableId();
+        event.begin();
+        try (RowStream rowStream = subTablePlan.getSubTable().scan(hitFields, subTableFilter)) {
+          int rows = builder.put(rowStream);
+          event.end();
+          event.projectedSchema = rowStream.getHeader().toString();
+          event.numRows=rows;
+          if(rows > 0 && !canPushDown){
+            allPushDown = false;
           }
+        }finally {
+          event.commit();
         }
       }
     }
 
     RowStream result = builder.build();
-    if (!Filters.isTrue(filterWithoutRange)) {
+    if (!allPushDown && !Filters.isTrue(filterWithoutRange)) {
       result = new FilterRowStreamWrapper(result, filterWithoutRange);
     }
     return result;
+  }
+
+  private static IdentityHashMap<SubTablePlan, Boolean> checkSubTablePlanOverlap(List<TablePlan> plans){
+    IdentityHashMap<SubTablePlan, Boolean> overlapMap = new IdentityHashMap<>();
+
+    Map<Field, RangeMap<Long, SubTablePlan>> fieldToRangeMap = new HashMap<>();
+    for(TablePlan plan : plans) {
+      for (SubTablePlan subTablePlan : plan.getSubTablePlans()) {
+        overlapMap.put(subTablePlan, false);
+
+        for (Field field : subTablePlan.getFields()) {
+          RangeMap<Long, SubTablePlan> rangeMap = fieldToRangeMap.computeIfAbsent(field, f -> TreeRangeMap.create());
+          for (Range<Long> range : subTablePlan.getRange().asRanges()) {
+            RangeMap<Long, SubTablePlan> overlapping = rangeMap.subRangeMap(range);
+            for(SubTablePlan other : overlapping.asMapOfRanges().values()) {
+              overlapMap.put(subTablePlan, true);
+              overlapMap.put(other, true);
+            }
+            rangeMap.put(range, subTablePlan);
+          }
+        }
+      }
+    }
+    return overlapMap;
   }
 
   private static class ResultTableBuilder {
@@ -126,5 +180,24 @@ public class ScanExecutor {
       keyToValues.clear();
       return new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, rows);
     }
+  }
+
+  @Value
+  private static class TablePlan {
+    @lombok.NonNull
+    Table table;
+    @lombok.NonNull
+    List<SubTablePlan> subTablePlans;
+  }
+
+  @Value
+  private static class SubTablePlan {
+    int subTableId;
+    @lombok.NonNull
+    Table.SubTable subTable;
+    @lombok.NonNull
+    List<Field> fields;
+    @lombok.NonNull
+    RangeSet<Long> range;
   }
 }

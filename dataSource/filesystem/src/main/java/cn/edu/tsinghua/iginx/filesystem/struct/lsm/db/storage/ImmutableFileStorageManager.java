@@ -21,6 +21,7 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage;
 
 import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Field;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Indexer;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.ImmutableFileFormat;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.Tombstone;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.tombstone.TombstoneStorage;
@@ -55,10 +56,10 @@ public class ImmutableFileStorageManager implements StorageManager {
 
   private final ImmutableFileFormat immutableFileFormat;
 
-  public ImmutableFileStorageManager(Path path, StorageConfig config, CachePool cachePool) {
+  public ImmutableFileStorageManager(Path path, StorageConfig config, CachePool cachePool, Indexer indexer) {
     this.dir = path;
     this.tombstoneStorage = new TombstoneStorage(cachePool);
-    this.immutableFileFormat = config.getFileFormat().create(config.getFileConfig(), cachePool);
+    this.immutableFileFormat = config.getFileFormat().create(config.getFileConfig(), cachePool, indexer);
   }
 
   @Override

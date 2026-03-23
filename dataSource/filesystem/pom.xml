@@ -149,6 +149,12 @@
             <id>parquet-file</id>
             <name>IGinX GitHub repository</name>
             <url>https://iginx-thu.github.io/Parquet/maven-repo</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
         </repository>
     </repositories>
 

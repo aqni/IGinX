@@ -47,9 +47,9 @@ public class TableStorage {
   private final Catalog catalog;
   private final StorageManager storageManager;
 
-  public TableStorage(Path path, StorageConfig storage, Catalog catalog, CachePool cachePool) {
+  public TableStorage(Path path, StorageConfig storage, Catalog catalog, CachePool cachePool, Indexer indexer) {
     this.catalog = catalog;
-    this.storageManager = new ImmutableFileStorageManager(path, storage, cachePool);
+    this.storageManager = new ImmutableFileStorageManager(path, storage, cachePool, indexer);
 
     try {
       for (long tableId : storageManager.list()) {

@@ -44,6 +44,11 @@ public abstract class ImmutableFileFormat {
     this.name = Objects.requireNonNull(name);
     this.config = Objects.requireNonNull(config);
     this.cachePool = Objects.requireNonNull(cachePool);
+    List<AbstractConfig.ValidationProblem> problems = config.validate();
+    if (!problems.isEmpty()) {
+        throw new IllegalArgumentException(
+            "invalid config for format " + name + ": " + problems);
+    }
   }
 
   @Override

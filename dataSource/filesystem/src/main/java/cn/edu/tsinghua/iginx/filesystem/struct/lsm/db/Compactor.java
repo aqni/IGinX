@@ -146,7 +146,7 @@ public class Compactor {
             try (MemTableQueue.TookTable ignored = finalTable) {
               LOGGER.debug("start to flush table {}", tableId);
               tableStorage.flush(tableId, finalTable.getMemTable(), finalTable.isFinalTable());
-            } catch (IOException | PhysicalException e) {
+            } catch (Throwable e) {
               finalTable.fail();
               LOGGER.error("flush memtable {} failed", tableId, e);
             } finally {
@@ -171,7 +171,7 @@ public class Compactor {
       LOGGER.debug("flushed table {} is need to delete", tableId);
       try {
         tableStorage.deleteUncommitted(tableId);
-      } catch (IOException e) {
+      } catch (Throwable e) {
         LOGGER.error("delete memtable {} failed, giving up", tableId, e);
       }
     }

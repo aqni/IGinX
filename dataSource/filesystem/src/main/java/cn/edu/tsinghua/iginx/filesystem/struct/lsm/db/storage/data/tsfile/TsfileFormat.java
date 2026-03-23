@@ -23,6 +23,7 @@ import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Indexer;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.SparseImmutableFileFormat;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
@@ -59,7 +60,7 @@ public class TsfileFormat extends SparseImmutableFileFormat {
 
   private final TsfileConfig tsfileConfig;
 
-  public TsfileFormat(Config config, CachePool cachePool) {
+  public TsfileFormat(Config config, CachePool cachePool, Indexer indexer) {
     super("tsfile", TsfileConfig.of(config), cachePool);
     this.tsfileConfig = (TsfileConfig) this.config;
   }

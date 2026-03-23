@@ -23,6 +23,7 @@ import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
+import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.Indexer;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.DenseImmutableFileFormat;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
@@ -31,6 +32,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.RangeSet;
 import com.typesafe.config.Config;
 import org.apache.paimon.data.InternalRow;
+import org.apache.paimon.fileindex.FileIndexResult;
+import org.apache.paimon.fileindex.bitmap.BitmapIndexResult;
 import org.apache.paimon.format.*;
 import org.apache.paimon.format.parquet.ParquetFileFormat;
 import org.apache.paimon.format.parquet.ParquetUtil;
@@ -40,12 +43,19 @@ import org.apache.paimon.fs.local.LocalFileIO;
 import org.apache.paimon.options.MemorySize;
 import org.apache.paimon.options.Options;
 import org.apache.paimon.predicate.Predicate;
+import org.apache.paimon.predicate.PredicateBuilder;
 import org.apache.paimon.reader.FileRecordIterator;
 import org.apache.paimon.reader.FileRecordReader;
 import org.apache.paimon.shade.org.apache.parquet.column.statistics.Statistics;
+import org.apache.paimon.types.DataField;
+import org.apache.paimon.types.DataType;
 import org.apache.paimon.types.RowType;
 import org.apache.paimon.utils.Pair;
+import org.apache.paimon.utils.RoaringBitmap32;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -58,100 +68,153 @@ import java.util.stream.IntStream;
 
 public class ParquetFormat extends DenseImmutableFileFormat {
 
-  private final ParquetConfig parquetConfig;
-  private final ParquetFileFormat format;
+    private static final Logger LOGGER = LoggerFactory.getLogger(ParquetFormat.class);
 
-  public ParquetFormat(Config config, CachePool cachePool) {
-    super("parquet", ParquetConfig.of(config), cachePool);
-    this.parquetConfig = (ParquetConfig) this.config;
-    this.format = new ParquetFileFormat(new FileFormatFactory.FormatContext(
-        new Options(),
-        parquetConfig.readBatchSize,
-        parquetConfig.writeBatchSize,
-        MemorySize.ofBytes(parquetConfig.writeBatchMemory.toBytes()),
-        parquetConfig.getZstdLevel(),
-        null
-    ));
-  }
+    private final ParquetConfig parquetConfig;
+    private final ParquetFileFormat format;
+    private final ParquetFormatIndexer indexer;
 
-  @Override
-  protected void flush(Path dst, Table.SubTable subTable) throws IOException, PhysicalException {
-    org.apache.paimon.fs.Path paimonDst = new org.apache.paimon.fs.Path(dst.toUri());
-    try (RowStream rowStream = scanAll(subTable)) {
-      RowType schema = TypeUtils.toRowType(rowStream.getHeader());
-      FormatWriterFactory writerFactory = format.createWriterFactory(schema);
-      try (LocalFileIO localFileIO = LocalFileIO.create();
-           PositionOutputStream outputStream = localFileIO.newOutputStream(paimonDst, false);
-           FormatWriter writer = writerFactory.create(outputStream, parquetConfig.getCompression().name())) {
-        while (rowStream.hasNext()) {
-          Row row = rowStream.next();
-          InternalRow paimonRow = TypeUtils.toInternalRow(row);
-          writer.addElement(paimonRow);
-        }
-      }
+    public ParquetFormat(Config config, CachePool cachePool, Indexer indexer) {
+        super("parquet", ParquetConfig.of(config), cachePool);
+        this.parquetConfig = (ParquetConfig) this.config;
+        this.format = new ParquetFileFormat(new FileFormatFactory.FormatContext(
+                new Options(),
+                parquetConfig.readBatchSize,
+                parquetConfig.writeBatchSize,
+                MemorySize.ofBytes(parquetConfig.writeBatchMemory.toBytes()),
+                parquetConfig.getZstdLevel(),
+                null
+        ));
+        this.indexer = new ParquetFormatIndexer(parquetConfig.getIndex(), cachePool, indexer, format);
     }
-  }
 
-  @Override
-  protected Table.Meta loadMeta(Path src) throws IOException {
-    org.apache.paimon.fs.Path paimonDst = new org.apache.paimon.fs.Path(src.toUri());
-    try (LocalFileIO localFileIO = LocalFileIO.create()) {
-      FileStatus fileStatus = localFileIO.getFileStatus(paimonDst);
-      Pair<Map<String, Statistics<?>>, SimpleStatsExtractor.FileInfo> stats =
-          ParquetUtil.extractColumnStats(localFileIO, paimonDst, fileStatus.getLen());
-      ImmutableMap<Field, Table.Statistic> statisticMap = TypeUtils.toStatisticMap(stats.getLeft());
-      return new Table.Meta(statisticMap);
-    }
-  }
-
-  @Override
-  protected RowStream scan(Path src, List<Field> fields, Filter predicate) throws IOException {
-    org.apache.paimon.fs.Path paimonSrc = new org.apache.paimon.fs.Path(src.toUri());
-    Header header = new Header(Field.KEY, fields);
-    RowType projectedSchema = TypeUtils.toRowType(header);
-    InternalRow.FieldGetter[] fieldGetters = IntStream.range(0, projectedSchema.getFieldCount())
-        .mapToObj(i -> InternalRow.createFieldGetter(projectedSchema.getTypeAt(i), i))
-        .toArray(InternalRow.FieldGetter[]::new);
-
-    RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(predicate);
-    Predicate paimonPredicate = FilterUtils.toPaimonPredicate(rangeSet, projectedSchema);
-    List<Predicate> predicates = null;
-    if (paimonPredicate != null) {
-      predicates = Collections.singletonList(paimonPredicate);
-    }
-    FormatReaderFactory readerFactory = format.createReaderFactory(null, projectedSchema, predicates);
-
-    List<Row> rows = new ArrayList<>();
-    try (LocalFileIO localFileIO = LocalFileIO.create()) {
-      FileStatus fileStatus = localFileIO.getFileStatus(paimonSrc);
-      FormatReaderContext context = new FormatReaderContext(
-          localFileIO,
-          paimonSrc,
-          fileStatus.getLen(),
-          null
-      );
-      try (FileRecordReader<InternalRow> reader = readerFactory.createReader(context)) {
-        while (true) {
-          FileRecordIterator<InternalRow> paimonBatch = reader.readBatch();
-          if (paimonBatch == null) {
-            break;
-          }
-          while (true) {
-            InternalRow paimonRow = paimonBatch.next();
-            if (paimonRow == null) {
-              break;
+    @Override
+    protected void flush(Path dst, Table.SubTable subTable) throws IOException, PhysicalException {
+        org.apache.paimon.fs.Path paimonDst = new org.apache.paimon.fs.Path(dst.toUri());
+        RowType schema;
+        try (RowStream rowStream = scanAll(subTable)) {
+            schema = TypeUtils.toRowType(rowStream.getHeader());
+            FormatWriterFactory writerFactory = format.createWriterFactory(schema);
+            try (LocalFileIO localFileIO = LocalFileIO.create();
+                 PositionOutputStream outputStream = localFileIO.newOutputStream(paimonDst, false);
+                 FormatWriter writer = writerFactory.create(outputStream, parquetConfig.getCompression().name())) {
+                while (rowStream.hasNext()) {
+                    Row row = rowStream.next();
+                    InternalRow paimonRow = TypeUtils.toInternalRow(row);
+                    writer.addElement(paimonRow);
+                }
             }
-            Row row = TypeUtils.toRow(paimonRow, header, fieldGetters);
-            rows.add(row);
-          }
         }
-      }
+        if (parquetConfig.getIndex().getHitCountThreshold() == 0) {
+            for (DataField field : schema.getFields().subList(1, schema.getFieldCount())) {
+                try{
+                    indexer.buildIndex(dst, field.name(), field.type());
+                } catch (Throwable e){
+                    LOGGER.error("Failed to build index for field {} of subtable {}, skipping index building for this field",
+                            field.name(), dst.getFileName(), e);
+                }
+            }
+        }
     }
 
-    RowStream rowStream = new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, rows);
-    if (!Filters.isTrue(predicate)) {
-      rowStream = new FilterRowStreamWrapper(rowStream, predicate);
+    @Override
+    protected Table.Meta loadMeta(Path src) throws IOException {
+        org.apache.paimon.fs.Path paimonDst = new org.apache.paimon.fs.Path(src.toUri());
+        try (LocalFileIO localFileIO = LocalFileIO.create()) {
+            FileStatus fileStatus = localFileIO.getFileStatus(paimonDst);
+            Pair<Map<String, Statistics<?>>, SimpleStatsExtractor.FileInfo> stats =
+                    ParquetUtil.extractColumnStats(localFileIO, paimonDst, fileStatus.getLen());
+            ImmutableMap<Field, Table.Statistic> statisticMap = TypeUtils.toStatisticMap(stats.getLeft());
+            return new Table.Meta(statisticMap);
+        }
     }
-    return rowStream;
-  }
+
+    @Override
+    protected RowStream scan(Path src, List<Field> fields, Filter predicate) throws IOException {
+        org.apache.paimon.fs.Path paimonSrc = new org.apache.paimon.fs.Path(src.toUri());
+        Header header = new Header(Field.KEY, fields);
+        RowType projectedSchema = TypeUtils.toRowType(header);
+        InternalRow.FieldGetter[] fieldGetters = IntStream.range(0, projectedSchema.getFieldCount())
+                .mapToObj(i -> InternalRow.createFieldGetter(projectedSchema.getTypeAt(i), i))
+                .toArray(InternalRow.FieldGetter[]::new);
+
+        Predicate paimonPredicate = null;
+        RoaringBitmap32 selection = null;
+        try {
+            paimonPredicate = FilterUtils.toPaimonPredicate(predicate, header, projectedSchema);
+            FileIndexResult indexResult = indexer.useIndex(src, paimonPredicate);
+            if(!indexResult.remain()){
+                return new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, Collections.emptyList());
+            }
+            if(indexResult instanceof BitmapIndexResult){
+                selection = ((BitmapIndexResult) indexResult).get();
+            }
+        } catch (UnsupportedOperationException ignored) {
+            LOGGER.debug("Failed to convert filter {} to paimon predicate, will do filtering in memory", predicate);
+        }
+        FormatReaderFactory readerFactory = format.createReaderFactory(null, projectedSchema, PredicateBuilder.splitAnd(paimonPredicate));
+
+        List<Row> rows = new ArrayList<>();
+        long allReadRows = 0;
+        long rowsFilteredByOtherPredicate = 0;
+        RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(predicate);
+        try (LocalFileIO localFileIO = LocalFileIO.create()) {
+            FileStatus fileStatus = localFileIO.getFileStatus(paimonSrc);
+            FormatReaderContext context = new FormatReaderContext(
+                    localFileIO,
+                    paimonSrc,
+                    fileStatus.getLen(),
+                    selection
+            );
+            try (FileRecordReader<InternalRow> reader = readerFactory.createReader(context)) {
+                while (true) {
+                    FileRecordIterator<InternalRow> paimonBatch = reader.readBatch();
+                    if (paimonBatch == null) {
+                        break;
+                    }
+                    while (true) {
+                        InternalRow paimonRow = paimonBatch.next();
+                        if (paimonRow == null) {
+                            break;
+                        }
+                        allReadRows++;
+                        int rowPosition = Math.toIntExact(paimonBatch.returnedPosition());
+                        boolean filtered = !testPredicate(paimonRow, rowPosition, selection, paimonPredicate);
+                        if (filtered) {
+                            long key = (Long) fieldGetters[0].getFieldOrNull(paimonRow);
+                            if (rangeSet.contains(key)) {
+                                rowsFilteredByOtherPredicate++;
+                            }
+                            continue;
+                        }
+                        Row row = TypeUtils.toRow(paimonRow, header, fieldGetters);
+                        rows.add(row);
+                    }
+                }
+            }
+        }
+
+        if (paimonPredicate != null && allReadRows > 0) {
+            double selectivity = 1 - ((double) rowsFilteredByOtherPredicate / (double) allReadRows);
+            Map<String, DataType> predicateFields = FilterUtils.extractFields(paimonPredicate);
+            indexer.tryBuildIndex(src, predicateFields, selectivity);
+        }
+
+        RowStream rowStream = new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, rows);
+        if (paimonPredicate == null && !Filters.isTrue(predicate)) {
+            rowStream = new FilterRowStreamWrapper(rowStream, predicate);
+        }
+        return rowStream;
+    }
+
+    private static boolean testPredicate(
+            InternalRow paimonRow,
+            int position,
+            @Nullable RoaringBitmap32 selection,
+            @Nullable  Predicate predicate) {
+        if(selection != null && !selection.contains(position)) {
+            return false;
+        }
+        return predicate == null || predicate.test(paimonRow);
+    }
 }
