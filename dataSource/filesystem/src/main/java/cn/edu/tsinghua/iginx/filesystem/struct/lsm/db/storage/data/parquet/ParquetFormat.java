@@ -150,8 +150,8 @@ public class ParquetFormat extends DenseImmutableFileFormat {
             if(indexResult instanceof BitmapIndexResult){
                 selection = ((BitmapIndexResult) indexResult).get();
             }
-        } catch (UnsupportedOperationException ignored) {
-            LOGGER.debug("Failed to convert filter {} to paimon predicate, will do filtering in memory", predicate);
+        } catch (UnsupportedOperationException e) {
+            LOGGER.debug("Failed to convert filter {} to paimon predicate, will do filtering in memory", predicate, e);
         }
         FormatReaderFactory readerFactory = format.createReaderFactory(null, projectedSchema, PredicateBuilder.splitAnd(paimonPredicate));
 
