@@ -2,18 +2,16 @@ package cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.storage.data.parquet;
 
 import cn.edu.tsinghua.iginx.engine.shared.data.Value;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.Header;
+import cn.edu.tsinghua.iginx.engine.shared.expr.BaseExpression;
+import cn.edu.tsinghua.iginx.engine.shared.expr.ConstantExpression;
+import cn.edu.tsinghua.iginx.engine.shared.expr.Expression;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.*;
 import cn.edu.tsinghua.iginx.thrift.DataType;
-import com.google.common.collect.BoundType;
-import com.google.common.collect.Range;
-import com.google.common.collect.RangeSet;
 import org.apache.paimon.data.BinaryString;
 import org.apache.paimon.predicate.*;
 import org.apache.paimon.types.DataField;
 import org.apache.paimon.types.RowType;
 
-import javax.annotation.Nullable;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class FilterUtils {
@@ -33,13 +31,31 @@ public class FilterUtils {
                 return toPaimonPredicate((OrFilter) filter, header, projectedSchema);
             case In:
                 return toPaimonPredicate((InFilter) filter, header, projectedSchema);
+            case Expr:
+                return toPaimonPredicate(toValueFilter((ExprFilter)filter), header, projectedSchema);
             case Path:
             case Bool:
-            case Expr:
             case Not:
             default:
                 throw new UnsupportedOperationException("Unsupported filter type: " + filter.getType());
         }
+    }
+
+    private static ValueFilter toValueFilter(ExprFilter filter) {
+        Expression exprA = filter.getExpressionA();
+        Expression exprB = filter.getExpressionB();
+        BaseExpression baseExpr;
+        ConstantExpression constantExpr;
+        if(exprA instanceof ConstantExpression && exprB instanceof BaseExpression) {
+            baseExpr = (BaseExpression) exprB;
+            constantExpr = (ConstantExpression) exprA;
+        } else if(exprA instanceof BaseExpression && exprB instanceof ConstantExpression) {
+            baseExpr = (BaseExpression) exprA;
+            constantExpr = (ConstantExpression) exprB;
+        } else {
+            throw new UnsupportedOperationException("Unsupported expression filter: " + filter);
+        }
+        return new ValueFilter(baseExpr.getPathName(), filter.getOp(), new Value(constantExpr.getValue()));
     }
 
     private static Predicate toPaimonPredicate(KeyFilter filter, RowType projectedSchema) {
