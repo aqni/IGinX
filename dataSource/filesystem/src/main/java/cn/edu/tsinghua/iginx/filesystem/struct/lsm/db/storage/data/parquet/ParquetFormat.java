@@ -142,6 +142,7 @@ public class ParquetFormat extends DenseImmutableFileFormat {
         RoaringBitmap32 selection = null;
         try {
             paimonPredicate = FilterUtils.toPaimonPredicate(predicate, header, projectedSchema);
+            paimonPredicate = PredicateDeduper.simplify(paimonPredicate);
             FileIndexResult indexResult = indexer.useIndex(src, paimonPredicate);
             if(!indexResult.remain()){
                 return new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, Collections.emptyList());

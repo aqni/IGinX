@@ -80,13 +80,20 @@ public class FilterUtils {
         for (Value value : filter.getValues()) {
             values.add(getJavaObject(header, index, value));
         }
+        DataField field = projectedSchema.getFields().get(index);
         switch (filter.getInOp()) {
             case IN_AND:
             case IN_OR:
-                return builder.in(index, values);
+                if(values.size() == 1) {
+                    return builder.equal(index, values.get(0));
+                }
+                return new LeafPredicate(In.INSTANCE, field.type(), index, field.name(), values);
             case NOT_IN_AND:
             case NOT_IN_OR:
-                return builder.notIn(index, values);
+                if(values.size() == 1) {
+                    return builder.notEqual(index, values.get(0));
+                }
+                return new LeafPredicate(NotIn.INSTANCE, field.type(), index, field.name(), values);
             default:
                 throw new UnsupportedOperationException("Unsupported InOp: " + filter.getInOp());
         }
