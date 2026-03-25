@@ -102,41 +102,54 @@ public class ScanExecutor {
     }
 
     private void executePlans(List<TablePlan> plans, ResultTableBuilder builder) throws PhysicalException, IOException {
-        // 1. 使用 ListeningExecutorService 包装原有线程池
-
-        List<SubTablePlan> sequentialPlans = new ArrayList<>();
-        List<CompletableFuture<Void>> parallelFutures = new ArrayList<>();
-
-        // 2. 任务分类
+        // 1. 数据分类：使用 Queue 方便弹出
+        Queue<SubTablePlan> parallelQueue = new ArrayDeque<>();
+        Queue<SubTablePlan> sequentialPlans = new ArrayDeque<>();
         for (TablePlan plan : plans) {
-            for (SubTablePlan subTablePlan : plan.getSubTablePlans()) {
-                if (!subTablePlan.isOverlap() && scannerPermits.tryAcquire()) {
-                    CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                        try {
-                            LOGGER.debug("Executing subTablePlan of {} in parallel: {}", name, subTablePlan);
-                            executePlan(subTablePlan, builder);
-                        } catch (PhysicalException | IOException e) {
-                            throw new CompletionException(e);
-                        } finally {
-                            scannerPermits.release();
-                        }
-                    }, executor);
-                    parallelFutures.add(future);
-                } else {
-                    sequentialPlans.add(subTablePlan);
+            for (SubTablePlan sub : plan.getSubTablePlans()) {
+                if (!sub.isOverlap()) {
+                    parallelQueue.offer(sub);
+                } else{
+                    sequentialPlans.add(sub);
                 }
             }
         }
 
-        // 3. 执行同步任务
-        for (SubTablePlan subTablePlan : sequentialPlans) {
-            executePlan(subTablePlan, builder);
+        // 2. 贪婪异步
+        List<CompletableFuture<Void>> parallelFutures = new ArrayList<>();
+        while(true){
+            SubTablePlan currPlan;
+            if(!sequentialPlans.isEmpty()){
+                currPlan = sequentialPlans.poll();
+            } else if(!parallelQueue.isEmpty()){
+                currPlan = parallelQueue.poll();
+            } else {
+                break;
+            }
+            while (!parallelQueue.isEmpty() && scannerPermits.tryAcquire()) {
+                SubTablePlan parallelPlan = parallelQueue.poll();
+                parallelFutures.add(CompletableFuture.runAsync(() -> {
+                    try {
+                        LOGGER.debug("Executing subTablePlan of {} in parallel: {}", name, parallelPlan);
+                        executePlan(parallelPlan, builder);
+                    } catch (PhysicalException | IOException e) {
+                        throw new CompletionException(e);
+                    } finally {
+                        scannerPermits.release();
+                    }
+                }, executor));
+            }
+            LOGGER.debug("Executing subTablePlan of {} in sequence: {}", name, currPlan);
+            executePlan(currPlan, builder);
         }
 
-        try {
-            CompletableFuture.allOf(parallelFutures.toArray(new CompletableFuture[0])).join();
-        } catch (CompletionException e) {
-            throw new PhysicalException(e);
+        // 3. 统一等待
+        if (!parallelFutures.isEmpty()) {
+            try {
+                CompletableFuture.allOf(parallelFutures.toArray(new CompletableFuture[0])).join();
+            } catch (CompletionException e) {
+                throw new PhysicalException(e);
+            }
         }
     }
 
