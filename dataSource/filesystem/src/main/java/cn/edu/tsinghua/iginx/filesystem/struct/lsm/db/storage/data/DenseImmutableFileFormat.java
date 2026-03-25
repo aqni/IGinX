@@ -94,6 +94,13 @@ public abstract class DenseImmutableFileFormat extends ImmutableFileFormat {
     }
 
     @Override
+    public String toString() {
+      return "DenseSubTable{" +
+              "path=" + path +
+              '}';
+    }
+
+    @Override
     public Table.Meta getMeta() throws IOException {
       return getOrLoadMeta(path);
     }

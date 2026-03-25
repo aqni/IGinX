@@ -83,6 +83,14 @@ public abstract class SparseImmutableFileFormat extends ImmutableFileFormat {
     }
 
     @Override
+    public String toString() {
+      return "DenseSubTable{" +
+              "srcWithSuffix=" + srcWithSuffix +
+              ", subTableName='" + subTableName + '\'' +
+              '}';
+    }
+
+    @Override
     public Table.Meta getMeta() throws IOException {
       return loadMeta(srcWithSuffix, subTableName);
     }

@@ -12,7 +12,8 @@ import java.util.stream.Collectors;
 
 public class PredicateDeduper {
 
-    public static Predicate simplify(@Nullable Predicate predicate) {
+    @Nullable
+    public static  Predicate simplify(@Nullable Predicate predicate) {
         if (predicate == null) return null;
 
         // 1. 获取所有的 And 节点

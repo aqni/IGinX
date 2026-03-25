@@ -40,12 +40,15 @@ public class SharedConfig extends AbstractConfig {
 
   @Optional int memtableQueue = 4;
 
+  @Optional int scanners = 8;
+
   @Override
   public List<ValidationProblem> validate() {
     List<ValidationProblem> problems = new ArrayList<>();
     validateSubConfig(problems, Fields.cache, cache);
     validateInRange(problems, Fields.writers, Range.greaterThan(0), writers);
     validateInRange(problems, Fields.memtableQueue, Range.greaterThan(0), memtableQueue);
+    validateInRange(problems, Fields.scanners, Range.atLeast(0), scanners);
     return problems;
   }
 }

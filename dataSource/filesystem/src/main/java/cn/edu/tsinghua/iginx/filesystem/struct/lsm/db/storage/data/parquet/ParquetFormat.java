@@ -138,11 +138,12 @@ public class ParquetFormat extends DenseImmutableFileFormat {
                 .mapToObj(i -> InternalRow.createFieldGetter(projectedSchema.getTypeAt(i), i))
                 .toArray(InternalRow.FieldGetter[]::new);
 
-        Predicate paimonPredicate = null;
+        boolean[] needPostFilter = new boolean[]{false};
+
+        Predicate paimonPredicate = FilterUtils.toPaimonPredicate(predicate, header, projectedSchema, ()-> needPostFilter[0] = true);
+        paimonPredicate = PredicateDeduper.simplify(paimonPredicate);
         RoaringBitmap32 selection = null;
-        try {
-            paimonPredicate = FilterUtils.toPaimonPredicate(predicate, header, projectedSchema);
-            paimonPredicate = PredicateDeduper.simplify(paimonPredicate);
+        if(paimonPredicate!= null){
             FileIndexResult indexResult = indexer.useIndex(src, paimonPredicate);
             if(!indexResult.remain()){
                 return new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, Collections.emptyList());
@@ -150,9 +151,8 @@ public class ParquetFormat extends DenseImmutableFileFormat {
             if(indexResult instanceof BitmapIndexResult){
                 selection = ((BitmapIndexResult) indexResult).get();
             }
-        } catch (UnsupportedOperationException e) {
-            LOGGER.debug("Failed to convert filter {} to paimon predicate, will do filtering in memory", predicate, e);
         }
+
         FormatReaderFactory readerFactory = format.createReaderFactory(null, projectedSchema, PredicateBuilder.splitAnd(paimonPredicate));
 
         List<Row> rows = new ArrayList<>();
@@ -202,7 +202,7 @@ public class ParquetFormat extends DenseImmutableFileFormat {
         }
 
         RowStream rowStream = new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, rows);
-        if (paimonPredicate == null && !Filters.isTrue(predicate)) {
+        if (needPostFilter[0] && !Filters.isTrue(predicate)) {
             rowStream = new FilterRowStreamWrapper(rowStream, predicate);
         }
         return rowStream;

@@ -7,11 +7,13 @@ import cn.edu.tsinghua.iginx.engine.shared.expr.ConstantExpression;
 import cn.edu.tsinghua.iginx.engine.shared.expr.Expression;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.*;
 import cn.edu.tsinghua.iginx.thrift.DataType;
+import org.apache.arrow.util.Preconditions;
 import org.apache.paimon.data.BinaryString;
 import org.apache.paimon.predicate.*;
 import org.apache.paimon.types.DataField;
 import org.apache.paimon.types.RowType;
 
+import javax.annotation.Nullable;
 import java.util.*;
 
 public class FilterUtils {
@@ -19,28 +21,36 @@ public class FilterUtils {
     private FilterUtils() {
     }
 
-    public static Predicate toPaimonPredicate(Filter filter, Header header, RowType projectedSchema) {
+    @Nullable
+    public static Predicate toPaimonPredicate(Filter filter, Header header, RowType projectedSchema, Runnable onUnsupported) {
         switch (filter.getType()) {
             case Key:
                 return toPaimonPredicate((KeyFilter) filter, projectedSchema);
             case Value:
-                return toPaimonPredicate((ValueFilter) filter, header, projectedSchema);
+                return toPaimonPredicate((ValueFilter) filter, header, projectedSchema, onUnsupported);
             case And:
-                return toPaimonPredicate((AndFilter) filter, header, projectedSchema);
+                return toPaimonPredicate((AndFilter) filter, header, projectedSchema, onUnsupported);
             case Or:
-                return toPaimonPredicate((OrFilter) filter, header, projectedSchema);
+                return toPaimonPredicate((OrFilter) filter, header, projectedSchema, onUnsupported);
             case In:
-                return toPaimonPredicate((InFilter) filter, header, projectedSchema);
+                return toPaimonPredicate((InFilter) filter, header, projectedSchema, onUnsupported);
             case Expr:
-                return toPaimonPredicate(toValueFilter((ExprFilter)filter), header, projectedSchema);
+                ValueFilter valueFilter = toValueFilter((ExprFilter) filter);
+                if(valueFilter == null) {
+                    onUnsupported.run();
+                    return null;
+                }
+                return toPaimonPredicate(valueFilter, header, projectedSchema, onUnsupported);
             case Path:
             case Bool:
             case Not:
             default:
-                throw new UnsupportedOperationException("Unsupported filter type: " + filter.getType());
+                onUnsupported.run();
+                return null;
         }
     }
 
+    @Nullable
     private static ValueFilter toValueFilter(ExprFilter filter) {
         Expression exprA = filter.getExpressionA();
         Expression exprB = filter.getExpressionB();
@@ -53,7 +63,7 @@ public class FilterUtils {
             baseExpr = (BaseExpression) exprA;
             constantExpr = (ConstantExpression) exprB;
         } else {
-            throw new UnsupportedOperationException("Unsupported expression filter: " + filter);
+            return null;
         }
         return new ValueFilter(baseExpr.getPathName(), filter.getOp(), new Value(constantExpr.getValue()));
     }
@@ -88,10 +98,15 @@ public class FilterUtils {
         }
     }
 
-    private static Predicate toPaimonPredicate(InFilter filter, Header header, RowType projectedSchema) {
+    @Nullable
+    private static Predicate toPaimonPredicate(InFilter filter, Header header, RowType projectedSchema, Runnable onUnsupported) {
         PredicateBuilder builder = new PredicateBuilder(projectedSchema);
 
-        int index = getIndex(filter.getPath(), header);
+        Integer index = getIndex(filter.getPath(), header);
+        if(index == null) {
+            onUnsupported.run();
+            return null;
+        }
         List<Object> values = new ArrayList<>();
         for (Value value : filter.getValues()) {
             values.add(getJavaObject(header, index, value));
@@ -115,10 +130,15 @@ public class FilterUtils {
         }
     }
 
-    private static Predicate toPaimonPredicate(ValueFilter filter, Header header, RowType projectedSchema) {
+    @Nullable
+    private static Predicate toPaimonPredicate(ValueFilter filter, Header header, RowType projectedSchema, Runnable onUnsupported) {
         PredicateBuilder builder = new PredicateBuilder(projectedSchema);
 
-        int index = getIndex(filter.getPath(), header);
+        Integer index = getIndex(filter.getPath(), header);
+        if(index == null) {
+            onUnsupported.run();
+            return null;
+        }
         Object value = getJavaObject(header, index, filter.getValue());
         switch (filter.getOp()) {
             case GE:
@@ -148,35 +168,47 @@ public class FilterUtils {
         }
     }
 
-    private static Predicate toPaimonPredicate(AndFilter filter, Header header, RowType projectedSchema) {
+    @Nullable
+    private static Predicate toPaimonPredicate(AndFilter filter, Header header, RowType projectedSchema, Runnable onUnsupported) {
         List<Predicate> predicates = new ArrayList<>();
+        Preconditions.checkArgument(!filter.getChildren().isEmpty(), "OrFilter must have at least one child");
         for (Filter child : filter.getChildren()) {
-            predicates.add(toPaimonPredicate(child, header, projectedSchema));
+            Predicate childPredicate = toPaimonPredicate(child, header, projectedSchema, onUnsupported);
+            if(childPredicate == null) {
+                onUnsupported.run();
+                continue;
+            }
+            predicates.add(childPredicate);
         }
         if(predicates.isEmpty()) {
-            throw new UnsupportedOperationException("AndFilter has no children");
+            return null;
         }
         return PredicateBuilder.and(predicates);
     }
 
-    private static Predicate toPaimonPredicate(OrFilter filter, Header header, RowType projectedSchema) {
+    @Nullable
+    private static Predicate toPaimonPredicate(OrFilter filter, Header header, RowType projectedSchema, Runnable onUnsupported) {
         List<Predicate> predicates = new ArrayList<>();
+        Preconditions.checkArgument(!filter.getChildren().isEmpty(), "OrFilter must have at least one child");
         for (Filter child : filter.getChildren()) {
-            predicates.add(toPaimonPredicate(child, header, projectedSchema));
-        }
-        if(predicates.isEmpty()) {
-            throw new UnsupportedOperationException("OrFilter has no children");
+            Predicate childPredicate = toPaimonPredicate(child, header, projectedSchema, onUnsupported);
+            if(childPredicate == null) {
+                onUnsupported.run();
+                return null;
+            }
+            predicates.add(childPredicate);
         }
         return PredicateBuilder.or(predicates);
     }
 
-    private static int getIndex(String pattern, Header header) {
+    @Nullable
+    private static Integer getIndex(String pattern, Header header) {
         List<Integer> indices = header.patternIndexOf(pattern);
         if (indices.isEmpty()) {
-            throw new UnsupportedOperationException("Path pattern " + pattern + " does not match any field in header " + header);
+            return null;
         }
         if (indices.size() > 1) {
-            throw new UnsupportedOperationException("Path pattern " + pattern + " matches multiple fields in header " + header);
+            return null;
         }
         return indices.get(0) + 1;
     }

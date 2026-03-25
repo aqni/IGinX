@@ -35,6 +35,8 @@ public class Shared implements Closeable {
 
   private final Semaphore memTablePermits;
 
+  private final Semaphore scannerPermits;
+
   private final CachePool cachePool;
 
   private final BufferAllocator allocator;
@@ -43,11 +45,13 @@ public class Shared implements Closeable {
       DBConfig config,
       Semaphore flusherPermits,
       Semaphore memTablePermits,
+      Semaphore scannerPermits,
       CachePool cachePool,
       BufferAllocator allocator) {
     this.config = config;
     this.flusherPermits = flusherPermits;
     this.memTablePermits = memTablePermits;
+    this.scannerPermits = scannerPermits;
     this.cachePool = cachePool;
     this.allocator = allocator;
   }
@@ -56,9 +60,10 @@ public class Shared implements Closeable {
     SharedConfig sharedConfig = config.getShared();
     Semaphore flusherPermits = new Semaphore(sharedConfig.getWriters(), true);
     Semaphore memTablePermits = new Semaphore(sharedConfig.getMemtableQueue(), true);
+    Semaphore scannerPermits = new Semaphore(sharedConfig.getScanners(), true);
     CachePool cachePool = new CachePool(sharedConfig.getCache());
     BufferAllocator allocator = new RootAllocator();
-    return new Shared(config.getDb(), flusherPermits, memTablePermits, cachePool, allocator);
+    return new Shared(config.getDb(), flusherPermits, memTablePermits, scannerPermits, cachePool, allocator);
   }
 
   public DBConfig getConfig() {
@@ -71,6 +76,10 @@ public class Shared implements Closeable {
 
   public Semaphore getMemTablePermits() {
     return memTablePermits;
+  }
+
+  public Semaphore getScannerPermits() {
+    return scannerPermits;
   }
 
   public CachePool getCachePool() {
@@ -86,4 +95,6 @@ public class Shared implements Closeable {
     cachePool.asMap().clear();
     allocator.close();
   }
+
+
 }

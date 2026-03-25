@@ -23,181 +23,240 @@ import cn.edu.tsinghua.iginx.engine.physical.exception.PhysicalException;
 import cn.edu.tsinghua.iginx.engine.shared.data.read.*;
 import cn.edu.tsinghua.iginx.engine.shared.operator.filter.Filter;
 import cn.edu.tsinghua.iginx.filesystem.common.Filters;
-import cn.edu.tsinghua.iginx.filesystem.struct.lsm.FileLsm;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.FilterRangeUtils;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.Table;
 import cn.edu.tsinghua.iginx.filesystem.struct.lsm.db.util.event.TableReadEvent;
 import com.google.common.collect.*;
-import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+import lombok.Data;
 import lombok.Value;
 import org.apache.arrow.util.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class ScanExecutor {
 
-  public static RowStream scan(List<Table> allHitTables, List<Field> fields, Filter filter)
-      throws IOException, PhysicalException {
-    ResultTableBuilder builder = new ResultTableBuilder(fields);
-    RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(filter);
-    Filter rangeFilter = FilterRangeUtils.filterOf(rangeSet);
-    Filter filterWithoutRange = FilterRangeUtils.withoutKeyRangeSet(filter);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ScanExecutor.class);
 
-    List<TablePlan> plans = new ArrayList<>();
-    for(Table table : allHitTables){
-      List<SubTablePlan> subTablePlans = new ArrayList<>();
-      List<Table.SubTable> subTables = table.getSubTables();
-      for(int subTableId=0; subTableId<subTables.size(); subTableId++) {
-        Table.SubTable subTable = subTables.get(subTableId);
-        Table.Meta meta = subTable.getMeta();
-        ImmutableMap<Field, Table.Statistic> fieldStats = meta.getFieldStats();
-        List<Field> hitFields =
-                fields.stream().filter(fieldStats::containsKey).collect(Collectors.toList());
-        RangeSet<Long> hitRangeSet = TreeRangeSet.create();
-        fieldStats.entrySet().stream()
-                .filter(e -> hitFields.contains(e.getKey()))
-                .map(Map.Entry::getValue)
-                .map(Table.Statistic::getKeyRange)
-                .forEach(hitRangeSet::add);
-        hitRangeSet.removeAll(rangeSet.complement());
-        if(!hitFields.isEmpty() && !hitRangeSet.isEmpty()){
-          SubTablePlan subTablePlan = new SubTablePlan(subTableId, subTable, hitFields, hitRangeSet);
-          subTablePlans.add(subTablePlan);
-        }
-      }
-      TablePlan plan = new TablePlan(table, subTablePlans);
-      plans.add(plan);
+    private final String name;
+    private final Semaphore scannerPermits;
+    private final ExecutorService executor = Executors.newCachedThreadPool();
+
+    public ScanExecutor(String name, Semaphore scannerPermits) {
+        this.name = name;
+        this.scannerPermits = scannerPermits;
     }
 
-    IdentityHashMap<SubTablePlan, Boolean> overlapMap = checkSubTablePlanOverlap(plans);
+    public RowStream scan(List<Table> allHitTables, List<Field> fields, Filter filter)
+            throws PhysicalException, IOException {
 
-    boolean allPushDown = true;
-    for(TablePlan plan : plans) {
-      for (SubTablePlan subTablePlan : plan.getSubTablePlans()) {
-        boolean hasOverlap = overlapMap.get(subTablePlan);
-        List<Field> hitFields = subTablePlan.getFields();
-        boolean canPushDown = !hasOverlap && hitFields.equals(fields);
-
-        Filter subTableFilter = canPushDown ? filter : rangeFilter;
-        TableReadEvent event = new TableReadEvent();
-        event.tableName = plan.getTable().toString();
-        event.subTableId = subTablePlan.getSubTableId();
-        event.begin();
-        try (RowStream rowStream = subTablePlan.getSubTable().scan(hitFields, subTableFilter)) {
-          int rows = builder.put(rowStream);
-          event.end();
-          event.projectedSchema = rowStream.getHeader().toString();
-          event.numRows=rows;
-          if(rows > 0 && !canPushDown){
-            allPushDown = false;
-          }
-        }finally {
-          event.commit();
-        }
-      }
-    }
-
-    RowStream result = builder.build();
-    if (!allPushDown && !Filters.isTrue(filterWithoutRange)) {
-      result = new FilterRowStreamWrapper(result, filterWithoutRange);
-    }
-    return result;
-  }
-
-  private static IdentityHashMap<SubTablePlan, Boolean> checkSubTablePlanOverlap(List<TablePlan> plans){
-    IdentityHashMap<SubTablePlan, Boolean> overlapMap = new IdentityHashMap<>();
-
-    Map<Field, RangeMap<Long, SubTablePlan>> fieldToRangeMap = new HashMap<>();
-    for(TablePlan plan : plans) {
-      for (SubTablePlan subTablePlan : plan.getSubTablePlans()) {
-        overlapMap.put(subTablePlan, false);
-
-        for (Field field : subTablePlan.getFields()) {
-          RangeMap<Long, SubTablePlan> rangeMap = fieldToRangeMap.computeIfAbsent(field, f -> TreeRangeMap.create());
-          for (Range<Long> range : subTablePlan.getRange().asRanges()) {
-            RangeMap<Long, SubTablePlan> overlapping = rangeMap.subRangeMap(range);
-            for(SubTablePlan other : overlapping.asMapOfRanges().values()) {
-              overlapMap.put(subTablePlan, true);
-              overlapMap.put(other, true);
+        List<TablePlan> plans = new ArrayList<>();
+        RangeSet<Long> rangeSet = FilterRangeUtils.rangeSetOf(filter);
+        for (Table table : allHitTables) {
+            List<SubTablePlan> subTablePlans = new ArrayList<>();
+            List<Table.SubTable> subTables = table.getSubTables();
+            for (Table.SubTable subTable : subTables) {
+                Table.Meta meta = subTable.getMeta();
+                ImmutableMap<Field, Table.Statistic> fieldStats = meta.getFieldStats();
+                List<Field> hitFields =
+                        fields.stream().filter(fieldStats::containsKey).collect(Collectors.toList());
+                RangeSet<Long> hitRangeSet = TreeRangeSet.create();
+                fieldStats.entrySet().stream()
+                        .filter(e -> hitFields.contains(e.getKey()))
+                        .map(Map.Entry::getValue)
+                        .map(Table.Statistic::getKeyRange)
+                        .forEach(hitRangeSet::add);
+                hitRangeSet.removeAll(rangeSet.complement());
+                if (!hitFields.isEmpty() && !hitRangeSet.isEmpty()) {
+                    Filter defaultRangeFilter = FilterRangeUtils.filterOf(hitRangeSet);
+                    SubTablePlan subTablePlan = new SubTablePlan(subTable, hitFields, hitRangeSet, defaultRangeFilter);
+                    subTablePlans.add(subTablePlan);
+                }
             }
-            rangeMap.put(range, subTablePlan);
-          }
+            TablePlan plan = new TablePlan(table, subTablePlans);
+            plans.add(plan);
         }
-      }
-    }
-    return overlapMap;
-  }
 
-  private static class ResultTableBuilder {
+        analyseOverlap(plans);
+        pushdownFilter(plans, fields, filter);
 
-    private final Header header;
-    private final Object2IntOpenHashMap<cn.edu.tsinghua.iginx.engine.shared.data.read.Field>
-        indexOfField = new Object2IntOpenHashMap<>();
-    private final Long2ObjectOpenHashMap<Object[]> keyToValues = new Long2ObjectOpenHashMap<>();
+        ResultTableBuilder builder = new ResultTableBuilder(fields);
+        executePlans(plans, builder);
 
-    public ResultTableBuilder(List<Field> fields) {
-      this.header = new Header(Field.KEY, fields);
-      IntStream.range(0, fields.size()).forEach(i -> indexOfField.put(header.getField(i), i));
-      Preconditions.checkArgument(indexOfField.size() == fields.size());
-    }
-
-    public int put(RowStream rowStream) throws PhysicalException {
-      Header header = rowStream.getHeader();
-      Preconditions.checkArgument(header.hasKey());
-      int[] dstIndex = new int[header.getFieldSize()];
-      for (int i = 0; i < dstIndex.length; i++) {
-        Preconditions.checkArgument(indexOfField.containsKey(header.getField(i)));
-        dstIndex[i] = indexOfField.getInt(header.getField(i));
-      }
-      int count = 0;
-      while (rowStream.hasNext()) {
-        Row row = rowStream.next();
-        long key = row.getKey();
-        Object[] values = row.getValues();
-        Object[] dstValues = keyToValues.computeIfAbsent(key, k -> new Object[indexOfField.size()]);
-        for (int i = 0; i < dstIndex.length; i++) {
-          Object value = values[i];
-          if (value != null) {
-            dstValues[dstIndex[i]] = value;
-          }
+        boolean allPushDown = plans.stream().flatMap(p -> p.getSubTablePlans().stream())
+                .filter(p -> p.getResultRows() > 0)
+                .allMatch(st -> st.getFilter().equals(filter));
+        RowStream result = builder.build();
+        Filter filterWithoutRange = FilterRangeUtils.withoutKeyRangeSet(filter);
+        if (!allPushDown && !Filters.isTrue(filterWithoutRange)) {
+            result = new FilterRowStreamWrapper(result, filterWithoutRange);
         }
-        count++;
-      }
-      return count;
+        return result;
     }
 
-    public cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table build() {
-      List<Row> rows =
-          keyToValues.long2ObjectEntrySet().stream()
-              .sorted(Comparator.comparingLong(Long2ObjectMap.Entry::getLongKey))
-              .map(e -> new Row(header, e.getLongKey(), e.getValue()))
-              .collect(Collectors.toList());
-      keyToValues.clear();
-      return new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, rows);
+    private void executePlans(List<TablePlan> plans, ResultTableBuilder builder) throws PhysicalException, IOException {
+        // 1. 使用 ListeningExecutorService 包装原有线程池
+
+        List<SubTablePlan> sequentialPlans = new ArrayList<>();
+        List<CompletableFuture<Void>> parallelFutures = new ArrayList<>();
+
+        // 2. 任务分类
+        for (TablePlan plan : plans) {
+            for (SubTablePlan subTablePlan : plan.getSubTablePlans()) {
+                if (!subTablePlan.isOverlap() && scannerPermits.tryAcquire()) {
+                    CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                        try {
+                            LOGGER.debug("Executing subTablePlan of {} in parallel: {}", name, subTablePlan);
+                            executePlan(subTablePlan, builder);
+                        } catch (PhysicalException | IOException e) {
+                            throw new CompletionException(e);
+                        } finally {
+                            scannerPermits.release();
+                        }
+                    }, executor);
+                    parallelFutures.add(future);
+                } else {
+                    sequentialPlans.add(subTablePlan);
+                }
+            }
+        }
+
+        // 3. 执行同步任务
+        for (SubTablePlan subTablePlan : sequentialPlans) {
+            executePlan(subTablePlan, builder);
+        }
+
+        try {
+            CompletableFuture.allOf(parallelFutures.toArray(new CompletableFuture[0])).join();
+        } catch (CompletionException e) {
+            throw new PhysicalException(e);
+        }
     }
-  }
 
-  @Value
-  private static class TablePlan {
-    @lombok.NonNull
-    Table table;
-    @lombok.NonNull
-    List<SubTablePlan> subTablePlans;
-  }
+    private static void executePlan(SubTablePlan subTablePlan, ResultTableBuilder builder) throws PhysicalException, IOException {
+        TableReadEvent event = new TableReadEvent();
+        event.tableName = subTablePlan.getSubTable().toString();
+        event.begin();
+        try (RowStream rowStream = subTablePlan.getSubTable().scan(subTablePlan.getFields(), subTablePlan.getFilter())) {
+            int rows = builder.put(rowStream);
+            event.end();
+            event.projectedSchema = rowStream.getHeader().toString();
+            event.numRows = rows;
+            subTablePlan.setResultRows(rows);
+        } finally {
+            event.commit();
+        }
+    }
 
-  @Value
-  private static class SubTablePlan {
-    int subTableId;
-    @lombok.NonNull
-    Table.SubTable subTable;
-    @lombok.NonNull
-    List<Field> fields;
-    @lombok.NonNull
-    RangeSet<Long> range;
-  }
+    private static void analyseOverlap(List<TablePlan> plans) {
+        Map<Field, RangeMap<Long, SubTablePlan>> fieldToRangeMap = new HashMap<>();
+        for (TablePlan plan : plans) {
+            for (SubTablePlan subTablePlan : plan.getSubTablePlans()) {
+                subTablePlan.setOverlap(false);
+                for (Field field : subTablePlan.getFields()) {
+                    RangeMap<Long, SubTablePlan> rangeMap = fieldToRangeMap.computeIfAbsent(field, f -> TreeRangeMap.create());
+                    for (Range<Long> range : subTablePlan.getRange().asRanges()) {
+                        RangeMap<Long, SubTablePlan> overlapping = rangeMap.subRangeMap(range);
+                        for (SubTablePlan other : overlapping.asMapOfRanges().values()) {
+                            subTablePlan.setOverlap(true);
+                            other.setOverlap(true);
+                        }
+                        rangeMap.put(range, subTablePlan);
+                    }
+                }
+            }
+        }
+
+    }
+
+    private static void pushdownFilter(List<TablePlan> plans, List<Field> fields, Filter filter) {
+        for (TablePlan plan : plans) {
+            for (SubTablePlan subTablePlan : plan.getSubTablePlans()) {
+                if (!subTablePlan.isOverlap()) {
+                    if (subTablePlan.getFields().size() == fields.size()) {
+                        subTablePlan.setFilter(filter);
+                    }
+                }
+            }
+        }
+    }
+
+    @ThreadSafe
+    private static class ResultTableBuilder {
+
+        private final Header header;
+        private final Object2IntOpenHashMap<cn.edu.tsinghua.iginx.engine.shared.data.read.Field>
+                indexOfField = new Object2IntOpenHashMap<>();
+        private final ConcurrentHashMap<Long, Object[]> keyToValues = new ConcurrentHashMap<>();
+
+        public ResultTableBuilder(List<Field> fields) {
+            this.header = new Header(Field.KEY, fields);
+            IntStream.range(0, fields.size()).forEach(i -> indexOfField.put(header.getField(i), i));
+            Preconditions.checkArgument(indexOfField.size() == fields.size());
+        }
+
+        public int put(RowStream rowStream) throws PhysicalException {
+            Header header = rowStream.getHeader();
+            Preconditions.checkArgument(header.hasKey());
+            int[] dstIndex = new int[header.getFieldSize()];
+            for (int i = 0; i < dstIndex.length; i++) {
+                Preconditions.checkArgument(indexOfField.containsKey(header.getField(i)));
+                dstIndex[i] = indexOfField.getInt(header.getField(i));
+            }
+            int count = 0;
+            while (rowStream.hasNext()) {
+                Row row = rowStream.next();
+                long key = row.getKey();
+                Object[] values = row.getValues();
+                Object[] dstValues = keyToValues.computeIfAbsent(key, k -> new Object[indexOfField.size()]);
+                for (int i = 0; i < dstIndex.length; i++) {
+                    Object value = values[i];
+                    if (value != null) {
+                        dstValues[dstIndex[i]] = value;
+                    }
+                }
+                count++;
+            }
+            return count;
+        }
+
+        public cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table build() {
+            List<Row> rows =
+                    keyToValues.entrySet().stream()
+                            .sorted(Comparator.comparingLong(Map.Entry::getKey))
+                            .map(e -> new Row(header, e.getKey(), e.getValue()))
+                            .collect(Collectors.toList());
+            keyToValues.clear();
+            return new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, rows);
+        }
+    }
+
+    @Value
+    private static class TablePlan {
+        @lombok.NonNull
+        Table table;
+        @lombok.NonNull
+        List<SubTablePlan> subTablePlans;
+    }
+
+    @Data
+    private static class SubTablePlan {
+        @lombok.NonNull
+        Table.SubTable subTable;
+        @lombok.NonNull
+        List<Field> fields;
+        @lombok.NonNull
+        RangeSet<Long> range;
+        @lombok.NonNull
+        Filter filter;
+        boolean overlap = true;
+        int resultRows = 0;
+    }
 }

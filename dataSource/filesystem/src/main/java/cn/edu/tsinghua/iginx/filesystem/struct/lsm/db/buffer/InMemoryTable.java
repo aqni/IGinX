@@ -71,7 +71,7 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
     return "InMemoryTable{" +  "id=" + id + '}';
   }
 
-  private static class InMemorySubTable implements SubTable {
+  private class InMemorySubTable implements SubTable {
 
     private final MemSubTable.Snapshot snapshot;
     private final Meta meta;
@@ -87,6 +87,14 @@ public class InMemoryTable extends AbstractTable implements NoexceptAutoCloseabl
           snapshot.getFields().stream().map(ArrowFields::toIginxField)
               .collect(ImmutableMap.toImmutableMap(field -> field, field -> new Statistic(range)));
       this.meta = new Meta(fieldStats);
+    }
+
+    @Override
+    public String toString() {
+      return "InMemorySubTable{" +
+              "table=" + InMemoryTable.this +
+              ", meta=" + meta +
+              '}';
     }
 
     @Override

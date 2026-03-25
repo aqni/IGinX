@@ -72,6 +72,14 @@ public class TombstoneTable extends AbstractTable {
     }
 
     @Override
+    public String toString() {
+      return "TombstoneSubTable{" +
+              "subTable=" + subTable +
+              ", tombstone=" + tombstone +
+              '}';
+    }
+
+    @Override
     public Meta getMeta() throws IOException {
       Meta meta = subTable.getMeta();
       ImmutableMap.Builder<Field, Statistic> fieldBuilder = ImmutableMap.builder();

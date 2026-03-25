@@ -10,8 +10,6 @@ public class TableReadEvent extends Event {
 
     public String tableName;
 
-    public int subTableId;
-
     public String projectedSchema;
 
     public int numRows;

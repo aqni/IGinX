@@ -64,6 +64,7 @@ public class OneTierDB implements AutoCloseable {
   private final MemTableQueue memTableQueue;
   private final Compactor flusher;
   private final Indexer indexer;
+  private final ScanExecutor scanExecutor;
 
   public OneTierDB(Shared shared, Path path) {
     this.path = path;
@@ -90,6 +91,7 @@ public class OneTierDB implements AutoCloseable {
             shared.getConfig().getMemtable().getTimeout(),
             memTableQueue,
             tableStorage);
+    this.scanExecutor = new ScanExecutor(path.toString(), shared.getScannerPermits());
     indexer.start();
     flusher.start();
     if (shared.getConfig().isFlushOnClose()) {
@@ -115,7 +117,7 @@ public class OneTierDB implements AutoCloseable {
         List<Table> allHitTables =
             Streams.concat(fileTables.stream(), inMemoryTables.stream())
                 .collect(ImmutableList.toImmutableList());
-        return ScanExecutor.scan(allHitTables, fields, filter);
+        return scanExecutor.scan(allHitTables, fields, filter);
       }
     } catch (IOException | PhysicalException e) {
       LOGGER.debug(
