@@ -40,7 +40,7 @@ public class SharedConfig extends AbstractConfig {
 
   @Optional int memtableQueue = 4;
 
-  @Optional int scanners = 8;
+  @Optional int scanners = 0;
 
   @Override
   public List<ValidationProblem> validate() {
