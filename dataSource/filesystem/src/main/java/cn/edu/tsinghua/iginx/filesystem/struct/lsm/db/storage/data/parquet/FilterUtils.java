@@ -161,10 +161,30 @@ public class FilterUtils {
                 return builder.notEqual(index, value);
             case LIKE:
             case LIKE_AND:
+                String pattern = new String(((BinaryString)value).toBytes());
+                LikeOptimizer.Classified classified = LikeOptimizer.classify(pattern);
+                BinaryString literal = BinaryString.fromBytes(classified.getLiteral().getBytes());
+                switch (classified.getKind()) {
+                    case EXACT:
+                        return builder.equal(index, literal);
+                    case STARTS_WITH:
+                        return builder.startsWith(index, literal);
+                    case ENDS_WITH:
+                        return builder.endsWith(index, literal);
+                    case CONTAINS:
+                        return builder.contains(index, literal);
+                    case REGEX:
+                        onUnsupported.run();
+                        return null;
+                    default:
+                        throw new UnsupportedOperationException("Unsupported Like pattern: " + classified.getKind());
+                }
             case NOT_LIKE:
             case NOT_LIKE_AND:
+                onUnsupported.run();
+                return null;
             default:
-                throw new UnsupportedOperationException("Unsupported InOp: " + filter.getOp());
+                throw new UnsupportedOperationException("Unsupported Op: " + filter.getOp());
         }
     }
 
