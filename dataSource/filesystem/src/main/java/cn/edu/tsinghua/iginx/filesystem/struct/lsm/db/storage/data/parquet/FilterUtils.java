@@ -41,8 +41,13 @@ public class FilterUtils {
                     return null;
                 }
                 return toPaimonPredicate(valueFilter, header, projectedSchema, onUnsupported);
-            case Path:
             case Bool:
+                BoolFilter boolFilter = (BoolFilter) filter;
+                if(!boolFilter.isTrue()) {
+                    onUnsupported.run();
+                }
+                return null;
+            case Path:
             case Not:
             default:
                 onUnsupported.run();

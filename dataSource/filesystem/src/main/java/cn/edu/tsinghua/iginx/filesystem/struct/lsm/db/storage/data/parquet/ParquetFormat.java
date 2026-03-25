@@ -133,6 +133,11 @@ public class ParquetFormat extends DenseImmutableFileFormat {
     protected RowStream scan(Path src, List<Field> fields, Filter predicate) throws IOException {
         org.apache.paimon.fs.Path paimonSrc = new org.apache.paimon.fs.Path(src.toUri());
         Header header = new Header(Field.KEY, fields);
+
+        if(Filters.isFalse(predicate)){
+            return new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, Collections.emptyList());
+        }
+
         RowType projectedSchema = TypeUtils.toRowType(header);
         InternalRow.FieldGetter[] fieldGetters = IntStream.range(0, projectedSchema.getFieldCount())
                 .mapToObj(i -> InternalRow.createFieldGetter(projectedSchema.getTypeAt(i), i))
