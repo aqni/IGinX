@@ -415,9 +415,11 @@ public class NaivePhysicalPlanner {
   public PhysicalTask<?> construct(SetTransform operator, RequestContext context) {
     PhysicalTask<?> sourceTask = fetch(operator.getSource(), context);
 
-    StoragePhysicalTask storageTask = tryPushDownAloneWithProject(sourceTask, context, operator);
-    if (storageTask != null) {
-      return storageTask;
+    if(ConfigDescriptor.getInstance().getConfig().isEnableAggPushDown()){
+      StoragePhysicalTask storageTask = tryPushDownAloneWithProject(sourceTask, context, operator);
+      if (storageTask != null) {
+        return storageTask;
+      }
     }
 
     if (operator.getFunctionCallList().stream().anyMatch(UDFDetector::containNonSystemFunction)) {
@@ -434,9 +436,11 @@ public class NaivePhysicalPlanner {
   public PhysicalTask<?> construct(GroupBy operator, RequestContext context) {
     PhysicalTask<?> sourceTask = fetch(operator.getSource(), context);
 
-    StoragePhysicalTask storageTask = tryPushDownAloneWithProject(sourceTask, context, operator);
-    if (storageTask != null) {
-      return storageTask;
+    if(ConfigDescriptor.getInstance().getConfig().isEnableAggPushDown()) {
+      StoragePhysicalTask storageTask = tryPushDownAloneWithProject(sourceTask, context, operator);
+      if (storageTask != null) {
+        return storageTask;
+      }
     }
 
     if (operator.getFunctionCallList().stream().anyMatch(UDFDetector::containNonSystemFunction)) {

@@ -148,6 +148,8 @@ public class Config {
 
   private boolean enablePushDown = true;
 
+  private boolean enableAggPushDown = true;
+
   private boolean useStreamExecutor = true;
 
   private boolean enableMemoryControl = true;
@@ -697,6 +699,14 @@ public class Config {
 
   public void setEnablePushDown(boolean enablePushDown) {
     this.enablePushDown = enablePushDown;
+  }
+
+  public boolean isEnableAggPushDown() {
+      return enableAggPushDown;
+  }
+
+  public void setEnableAggPushDown(boolean enableAggPushDown) {
+      this.enableAggPushDown = enableAggPushDown;
   }
 
   public boolean isUseStreamExecutor() {

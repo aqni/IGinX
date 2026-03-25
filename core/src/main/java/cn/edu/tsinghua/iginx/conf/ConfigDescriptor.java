@@ -182,6 +182,8 @@ public class ConfigDescriptor {
 
       config.setEnablePushDown(
           Boolean.parseBoolean(properties.getProperty("enablePushDown", "true")));
+      config.setEnableAggPushDown(
+          Boolean.parseBoolean(properties.getProperty("enableAggPushDown", "true")));
       config.setUseStreamExecutor(
           Boolean.parseBoolean(properties.getProperty("useStreamExecutor", "true")));
 
@@ -319,6 +321,8 @@ public class ConfigDescriptor {
     config.setStorageGroupValueLimit(
         EnvUtils.loadEnv("storageGroupValueLimit", config.getStorageGroupValueLimit()));
     config.setEnablePushDown(EnvUtils.loadEnv("enablePushDown", config.isEnablePushDown()));
+    config.setEnableAggPushDown(
+        EnvUtils.loadEnv("enableAggPushDown", config.isEnableAggPushDown()));
     config.setUseStreamExecutor(
         EnvUtils.loadEnv("useStreamExecutor", config.isUseStreamExecutor()));
     config.setEnableMemoryControl(
