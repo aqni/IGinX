@@ -143,12 +143,23 @@ public class ParquetFormat extends DenseImmutableFileFormat {
                 .mapToObj(i -> InternalRow.createFieldGetter(projectedSchema.getTypeAt(i), i))
                 .toArray(InternalRow.FieldGetter[]::new);
 
-        boolean[] needPostFilter = new boolean[]{false};
+        List<Filter> unhandledFilters = new ArrayList<>();
+        Predicate paimonPredicate = FilterUtils.toPaimonPredicate(predicate, header, projectedSchema, unhandledFilters);
 
-        Predicate paimonPredicate = FilterUtils.toPaimonPredicate(predicate, header, projectedSchema, ()-> needPostFilter[0] = true);
-        paimonPredicate = PredicateDeduper.simplify(paimonPredicate);
+        List<Filter> postingFilters = new ArrayList<>();
+        List<java.util.function.Predicate<InternalRow>> otherPredicates = new ArrayList<>();
+        for(Filter unhandledFilter : unhandledFilters){
+            java.util.function.Predicate<InternalRow> otherPredicate = FilterUtils.optimizeUnsupportedFilter(unhandledFilter, header, fieldGetters);
+            if(otherPredicate != null){
+                otherPredicates.add(otherPredicate);
+            } else {
+                postingFilters.add(unhandledFilter);
+            }
+        }
+
+        Predicate optimizedPaimonPredicate = PredicateDeduper.simplify(paimonPredicate);
         RoaringBitmap32 selection = null;
-        if(paimonPredicate!= null){
+        if(optimizedPaimonPredicate!= null){
             FileIndexResult indexResult = indexer.useIndex(src, paimonPredicate);
             if(!indexResult.remain()){
                 return new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, Collections.emptyList());
@@ -158,7 +169,7 @@ public class ParquetFormat extends DenseImmutableFileFormat {
             }
         }
 
-        FormatReaderFactory readerFactory = format.createReaderFactory(null, projectedSchema, PredicateBuilder.splitAnd(paimonPredicate));
+        FormatReaderFactory readerFactory = format.createReaderFactory(null, projectedSchema, PredicateBuilder.splitAnd(optimizedPaimonPredicate));
 
         List<Row> rows = new ArrayList<>();
         long allReadRows = 0;
@@ -193,6 +204,9 @@ public class ParquetFormat extends DenseImmutableFileFormat {
                             }
                             continue;
                         }
+                        if(otherPredicates.stream().anyMatch(p -> !p.test(paimonRow))){
+                            continue;
+                        }
                         Row row = TypeUtils.toRow(paimonRow, header, fieldGetters);
                         rows.add(row);
                     }
@@ -207,8 +221,10 @@ public class ParquetFormat extends DenseImmutableFileFormat {
         }
 
         RowStream rowStream = new cn.edu.tsinghua.iginx.engine.physical.memory.execute.Table(header, rows);
-        if (needPostFilter[0] && !Filters.isTrue(predicate)) {
-            rowStream = new FilterRowStreamWrapper(rowStream, predicate);
+        for(Filter postingFilter : postingFilters){
+            if(!Filters.isTrue(postingFilter)) {
+                rowStream = new FilterRowStreamWrapper(rowStream, postingFilter);
+            }
         }
         return rowStream;
     }
