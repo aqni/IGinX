@@ -22,14 +22,9 @@ public class TypeUtils {
   private TypeUtils() {
   }
 
-  public static IMeasurementSchema toTsfileField(Field field, TSFileConfig config) {
+  public static IMeasurementSchema toTsfileField(Field field) {
     TSDataType dataType = toTsfileType(field.getType());
-    return new MeasurementSchema(
-        TagKVUtils.toFullName(field.getName(), field.getTags()),
-        dataType,
-        TSEncoding.valueOf(config.getValueEncoder(dataType)),
-        config.getCompressor(dataType)
-    );
+    return new MeasurementSchema(TagKVUtils.toFullName(field.getName(), field.getTags()), dataType);
   }
 
   public static TSDataType toTsfileType(DataType type) {

@@ -36,6 +36,7 @@ import com.typesafe.config.Config;
 import lombok.Value;
 import org.apache.arrow.util.Preconditions;
 import org.apache.tsfile.common.conf.TSFileConfig;
+import org.apache.tsfile.common.conf.TSFileDescriptor;
 import org.apache.tsfile.exception.write.WriteProcessException;
 import org.apache.tsfile.file.metadata.TimeseriesMetadata;
 import org.apache.tsfile.file.metadata.statistics.Statistics;
@@ -63,14 +64,12 @@ public class TsfileFormat extends SparseImmutableFileFormat {
   public TsfileFormat(Config config, CachePool cachePool, Indexer indexer) {
     super("tsfile", TsfileConfig.of(config), cachePool);
     this.tsfileConfig = (TsfileConfig) this.config;
+    TSFileDescriptor.getInstance().getConfig().setCompressor(tsfileConfig.getCompression().name());
   }
 
   @Override
   protected void flush(Path dstWithSuffix, List<Table.SubTable> subTables) throws IOException, PhysicalException {
-    TSFileConfig tsFileConfig = new TSFileConfig();
-    tsFileConfig.setCompressor(tsfileConfig.getCompression().name());
-
-    try (TsFileWriter tsFileWriter = new TsFileWriter(dstWithSuffix.toFile(), new Schema(), tsFileConfig)) {
+    try (TsFileWriter tsFileWriter = new TsFileWriter(dstWithSuffix.toFile(), new Schema())) {
       for (int subTableIndex = 0; subTableIndex < subTables.size(); subTableIndex++) {
         String deviceId = String.format("subtable%010d", subTableIndex);
         Table.SubTable subTable = subTables.get(subTableIndex);
@@ -78,7 +77,7 @@ public class TsfileFormat extends SparseImmutableFileFormat {
           Header header = rowStream.getHeader();
           List<IMeasurementSchema> schema = new ArrayList<>();
           for (Field field : header.getFields()) {
-            schema.add(TypeUtils.toTsfileField(field, tsFileConfig));
+            schema.add(TypeUtils.toTsfileField(field));
           }
           tsFileWriter.registerAlignedTimeseries(deviceId, schema);
           while (rowStream.hasNext()) {
