@@ -35,16 +35,16 @@ import org.apache.arrow.vector.types.pojo.Field;
 
 class WriteBatches {
 
-  public static Collection<MemBatch.Snapshot> of(DataView data, BufferAllocator allocator, boolean enableAlignInsert) {
+  public static Collection<MemBatch.Snapshot> of(DataView data, BufferAllocator allocator, boolean enableAlignInsert, boolean forceAlignInsert) {
     switch (data.getRawDataType()) {
       case Column:
-        return of((ColumnDataView) data, allocator, enableAlignInsert);
+        return of((ColumnDataView) data, allocator, enableAlignInsert || forceAlignInsert);
       case NonAlignedColumn:
-        return of((ColumnDataView) data, allocator, false);
+        return of((ColumnDataView) data, allocator, forceAlignInsert);
       case Row:
-        return of((RowDataView) data, allocator, enableAlignInsert);
+        return of((RowDataView) data, allocator, enableAlignInsert || forceAlignInsert);
       case NonAlignedRow:
-        return of((RowDataView) data, allocator, false);
+        return of((RowDataView) data, allocator, forceAlignInsert);
       default:
         throw new IllegalArgumentException("Unsupported data type: " + data.getRawDataType());
     }

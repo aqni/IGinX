@@ -44,6 +44,8 @@ public class MemTableConfig extends AbstractConfig {
 
   @Optional boolean enableAlignInsert = true;
 
+  @Optional boolean forceAlignInsert = false;
+
   @Override
   public List<ValidationProblem> validate() {
     List<ValidationProblem> problems = new ArrayList<>();

@@ -56,7 +56,7 @@ public class MemTableQueue implements NoexceptAutoCloseable {
   }
 
   public WriteBatch prepare(DataView data) {
-    return new WriteBatch(WriteBatches.of(data, allocator, config.isEnableAlignInsert()));
+    return new WriteBatch(WriteBatches.of(data, allocator, config.isEnableAlignInsert(), config.isForceAlignInsert()));
   }
 
   public void store(WriteBatch data) throws InterruptedException {
